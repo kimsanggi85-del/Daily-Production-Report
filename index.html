@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>생산일보 통합관리 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 :root{
   --bg:#F2F4F7;--panel:#FFFFFF;--ink:#1A2230;--muted:#66717F;--line:#D9DFE7;--line2:#EDF0F4;
@@ -178,7 +180,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
   <a data-pg="master"><i>⚙</i>기준정보</a>
   <a data-pg="data"><i>⇅</i>데이터 관리</a>
   <a data-pg="help"><i>?</i>사용안내</a>
-  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v1.6</div>
+  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v2.0</div>
 </nav>
 <main>
   <div class="top">
@@ -291,7 +293,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
         <select id="p_cust"><option value="">고객사 전체</option></select>
         <span class="muted">평균 가동율·효율은 기존 엑셀 보고서와 같은 방식(일자별 평균의 평균), 평균가동시간은 1일 총 가동시간(분)</span>
         <span class="grow"></span>
-        <button onclick="exportReport()">엑셀 내려받기</button><button onclick="window.print()">인쇄</button>
+        <button class="p" onclick="savePdf()" id="btnPdf">PDF 내려받기</button><button onclick="exportReport()">엑셀 내려받기</button><button onclick="window.print()">인쇄</button>
       </div>
     </div>
     <div class="panel" id="rptBody"></div>
@@ -371,7 +373,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
       <ol>
         <li><b>월간 집계</b>: 예전 "월MH당제품_DB" 시트와 같은 설비×품번 집계표. 엑셀 내려받기로 보고서에 붙입니다.</li>
         <li><b>품목별 일별표</b>: 예전 "현황" 시트처럼 품번별로 날짜 칸에 생산수량이 들어갑니다.</li>
-        <li><b>월간 보고서</b>: 예전 "가동율_효율 양식" 시트. 주차별·당월·전월 비교는 자동이고 문제점·대책·인원·특이사항만 적으면 됩니다. 적은 내용은 서버에 함께 저장됩니다.</li>
+        <li><b>월간 보고서</b>: 예전 "가동율_효율 양식" 시트. 주차별·당월·전월 비교는 자동이고 문제점·대책·인원·특이사항만 적으면 됩니다. 적은 내용은 서버에 함께 저장됩니다. 대표님 보고용은 <b>PDF 내려받기</b>(A4 가로)를 쓰시면 됩니다.</li>
         <li><b>데이터 관리 → 백업 파일 내려받기</b>: 월 1회.</li>
       </ol>
     </div>
@@ -400,7 +402,7 @@ const SEED_MASTER={"mcs":["01 쌍용200","02 심팩200","03 심팩150","04 심�
 /* ===== 상태 ===== */
 let S={recs:[],del:{},master:null,seedVer:'',ua:''};
 let month=new Date().toISOString().slice(0,7);
-let editId=null, pg='dash', sortKey='date', sortDir=-1;
+let editId=null, pg='dash', sortKey='date', sortDir=-1, wView='sum';
 const $=id=>document.getElementById(id);
 const fmt=n=>(Math.round(n||0)).toLocaleString('ko-KR');
 const fmtK=v=>v>=1e6?(v/1e4).toFixed(0)+'만':v>=1e4?(v/1e4).toFixed(1)+'만':fmt(v);
@@ -705,6 +707,7 @@ function svgHBars(rows,opt={}){ // rows:[{l,v,txt,c}]
   return rows.map(r=>`<div class="hb" style="grid-template-columns:${opt.lw||150}px 1fr ${opt.tw||90}px"><span title="${esc(r.l)}" style="overflow:hidden;text-overflow:ellipsis">${esc(r.l)}</span><div class="bar"><i style="width:${(r.v/mx*100).toFixed(1)}%;background:${r.c||C.bar}"></i></div><span class=num style="font-size:12px">${r.txt}</span></div>`).join('')}
 function stopWords(R){const words={};const dict=[...new Set([...S.master.reasons,'설비이상','금형수리','금형점검','소재교환','측정대기','치수조정','치수수정','청소','3정5행','조회','관리','박스정리','기종전환','금형교환','대기','종료','가동'])].filter(w=>!['기타','조회','가동','종료'].includes(w));
   R.forEach(r=>{const s=(r.sr||'');dict.forEach(w=>{if(s.includes(w))words[w]=(words[w]||0)+1})});return Object.entries(words).sort((a,b)=>b[1]-a[1])}
+function setWView(v){wView=v;renderReport()}
 function renderReport(){
   opts($('p_cust'),S.master.custs,$('p_cust').value,'고객사 전체');
   const cu=$('p_cust').value;const st=rptStats(month,cu);const pm=prevMonth(month);const pv=rptStats(pm,cu).total;const o=rptGet();const R=st.R;const T=st.total;
@@ -731,12 +734,56 @@ function renderReport(){
   const gn={};R.forEach(r=>{if(+r.ng){const g=gn[r.pn]=gn[r.pn]||{ng:0,q:0,name:r.name,cust:r.cust,notes:{}};g.ng+=+r.ng;if(r.note)g.notes[r.note]=(g.notes[r.note]||0)+1}});
   R.forEach(r=>{if(gn[r.pn])gn[r.pn].q+=+r.qty||0});const gnl=Object.entries(gn).sort((a,b)=>b[1].ng-a[1].ng).slice(0,10);
   // 작업자
-  const gw={};R.forEach(r=>{const ws=workers(r);const k=ws[0]||'(미기재)';const g=gw[k]=gw[k]||{q:0,ng:0,n:0,run:0,work:0,cap:0,days:new Set()};const c=calc(r);g.q+=+r.qty||0;g.ng+=+r.ng||0;g.n++;g.run+=c.run;g.work+=+r.work||0;g.cap+=c.cap;g.days.add(r.date)});
+  // 작업자1~4 모두 집계. 근무일·작업건수는 보조 작업자도 포함, 수량·가동율·효율·불량은 중복 계상을 막기 위해 작업자1(주작업자) 기준
+  const gw={};R.forEach(r=>{const ws=workers(r);const list=ws.length?ws:['(미기재)'];const c=calc(r);
+    list.forEach((k,i)=>{const g=gw[k]=gw[k]||{q:0,ng:0,n:0,sub:0,run:0,work:0,cap:0,days:new Set()};
+      g.n++;g.days.add(r.date);
+      if(i===0){g.q+=+r.qty||0;g.ng+=+r.ng||0;g.run+=c.run;g.work+=+r.work||0;g.cap+=c.cap}else g.sub++;
+    })});
   const gwl=Object.entries(gw).sort((a,b)=>b[1].q-a[1].q);
+  // 작업자 × 품목 (주작업자 기준)
+  const gwi={};R.forEach(r=>{const k=r.w1||'(미기재)';const c=calc(r);
+    const o=(gwi[k]=gwi[k]||{})[r.pn]=gwi[k][r.pn]||{name:r.name,cust:r.cust,q:0,ng:0,n:0,run:0,work:0,cap:0,days:new Set()};
+    o.q+=+r.qty||0;o.ng+=+r.ng||0;o.n++;o.run+=c.run;o.work+=+r.work||0;o.cap+=c.cap;o.days.add(r.date)});
+  // 같은 품목을 여러 작업자가 한 경우 (효율 편차 비교)
+  const gip={};R.forEach(r=>{const w=r.w1||'(미기재)';const c=calc(r);
+    const it=gip[r.pn]=gip[r.pn]||{name:r.name,cust:r.cust,w:{}};
+    const o=it.w[w]=it.w[w]||{q:0,ng:0,n:0,run:0,work:0,cap:0,days:new Set()};
+    o.q+=+r.qty||0;o.ng+=+r.ng||0;o.n++;o.run+=c.run;o.work+=+r.work||0;o.cap+=c.cap;o.days.add(r.date)});
+  const cmpl=Object.entries(gip).map(([pn,it])=>{
+      const ws=Object.entries(it.w).filter(([,o])=>o.cap>0).map(([w,o])=>({w,...o,eff:o.q/o.cap,oper:o.run/o.work}))
+        .sort((a,b)=>b.eff-a.eff);
+      const q=ws.reduce((a,x)=>a+x.q,0);
+      return{pn,name:it.name,cust:it.cust,ws,q,gap:ws.length>1?ws[0].eff-ws[ws.length-1].eff:0}})
+    .filter(x=>x.ws.length>1).sort((a,b)=>b.gap-a.gap);
   // 품목
   const gp={};R.forEach(r=>{const g=gp[r.pn]=gp[r.pn]||{name:r.name,cust:r.cust,q:0,ng:0,run:0,work:0,cap:0,n:0};const c=calc(r);g.q+=+r.qty||0;g.ng+=+r.ng||0;g.run+=c.run;g.work+=+r.work||0;g.cap+=c.cap;g.n++});
   const gpl=Object.entries(gp).sort((a,b)=>b[1].q-a[1].q);
   const wk=w=>`<tr><td>${w.i}주차 (${m}/${String(w.a).padStart(2,'0')}~${m}/${String(w.b).padStart(2,'0')})</td><td class=num>${w.days||''}</td><td class=num>${w.n?pct(w.oper):''}</td><td class=num>${w.days?fmt(w.runPerDay):''}</td><td class=num>${w.n?pct(w.eff):''}</td><td class=num>${w.n?fmt(w.qty):''}</td><td class=num>${w.n?fmt(w.ng):''}</td><td>${ta('i'+w.i)}</td><td>${ta('a'+w.i)}</td></tr>`;
+  // 10번 항목: 보기 3종
+  let wHtml='';
+  if(wView==='sum'){
+    wHtml='<div class="muted" style="font-size:12px;margin-bottom:6px">근무일·작업건수는 보조 작업자로 참여한 것도 포함, 생산수량·가동율·효율·불량은 중복을 피해 주작업자(작업자1) 기준</div>'
+      +'<table><tr><th>작업자</th><th class=num>근무일</th><th class=num>작업건수</th><th class=num>보조</th><th class=num>생산수량</th><th class=num>가동율</th><th class=num>효율</th><th class=num>불량</th></tr>'
+      +gwl.map(([k,g])=>`<tr><td>${esc(k)}</td><td class=num>${g.days.size}</td><td class=num>${g.n}</td><td class=num>${g.sub||''}</td><td class=num>${fmt(g.q)}</td><td class=num>${pct(g.run/g.work)}</td><td class=num>${pct(g.q/g.cap)}</td><td class=num>${g.ng||''}</td></tr>`).join('')
+      +'</table>';
+  }else if(wView==='item'){
+    const rows=gwl.filter(([k])=>gwi[k]).map(([k,g])=>{
+      const its=Object.entries(gwi[k]).sort((a,b)=>b[1].q-a[1].q);
+      const body=its.map(([pn,o],i)=>`<tr><td>${i===0?'<b>'+esc(k)+'</b>':''}</td><td>${esc(pn)}</td><td class=muted style="max-width:180px;overflow:hidden;text-overflow:ellipsis">${esc(o.name)}</td><td>${esc(o.cust)}</td><td class=num>${o.days.size}</td><td class=num>${o.n}</td><td class=num>${fmt(o.q)}</td><td class=num><span class="tag ${cls(o.run/o.work)}">${pct(o.run/o.work)}</span></td><td class=num><span class="tag ${cls(o.q/o.cap)}">${pct(o.q/o.cap)}</span></td><td class=num>${o.ng||''}</td></tr>`).join('');
+      return body+`<tr class=sum><td></td><td colspan=3>${esc(k)} 합계 (품목 ${its.length}종)</td><td class=num>${g.days.size}</td><td class=num>${g.n}</td><td class=num>${fmt(g.q)}</td><td class=num>${pct(g.run/g.work)}</td><td class=num>${pct(g.q/g.cap)}</td><td class=num>${fmt(g.ng)}</td></tr>`;
+    }).join('');
+    wHtml='<div class="muted" style="font-size:12px;margin-bottom:6px">주작업자(작업자1) 기준 · 작업자별로 어떤 품목을 얼마나 했는지</div>'
+      +'<div class="tw" style="max-height:none;border:0"><table><tr><th>작업자</th><th>품번</th><th>품명</th><th>고객사</th><th class=num>일수</th><th class=num>건수</th><th class=num>생산수량</th><th class=num>가동율</th><th class=num>효율</th><th class=num>불량</th></tr>'+rows+'</table></div>';
+  }else{
+    const rows=cmpl.map(it=>it.ws.map((x,i)=>{
+      const gapCell=i===0?`<td class=num rowspan=${it.ws.length}><b class="${it.gap>=0.15?'dn':''}">${(it.gap*100).toFixed(1)}%p</b></td>`:'';
+      return `<tr><td>${i===0?esc(it.pn):''}</td><td class=muted style="max-width:170px;overflow:hidden;text-overflow:ellipsis">${i===0?esc(it.name):''}</td><td>${i===0?esc(it.cust):''}</td><td>${esc(x.w)}</td><td class=num>${x.days.size}</td><td class=num>${x.n}</td><td class=num>${fmt(x.q)}</td><td class=num><span class="tag ${cls(x.oper)}">${pct(x.oper)}</span></td><td class=num><span class="tag ${cls(x.eff)}">${pct(x.eff)}</span></td><td class=num>${x.ng||''}</td>`+gapCell+'</tr>';
+    }).join('')).join('');
+    wHtml='<div class="muted" style="font-size:12px;margin-bottom:6px">같은 품목을 두 명 이상이 작업한 경우만 · 효율 높은 순 정렬 · 편차가 크면 작업 방법 차이, 모두 낮으면 금형·설비 문제일 가능성</div>'
+      +(cmpl.length?'<div class="tw" style="max-height:none;border:0"><table><tr><th>품번</th><th>품명</th><th>고객사</th><th>작업자</th><th class=num>일수</th><th class=num>건수</th><th class=num>생산수량</th><th class=num>가동율</th><th class=num>효율</th><th class=num>불량</th><th class=num>효율 편차</th></tr>'+rows+'</table></div>'
+        :'<div class=empty>같은 품목을 두 명 이상 작업한 경우가 없습니다</div>');
+  }
   $('rptBody').innerHTML=`
    <div class="sig"><table><tr><th>담당</th><th>검토</th><th>승인</th></tr><tr><td></td><td></td><td></td></tr></table></div>
    <div class="rpt-hd"><h2>${y}년 ${m}월 프레스 생산 실적 보고서</h2><span class="muted">${cu||'전 고객사'} · 기간 ${dates[0]||'-'} ~ ${dates[dates.length-1]||'-'} · 작성일 ${today()} · 작성 ${esc(localStorage.getItem('tj_me')||'')}</span></div>
@@ -793,7 +840,9 @@ function renderReport(){
 
    <div class="grid g2 rpt-sec">
     <div><h3>9. 품목별 생산 상위</h3><table><tr><th>품번</th><th>품명</th><th>고객사</th><th class=num>생산수량</th><th class=num>가동율</th><th class=num>효율</th></tr>${gpl.slice(0,15).map(([k,g])=>`<tr><td>${esc(k)}</td><td class=muted>${esc(g.name)}</td><td>${esc(g.cust)}</td><td class=num>${fmt(g.q)}</td><td class=num>${pct(g.run/g.work)}</td><td class=num>${pct(g.q/g.cap)}</td></tr>`).join('')}</table></div>
-    <div><h3>10. 작업자별 실적</h3><table><tr><th>작업자</th><th class=num>근무일</th><th class=num>일보</th><th class=num>생산수량</th><th class=num>가동율</th><th class=num>효율</th><th class=num>불량</th></tr>${gwl.map(([k,g])=>`<tr><td>${esc(k)}</td><td class=num>${g.days.size}</td><td class=num>${g.n}</td><td class=num>${fmt(g.q)}</td><td class=num>${pct(g.run/g.work)}</td><td class=num>${pct(g.q/g.cap)}</td><td class=num>${g.ng||''}</td></tr>`).join('')}</table></div>
+    <div><h3>10. 작업자별 실적</h3>
+     <div class="fl noprint" style="margin-bottom:6px"><span class="chip ${wView==='sum'?'on':''}" onclick="setWView('sum')">작업자 요약</span><span class="chip ${wView==='item'?'on':''}" onclick="setWView('item')">작업자 × 품목</span><span class="chip ${wView==='cmp'?'on':''}" onclick="setWView('cmp')">같은 품목 비교</span></div>
+     ${wHtml}</div>
    </div>
 
    <div class="rpt-sec"><h3>11. 일별 실적</h3>
@@ -807,8 +856,78 @@ function exportReport(){const cu=$('p_cust').value;const st=rptStats(month,cu);c
   const rows=st.weeks.map(w=>row(`${w.i}주차 (${m}/${w.a}~${m}/${w.b})`,w,o['i'+w.i],o['a'+w.i]));rows.push(row('당월 실적',st.total,o.im,''));rows.push(row('전월 비교',pv,'',''));
   rows.push({'구분':'작업자 인원','가동일수(일)':o.staff||''},{'구분':'지원 인원','가동일수(일)':o.support||''},{'구분':'야간근무','가동일수(일)':o.night||''},{'구분':'총 가동시간(분)','가동일수(일)':st.total.run},{'구분':'총 정지시간(분)','가동일수(일)':st.total.stop},{'구분':'특이사항','가동일수(일)':o.special||''});
   const days=st.days.map(d=>({'생산일':d.d,'건수':d.n,'생산수량':d.qty,'평균가동율(%)':+(d.oper*100).toFixed(2),'평균효율(%)':+(d.eff*100).toFixed(2),'불량':d.ng,'가동시간(분)':d.run,'정지시간(분)':d.stop}));
-  const R=st.R;const grp=(kf,lf)=>{const g={};R.forEach(r=>{const k=kf(r);const o=g[k]=g[k]||{q:0,ng:0,n:0,run:0,stop:0,work:0,cap:0};const c=calc(r);o.q+=+r.qty||0;o.ng+=+r.ng||0;o.n++;o.run+=c.run;o.stop+=+r.stop||0;o.work+=+r.work||0;o.cap+=c.cap});return Object.entries(g).sort((a,b)=>b[1].q-a[1].q).map(([k,o])=>({[lf]:k,'일보':o.n,'생산수량':o.q,'가동율(%)':+(o.run/o.work*100).toFixed(2),'효율(%)':+(o.q/o.cap*100).toFixed(2),'불량':o.ng,'정지시간(분)':o.stop}))};
-  xl([{name:'월간보고서',rows},{name:'일별실적',rows:days},{name:'고객사별',rows:grp(r=>r.cust,'고객사')},{name:'설비별',rows:grp(r=>r.mc,'설비')},{name:'품목별',rows:grp(r=>r.pn,'품번')},{name:'작업자별',rows:grp(r=>r.w1||'(미기재)','작업자')},{name:'생산이력',rows:histRows(st.R.sort((a,b)=>a.date.localeCompare(b.date)))}],'월간보고서_'+month+(cu?'_'+cu:'')+'.xlsx')}
+  const R=st.R;
+  const gwlRows=L=>{const g={};L.forEach(r=>{const ws=workers(r);const list=ws.length?ws:['(미기재)'];const c=calc(r);
+      list.forEach((k,i)=>{const o=g[k]=g[k]||{q:0,ng:0,n:0,sub:0,run:0,work:0,cap:0,days:new Set()};o.n++;o.days.add(r.date);
+        if(i===0){o.q+=+r.qty||0;o.ng+=+r.ng||0;o.run+=c.run;o.work+=+r.work||0;o.cap+=c.cap}else o.sub++})});
+    return Object.entries(g).sort((a,b)=>b[1].q-a[1].q).map(([k,o])=>({'작업자':k,'근무일':o.days.size,'작업건수':o.n,'보조건수':o.sub,'생산수량':o.q,'가동율(%)':+(o.run/o.work*100).toFixed(2)||'','효율(%)':+(o.q/o.cap*100).toFixed(2)||'','불량':o.ng}))};
+  const gwiRows=L=>{const g={};L.forEach(r=>{const k=r.w1||'(미기재)';const c=calc(r);
+      const o=(g[k]=g[k]||{})[r.pn]=g[k][r.pn]||{name:r.name,cust:r.cust,q:0,ng:0,n:0,run:0,work:0,cap:0,days:new Set()};
+      o.q+=+r.qty||0;o.ng+=+r.ng||0;o.n++;o.run+=c.run;o.work+=+r.work||0;o.cap+=c.cap;o.days.add(r.date)});
+    const out=[];Object.entries(g).sort((a,b)=>Object.values(b[1]).reduce((x,o)=>x+o.q,0)-Object.values(a[1]).reduce((x,o)=>x+o.q,0))
+      .forEach(([k,its])=>Object.entries(its).sort((a,b)=>b[1].q-a[1].q).forEach(([pn,o])=>out.push({'작업자':k,'품번':pn,'품명':o.name,'고객사':o.cust,'일수':o.days.size,'건수':o.n,'생산수량':o.q,'가동율(%)':+(o.run/o.work*100).toFixed(2)||'','효율(%)':+(o.q/o.cap*100).toFixed(2)||'','불량':o.ng})));
+    return out};
+  const cmpRows=L=>{const g={};L.forEach(r=>{const w=r.w1||'(미기재)';const c=calc(r);
+      const it=g[r.pn]=g[r.pn]||{name:r.name,cust:r.cust,w:{}};
+      const o=it.w[w]=it.w[w]||{q:0,ng:0,n:0,run:0,work:0,cap:0,days:new Set()};
+      o.q+=+r.qty||0;o.ng+=+r.ng||0;o.n++;o.run+=c.run;o.work+=+r.work||0;o.cap+=c.cap;o.days.add(r.date)});
+    const rows=[];Object.entries(g).map(([pn,it])=>{
+      const ws=Object.entries(it.w).filter(([,o])=>o.cap>0).map(([w,o])=>({w,...o,eff:o.q/o.cap,oper:o.run/o.work})).sort((a,b)=>b.eff-a.eff);
+      return{pn,it,ws,gap:ws.length>1?ws[0].eff-ws[ws.length-1].eff:0}}).filter(x=>x.ws.length>1)
+      .sort((a,b)=>b.gap-a.gap).forEach(x=>x.ws.forEach(w=>rows.push({'품번':x.pn,'품명':x.it.name,'고객사':x.it.cust,'작업자':w.w,'일수':w.days.size,'건수':w.n,'생산수량':w.q,'가동율(%)':+(w.oper*100).toFixed(2),'효율(%)':+(w.eff*100).toFixed(2),'불량':w.ng,'효율편차(%p)':+(x.gap*100).toFixed(1)})));
+    return rows};
+  const grp=(kf,lf)=>{const g={};R.forEach(r=>{const k=kf(r);const o=g[k]=g[k]||{q:0,ng:0,n:0,run:0,stop:0,work:0,cap:0};const c=calc(r);o.q+=+r.qty||0;o.ng+=+r.ng||0;o.n++;o.run+=c.run;o.stop+=+r.stop||0;o.work+=+r.work||0;o.cap+=c.cap});return Object.entries(g).sort((a,b)=>b[1].q-a[1].q).map(([k,o])=>({[lf]:k,'일보':o.n,'생산수량':o.q,'가동율(%)':+(o.run/o.work*100).toFixed(2),'효율(%)':+(o.q/o.cap*100).toFixed(2),'불량':o.ng,'정지시간(분)':o.stop}))};
+  xl([{name:'월간보고서',rows},{name:'일별실적',rows:days},{name:'고객사별',rows:grp(r=>r.cust,'고객사')},{name:'설비별',rows:grp(r=>r.mc,'설비')},{name:'품목별',rows:grp(r=>r.pn,'품번')},{name:'작업자별',rows:gwlRows(R)},{name:'작업자x품목',rows:gwiRows(R)},{name:'같은품목비교',rows:cmpRows(R)},{name:'생산이력',rows:histRows(st.R.sort((a,b)=>a.date.localeCompare(b.date)))}],'월간보고서_'+month+(cu?'_'+cu:'')+'.xlsx')}
+
+/* 월간 보고서 PDF (A4 가로) */
+async function savePdf(){
+  const J=window.jspdf&&window.jspdf.jsPDF;
+  if(!J||!window.html2canvas){toast('PDF 라이브러리를 불러오지 못했습니다 (인터넷 연결 확인) — [인쇄]에서 PDF로 저장하세요');return}
+  const btn=$('btnPdf'),lab=btn.textContent;btn.disabled=true;
+  const body=$('rptBody');
+  // 입력칸은 그림으로 안 찍히므로 잠시 글자로 바꿔 둠
+  const swapped=[],styled=[];
+  // 가로 스크롤 표는 잘리므로 잠시 전체를 펼침
+  body.querySelectorAll('.tw').forEach(el=>{styled.push([el,el.getAttribute('style')||'']);el.style.overflow='visible';el.style.maxHeight='none'});
+  styled.push([body,body.getAttribute('style')||'']);body.style.overflow='visible';
+    body.querySelectorAll('textarea,input').forEach(el=>{
+    const d=document.createElement('div');
+    d.textContent=el.value||'';
+    d.style.cssText='font-size:12px;white-space:pre-wrap;min-height:16px;padding:2px 4px;color:#1A2230';
+    el.parentNode.insertBefore(d,el);el.style.display='none';swapped.push([el,d]);
+  });
+  try{
+    const secs=[...body.children].filter(e=>e.offsetHeight>0);
+    const pdf=new J({orientation:'landscape',unit:'mm',format:'a4'});
+    const PW=297,PH=210,M=7,W=PW-M*2,H=PH-M*2;
+    let y=M,first=true;
+    for(let i=0;i<secs.length;i++){
+      btn.textContent=`PDF 만드는 중 ${i+1}/${secs.length}`;
+      const cv=await html2canvas(secs[i],{scale:2,backgroundColor:'#ffffff',logging:false,scrollX:0,scrollY:0,width:secs[i].scrollWidth,height:secs[i].scrollHeight});
+      let h=cv.height*W/cv.width;
+      if(h>H){ // 한 장을 넘으면 세로로 잘라 여러 장에
+        const per=Math.floor(cv.width*H/W);let sy=0;
+        while(sy<cv.height){
+          const ph=Math.min(per,cv.height-sy);
+          const c2=document.createElement('canvas');c2.width=cv.width;c2.height=ph;
+          c2.getContext('2d').drawImage(cv,0,sy,cv.width,ph,0,0,cv.width,ph);
+          if(!first)pdf.addPage();first=false;
+          pdf.addImage(c2.toDataURL('image/jpeg',0.92),'JPEG',M,M,W,ph*W/cv.width);
+          sy+=ph;
+        }
+        y=M+H+1;
+      }else{
+        if(!first&&y+h>PH-M){pdf.addPage();y=M}
+        if(first){y=M;first=false}
+        pdf.addImage(cv.toDataURL('image/jpeg',0.92),'JPEG',M,y,W,h);
+        y+=h+2;
+      }
+    }
+    pdf.save('월간보고서_'+month+($('p_cust').value?'_'+$('p_cust').value:'')+'.pdf');
+    toast('PDF를 저장했습니다');
+  }catch(e){console.error(e);toast('PDF 저장에 실패했습니다 — [인쇄]에서 PDF로 저장하세요')}
+  finally{swapped.forEach(([el,d])=>{d.remove();el.style.display=''});styled.forEach(([el,s])=>el.setAttribute('style',s));btn.disabled=false;btn.textContent=lab}
+}
 
 /* ===== 기준정보 ===== */
 function mdel(t,v){S.master.mdel=S.master.mdel||{};S.master.mdel[t+'|'+v]=now();}
