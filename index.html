@@ -99,6 +99,11 @@ tr.sum td{background:#EEF2F7;font-weight:700;border-top:2px solid var(--line)}
 .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
 .chip{padding:3px 10px;border-radius:14px;border:1px solid var(--line);background:#fff;font-size:12px;cursor:pointer}
 .chip.on{background:var(--steel);color:#fff;border-color:var(--steel)}
+.act{position:sticky;bottom:0;z-index:3;box-shadow:0 -4px 12px rgba(20,30,45,.07);padding:10px 14px}
+.act .fl{gap:6px}
+@media (max-width:900px){.act{position:static;box-shadow:none}}
+tr.sel td{background:var(--steel2)!important;box-shadow:inset 3px 0 0 var(--steel)}
+#tHist tr{cursor:pointer}
 .ok-msg{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:#1B2C45;color:#fff;padding:10px 18px;border-radius:8px;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.2);z-index:99;display:none}
 
 /* charts */
@@ -172,15 +177,14 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
 <nav>
   <div class="brand"><b>생산일보 통합관리</b><span>태진다이텍 · 프레스 생산실적</span></div>
   <a data-pg="dash" class="on"><i>▦</i>현황판</a>
-  <a data-pg="entry"><i>✎</i>일보 입력</a>
-  <a data-pg="hist"><i>≡</i>생산이력</a>
+  <a data-pg="entry"><i>✎</i>생산일보</a>
   <a data-pg="month"><i>Σ</i>월간 집계</a>
   <a data-pg="daily"><i>▤</i>품목별 일별표</a>
   <a data-pg="report"><i>▣</i>월간 보고서</a>
   <a data-pg="master"><i>⚙</i>기준정보</a>
   <a data-pg="data"><i>⇅</i>데이터 관리</a>
   <a data-pg="help"><i>?</i>사용안내</a>
-  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v3.4</div>
+  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v4.1</div>
 </nav>
 <main>
   <div class="top">
@@ -203,10 +207,27 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
     <div class="panel"><h3 id="recentTitle">최근 입력 일보</h3><div class="tw" style="max-height:340px"><table id="tRecent"></table></div></div>
   </section>
 
-  <!-- 입력 -->
+  <!-- 생산일보 (입력 + 이력) -->
   <section class="pg" id="pg-entry">
+    <!-- 1. 불러오기 · 필터 -->
     <div class="panel">
-      <div class="fl" style="margin-bottom:12px"><h3 id="entryTitle" style="margin:0">새 일보</h3><span class="grow"></span><button class="s p" onclick="openMes()">MES 실적 불러오기</button><button class="s" onclick="copyPrev()">전일 동일설비 불러오기</button><button class="s" onclick="resetForm()">비우기</button></div>
+      <div class="fl">
+        <button class="p" onclick="openMes()">MES 실적 불러오기</button>
+        <span style="width:8px"></span>
+        <select id="h_range" style="min-width:150px"></select>
+        <input type="date" id="h_from" style="display:none"><input type="date" id="h_to" style="display:none">
+        <select id="h_cust"><option value="">고객사 전체</option></select>
+        <select id="h_mc"><option value="">설비 전체</option></select>
+        <select id="h_pn"><option value="">품번 전체</option></select>
+        <select id="h_w"><option value="">작업자 전체</option></select>
+        <input id="h_q" placeholder="검색 (품명·정지사유·특기사항)" class="grow">
+      </div>
+      <div class="muted" id="h_sum" style="margin-top:8px"></div>
+    </div>
+
+    <!-- 2. 일보 입력 -->
+    <div class="panel">
+      <div class="fl" style="margin-bottom:12px"><h3 id="entryTitle" style="margin:0">새 일보</h3><span class="grow"></span><button class="s" onclick="copyPrev()">전일 동일설비 불러오기</button></div>
       <div class="form">
         <div><label>생산일자</label><input type="date" id="f_date"></div>
         <div class="c2"><label>설비</label><select id="f_mc"></select></div>
@@ -234,29 +255,28 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
         <div><small>가동율</small><b id="r_oper">0%</b> <small>가동 ÷ 근무</small></div>
         <div><small>효율</small><b id="r_eff">0%</b> <small>실적 ÷ 가능</small></div>
       </div>
-      <div class="fl"><button class="p" onclick="saveRec()" id="btnSave">저장 (Ctrl+Enter)</button><button onclick="saveRec(true)">저장 후 같은 날짜 계속 입력</button><span class="grow"></span><span class="muted" id="fmsg"></span></div>
     </div>
-    <div class="panel"><h3 id="dayListTitle">선택한 날짜의 일보</h3><div class="tw" style="max-height:360px"><table id="tDay"></table></div></div>
-    <datalist id="dlW"></datalist>
-  </section>
 
-  <!-- 이력 -->
-  <section class="pg" id="pg-hist">
+    <!-- 3. 생산이력(DB) -->
     <div class="panel">
-      <div class="fl">
-        <select id="h_range" style="min-width:150px"></select>
-        <input type="date" id="h_from" style="display:none"><input type="date" id="h_to" style="display:none">
-        <select id="h_cust"><option value="">고객사 전체</option></select>
-        <select id="h_mc"><option value="">설비 전체</option></select>
-        <select id="h_pn"><option value="">품번 전체</option></select>
-        <select id="h_w"><option value="">작업자 전체</option></select>
-        <input id="h_q" placeholder="검색 (품명·정지사유·특기사항)" class="grow">
-        <button onclick="exportHist()">엑셀 내려받기</button>
-        <button onclick="window.print()">인쇄</button>
-      </div>
-      <div class="muted" id="h_sum" style="margin-top:8px"></div>
+      <h3 style="margin-bottom:8px">생산이력 (줄을 클릭하면 위 입력란으로 불러옵니다)</h3>
+      <div class="tw" style="max-height:46vh"><table id="tHist"></table></div>
     </div>
-    <div class="tw"><table id="tHist"></table></div>
+
+    <!-- 4. 실행 버튼 -->
+    <div class="panel act">
+      <div class="fl">
+        <button class="p" onclick="saveRec()" id="btnSave">저장 (Ctrl+Enter)</button>
+        <button onclick="newRec()">신규작성</button>
+        <button onclick="editSel()" id="btnEdit">수정</button>
+        <button class="d" onclick="delSel()" id="btnDel">삭제</button>
+        <span class="grow"></span>
+        <button onclick="exportHist()">엑셀 다운로드</button>
+        <button onclick="window.print()">인쇄</button>
+        <span class="muted" id="fmsg"></span>
+      </div>
+    </div>
+    <datalist id="dlW"></datalist>
   </section>
 
   <!-- 월간 -->
@@ -451,6 +471,13 @@ function renameCust(from,to){
 function migrate(){
   S.mig=S.mig||{};
   if(!S.mig.custATC){renameCust('ATC','SKF SBC');S.mig.custATC=now()}
+  // 기본 MES 매핑 보강 — 이미 지정된 코드는 그대로 두고 빠진 것만 채움
+  if(!S.mig.mesmc300){
+    S.master.mesMc=S.master.mesMc||{};S.master.mesPn=S.master.mesPn||{};
+    Object.entries(DEF_MESMC).forEach(([k,v])=>{if(!S.master.mesMc[k])S.master.mesMc[k]=v});
+    Object.entries(DEF_MESPN).forEach(([k,v])=>{if(!S.master.mesPn[k])S.master.mesPn[k]=v});
+    S.mig.mesmc300=now();
+  }
 }
 function saveLocal(){S.ua=now();localStorage.setItem(LS_KEY,JSON.stringify(S));$('cnt').textContent='일보 '+S.recs.length+'건';}
 function commit(){saveLocal();schedulePush();renderAll();}
@@ -501,7 +528,7 @@ async function push(manual){
 /* ===== 공통 UI ===== */
 function toast(m){const t=$('toast');t.textContent=m;t.style.display='block';clearTimeout(t._t);t._t=setTimeout(()=>t.style.display='none',1800)}
 function go(p){pg=p;document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('on',a.dataset.pg===p));document.querySelectorAll('.pg').forEach(s=>s.classList.toggle('on',s.id==='pg-'+p));
-  $('title').textContent={dash:'현황판',entry:'일보 입력',hist:'생산이력',month:'월간 집계',daily:'품목별 일별표',report:'월간 보고서',master:'기준정보',data:'데이터 관리',help:'사용안내'}[p];
+  $('title').textContent={dash:'현황판',entry:'생산일보 입력 · 이력',month:'월간 집계',daily:'품목별 일별표',report:'월간 보고서',master:'기준정보',data:'데이터 관리',help:'사용안내'}[p];
   if(p==='entry'&&!editId&&!$('f_date').value)$('f_date').value=today();
   renderAll();window.scrollTo(0,0);}
 document.querySelectorAll('nav a').forEach(a=>a.onclick=()=>go(a.dataset.pg));
@@ -512,7 +539,7 @@ function cls(v){return v>=0.85?'g':v>=0.7?'':v>=0.6?'a':'r'}
 
 function renderAll(){
   $('monLbl').textContent=month.replace('-','년 ')+'월';
-  ({dash:renderDash,entry:renderEntry,hist:renderHist,month:renderMonth,daily:renderDaily,report:renderReport,master:renderMaster,data:renderData,help:()=>{}})[pg]();
+  ({dash:renderDash,entry:renderEntry,month:renderMonth,daily:renderDaily,report:renderReport,master:renderMaster,data:renderData,help:()=>{}})[pg]();
 }
 
 /* ===== 현황판 ===== */
@@ -577,7 +604,7 @@ function onPn(){const it=S.master.items.find(i=>i.pn===$('f_pn').value);if(!it)r
 function readout(){const r=readForm();const c=calc(r);$('r_run').textContent=fmt(c.run);$('r_cap').textContent=fmt(c.cap);const o=$('r_oper'),e=$('r_eff');o.textContent=pct(c.oper);e.textContent=pct(c.eff);o.className=isFinite(c.oper)?cls(c.oper):'';e.className=isFinite(c.eff)?cls(c.eff):'';}
 function readForm(){return{date:$('f_date').value,mc:$('f_mc').value,proc:$('f_proc').value.trim()||'P/R',cust:$('f_cust').value,pn:$('f_pn').value,name:$('f_name').value.trim(),w1:$('f_w1').value.trim(),w2:$('f_w2').value.trim(),w3:$('f_w3').value.trim(),w4:$('f_w4').value.trim(),spm:+$('f_spm').value||0,work:+$('f_work').value||0,stop:+$('f_stop').value||0,brk:+$('f_brk').value||0,qty:+$('f_qty').value||0,ng:+$('f_ng').value||0,reg:+$('f_reg').value,sr:$('f_sr').value.trim(),note:$('f_note').value.trim()}}
 function writeForm(r){$('f_date').value=r.date;$('f_mc').value=r.mc;$('f_proc').value=r.proc||'P/R';$('f_cust').value=r.cust;fillPn();$('f_pn').value=r.pn;$('f_name').value=r.name;['w1','w2','w3','w4'].forEach(k=>$('f_'+k).value=r[k]||'');$('f_spm').value=r.spm;$('f_work').value=r.work;$('f_stop').value=r.stop;$('f_brk').value=r.brk||'';$('f_qty').value=r.qty;$('f_ng').value=r.ng||'';$('f_reg').value=r.reg??1;$('f_sr').value=r.sr||'';$('f_note').value=r.note||'';readout();}
-function resetForm(keepDate){const d=keepDate?$('f_date').value:today();editId=null;$('entryTitle').textContent='새 일보';writeForm({date:d,mc:'',proc:'P/R',cust:'',pn:'',name:'',spm:'',work:'',stop:'',brk:'',qty:'',ng:'',reg:1,sr:'',note:''});$('fmsg').textContent='';renderEntry();}
+function resetForm(keepDate){const d=keepDate?$('f_date').value:today();editId=null;$('entryTitle').textContent='새 일보';if($('btnSave')){$('btnSave').textContent='저장 (Ctrl+Enter)';$('btnEdit').disabled=true;$('btnDel').disabled=true}writeForm({date:d,mc:'',proc:'P/R',cust:'',pn:'',name:'',spm:'',work:'',stop:'',brk:'',qty:'',ng:'',reg:1,sr:'',note:''});$('fmsg').textContent='';renderEntry();}
 function saveRec(cont){
   const r=readForm();
   const miss=[];if(!r.date)miss.push('생산일자');if(!r.mc)miss.push('설비');if(!r.cust)miss.push('고객사');if(!r.pn)miss.push('품번');if(!r.work)miss.push('근무시간');
@@ -597,7 +624,11 @@ function saveRec(cont){
   const d=r.date;commit();
   if(cont){resetForm(true);$('f_date').value=d;$('f_mc').focus();}else{resetForm(true);$('f_date').value=d;renderEntry();}
 }
-function editRec(id){const r=S.recs.find(x=>x.id===id);if(!r)return;editId=id;go('entry');$('entryTitle').textContent='일보 수정 · '+r.date+' '+r.mc;writeForm(r);window.scrollTo(0,0);}
+function editRec(id){const r=S.recs.find(x=>x.id===id);if(!r)return;editId=id;
+  if(pg!=='entry')go('entry');
+  $('entryTitle').textContent='일보 수정 · '+r.date+' '+r.mc+' · '+r.pn;
+  writeForm(r);$('btnSave').textContent='수정 저장 (Ctrl+Enter)';$('btnEdit').disabled=false;$('btnDel').disabled=false;
+  renderHist();window.scrollTo({top:0,behavior:'smooth'});}
 function delRec(id){const r=S.recs.find(x=>x.id===id);if(!r)return;if(!confirm(r.date+' '+r.mc+' '+r.pn+' 일보를 삭제할까요?'))return;S.recs=S.recs.filter(x=>x.id!==id);S.del[id]=now();if(editId===id)resetForm(true);commit();toast('삭제했습니다');}
 function copyPrev(){const mc=$('f_mc').value,d=$('f_date').value;if(!mc){$('fmsg').textContent='설비를 먼저 선택하세요';return}
   const prev=S.recs.filter(r=>r.mc===mc&&r.date<d).sort((a,b)=>b.date.localeCompare(a.date))[0];
@@ -605,12 +636,14 @@ function copyPrev(){const mc=$('f_mc').value,d=$('f_date').value;if(!mc){$('fmsg
   writeForm({...prev,date:d,qty:'',ng:'',stop:'',sr:'',note:''});$('fmsg').textContent=prev.date+' 일보를 불러왔습니다. 수량·정지시간을 입력하세요.';$('f_work').focus();}
 function renderEntry(){
   fillSelectors();readout();
-  const d=$('f_date').value||today();
-  const list=S.recs.filter(r=>r.date===d).sort((a,b)=>a.mc.localeCompare(b.mc,'ko',{numeric:true}));
-  let q=0,ng=0;list.forEach(r=>{q+=+r.qty||0;ng+=+r.ng||0});
-  $('dayListTitle').textContent=d+' 일보 '+list.length+'건 · 생산 '+fmt(q)+' EA · 불량 '+fmt(ng);
-  $('tDay').innerHTML=rowsTable(list,true);
+  $('btnSave').textContent=editId?'수정 저장 (Ctrl+Enter)':'저장 (Ctrl+Enter)';
+  $('btnEdit').disabled=!editId;$('btnDel').disabled=!editId;
+  renderHist();
 }
+function newRec(){resetForm(true);toast('새 일보를 입력하세요')}
+function editSel(){if(!editId){toast('아래 생산이력에서 수정할 줄을 먼저 클릭하세요');return}
+  const r=S.recs.find(x=>x.id===editId);if(r){writeForm(r);window.scrollTo(0,0);toast('입력란으로 불러왔습니다')}}
+function delSel(){if(!editId){toast('아래 생산이력에서 삭제할 줄을 먼저 클릭하세요');return}delRec(editId)}
 ['f_spm','f_work','f_stop','f_brk','f_qty'].forEach(id=>$(id).addEventListener('input',readout));
 $('f_pn').addEventListener('change',onPn);
 function spmFor(mc,pn){const last=S.recs.filter(r=>r.pn===pn&&r.mc===mc).sort((a,b)=>b.date.localeCompare(a.date))[0];if(last)return last.spm;const sd=(S.master.spmdb||[]).find(x=>x.pn===pn&&x.mc===mc);return sd?sd.spm:0}
@@ -703,14 +736,14 @@ function drawMes(d){
   const mcs=S.master.mcs.slice().sort((a,b)=>a.localeCompare(b,'ko',{numeric:true}));
   const opt=(list,cur)=>'<option value=""></option>'+list.map(v=>`<option value="${esc(v)}"${v===cur?' selected':''}>${esc(v)}</option>`).join('');
   const rows=MESROWS.map(r=>{
-    const spm=spmFor(r.mc,r.pn)||(r.run?Math.round(r.qty/r.run):0);
+    const spm=spmFor(r.mc,r.pn)||(r.run>=60?Math.round(r.qty/r.run):0);
     return `<tr${r.dup?' style="opacity:.55"':''}>
     <td><input type=checkbox ${r.use?'checked':''} onchange="mesSet(${r.i},'use',this.checked)"></td>
     <td class=muted style="font-size:11px">${esc(r.code)}<br>${esc(r.pnCode)}</td>
     <td><select onchange="mesSet(${r.i},'mc',this.value)" style="min-width:110px;padding:3px 5px">${opt(mcs,r.mc)}</select></td>
     <td><select onchange="mesSet(${r.i},'pn',this.value)" style="min-width:130px;padding:3px 5px">${opt(S.master.items.map(x=>x.pn),r.pn)}<option value="@${esc(r.pnCode)}"${r.pn==='@'+r.pnCode?' selected':''}>＋ ${esc(r.pnCode)} 신규 등록</option></select><div class=muted style="font-size:11px">${esc(r.name2)}</div></td>
     <td><input value="${esc(r.w1)}" list="dlW" onchange="mesSet(${r.i},'w1',this.value)" style="width:80px;padding:3px 5px"></td>
-    <td class=num>${spm||''}</td>
+    <td class=num>${spm||'—'}</td>
     <td><input type=number value="${r.work}" onchange="mesSet(${r.i},'work',this.value)" style="width:70px;padding:3px 5px"></td>
     <td class=num${r.noRun?' style="color:var(--amber)"':''}>${r.run?fmt(r.run):'—'}</td>
     <td><input type=number value="${r.stop}" onchange="mesSet(${r.i},'stop',this.value)" style="width:70px;padding:3px 5px"></td>
@@ -748,7 +781,7 @@ function saveMes(){
     }
     r.pn=pn;
     const it=S.master.items.find(x=>x.pn===r.pn);
-    const spm=spmFor(r.mc,r.pn)||(r.run?Math.round(r.qty/r.run):0);
+    const spm=spmFor(r.mc,r.pn)||(r.run>=60?Math.round(r.qty/r.run):0);
     if(r.w1&&!S.master.workers.includes(r.w1))S.master.workers.push(r.w1);
     S.recs.push({id:uid(),date:d,mc:r.mc,proc:'P/R',cust:it?it.cust:'',pn:r.pn,name:it?it.name:r.name2,
       w1:r.w1,w2:'',w3:'',w4:'',spm:spm,work:r.work,stop:r.stop,brk:r.brk,qty:r.qty,ng:r.ng,
@@ -785,7 +818,7 @@ function renderHist(){
   $('h_sum').textContent=`${L.length}건 · 생산 ${fmt(q)} EA · 가동율 ${pct(run/work)} · 효율 ${pct(q/cap)} · 불량 ${fmt(ng)}`;
   const cols=[['date','생산일자'],['mc','설비'],['cust','고객사'],['pn','품번'],['name','품명'],['w1','작업자'],['spm','SPM',1],['work','근무',1],['stop','정지',1],['brk','휴식',1],['run','가동',1],['cap','가능',1],['qty','실적',1],['oper','가동율',1],['eff','효율',1],['ng','불량',1],['sr','정지사유'],['note','특기사항']];
   const h='<tr>'+cols.map(c=>`<th class="sort ${c[2]?'num':''} ${sortKey===c[0]?(sortDir>0?'asc':'desc'):''}" onclick="sortBy('${c[0]}')">${c[1]}</th>`).join('')+'<th></th></tr>';
-  $('tHist').innerHTML=h+(L.length?L.map(r=>`<tr><td>${r.date}</td><td>${esc(r.mc)}</td><td><span class="tag">${esc(r.cust)}</span></td><td>${esc(r.pn)}</td><td class=muted>${esc(r.name)}</td><td>${esc(workers(r).join(','))}</td><td class=num>${r.spm}</td><td class=num>${r.work}</td><td class=num>${r.stop}</td><td class=num>${r.brk||''}</td><td class=num>${r.run}</td><td class=num>${fmt(r.cap)}</td><td class=num><b>${fmt(r.qty)}</b></td><td class=num><span class="tag ${cls(r.oper)}">${pct(r.oper)}</span></td><td class=num><span class="tag ${cls(r.eff)}">${pct(r.eff)}</span></td><td class=num>${r.ng||''}</td><td class=muted>${esc(r.sr)}</td><td class=muted>${esc(r.note)}</td><td><button class=s onclick="editRec('${r.id}')">수정</button> <button class="s d" onclick="delRec('${r.id}')">삭제</button></td></tr>`).join('')+`<tr class=sum><td colspan=7>합계 ${L.length}건</td><td class=num>${fmt(work)}</td><td class=num>${fmt(work-run)}</td><td></td><td class=num>${fmt(run)}</td><td class=num>${fmt(cap)}</td><td class=num>${fmt(q)}</td><td class=num>${pct(run/work)}</td><td class=num>${pct(q/cap)}</td><td class=num>${fmt(ng)}</td><td colspan=3></td></tr>`:'<tr><td colspan=19 class=empty>조건에 맞는 일보가 없습니다</td></tr>');
+  $('tHist').innerHTML=h+(L.length?L.map(r=>`<tr class="${r.id===editId?'sel':''}" onclick="editRec('${r.id}')"><td>${r.date}</td><td>${esc(r.mc)}</td><td><span class="tag">${esc(r.cust)}</span></td><td>${esc(r.pn)}</td><td class=muted>${esc(r.name)}</td><td>${esc(workers(r).join(','))}</td><td class=num>${r.spm}</td><td class=num>${r.work}</td><td class=num>${r.stop}</td><td class=num>${r.brk||''}</td><td class=num>${r.run}</td><td class=num>${fmt(r.cap)}</td><td class=num><b>${fmt(r.qty)}</b></td><td class=num><span class="tag ${cls(r.oper)}">${pct(r.oper)}</span></td><td class=num><span class="tag ${cls(r.eff)}">${pct(r.eff)}</span></td><td class=num>${r.ng||''}</td><td class=muted>${esc(r.sr)}</td><td class=muted>${esc(r.note)}</td><td><button class="s d" onclick="event.stopPropagation();delRec('${r.id}')">삭제</button></td></tr>`).join('')+`<tr class=sum><td colspan=7>합계 ${L.length}건</td><td class=num>${fmt(work)}</td><td class=num>${fmt(work-run)}</td><td></td><td class=num>${fmt(run)}</td><td class=num>${fmt(cap)}</td><td class=num>${fmt(q)}</td><td class=num>${pct(run/work)}</td><td class=num>${pct(q/cap)}</td><td class=num>${fmt(ng)}</td><td colspan=3></td></tr>`:'<tr><td colspan=19 class=empty>조건에 맞는 일보가 없습니다</td></tr>');
 }
 function sortBy(k){if(sortKey===k)sortDir*=-1;else{sortKey=k;sortDir=k==='date'?-1:1}renderHist();}
 ['h_range','h_from','h_to','h_cust','h_mc','h_pn','h_w'].forEach(id=>$(id).addEventListener('change',renderHist));
