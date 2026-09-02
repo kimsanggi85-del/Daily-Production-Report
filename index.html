@@ -184,7 +184,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
   <a data-pg="master"><i>⚙</i>기준정보</a>
   <a data-pg="data"><i>⇅</i>데이터 관리</a>
   <a data-pg="help"><i>?</i>사용안내</a>
-  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v4.1</div>
+  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v4.2</div>
 </nav>
 <main>
   <div class="top">
@@ -249,12 +249,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
         <div class="c3"><label>정지사유</label><input id="f_sr" placeholder="예: 조회 금형점검 소재교환"><div class="chips" id="chips"></div></div>
         <div class="c3"><label>특기사항 (불량내용 등)</label><input id="f_note" placeholder="예: 시타발43 수리중불량15"></div>
       </div>
-      <div class="readout">
-        <div><small>가동시간</small><b id="r_run">0</b> <small>분 = 근무 − 정지</small></div>
-        <div><small>가능수량</small><b id="r_cap">0</b> <small>EA = SPM × (근무−휴식)</small></div>
-        <div><small>가동율</small><b id="r_oper">0%</b> <small>가동 ÷ 근무</small></div>
-        <div><small>효율</small><b id="r_eff">0%</b> <small>실적 ÷ 가능</small></div>
-      </div>
+      <div class="readout" style="display:none"><div><b id="r_run"></b><b id="r_cap"></b><b id="r_oper"></b><b id="r_eff"></b></div></div>
     </div>
 
     <!-- 3. 생산이력(DB) -->
