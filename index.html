@@ -192,7 +192,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
   <a data-pg="master"><i>⚙</i>기준정보</a>
   <a data-pg="data"><i>⇅</i>데이터 관리</a>
   <a data-pg="help"><i>?</i>사용안내</a>
-  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v7.0</div>
+  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v7.1</div>
 </nav>
 <main>
   <div class="top">
@@ -248,7 +248,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
         <div><label>작업자3</label><input id="f_w3" list="dlW"></div>
         <div><label>작업자4</label><input id="f_w4" list="dlW"></div>
         <div><label>근무시간(분)</label><input type="number" id="f_work" min="0" placeholder="570"></div>
-        <div><label>정지시간(분)</label><input type="number" id="f_stop" min="0" placeholder="0"></div>
+        <div><label>정지시간(분)</label><input type="number" id="f_stop" min="0" placeholder="0"><label style="display:flex;align-items:center;gap:4px;margin-top:4px;font-size:11px;color:var(--muted);font-weight:400"><input type="checkbox" id="f_auto" checked style="width:auto;margin:0"> 실적에 맞춰 자동 계산</label></div>
         <div><label>휴식·식사(분)</label><input type="number" id="f_brk" placeholder="0"></div>
         <div><label>실적수량(EA)</label><input type="number" id="f_qty" min="0"></div>
         <div><label>작업불량(EA)</label><input type="number" id="f_ng" min="0" placeholder="0"></div>
@@ -257,7 +257,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
         <div class="c3"><label>정지사유</label><input id="f_sr" placeholder="예: 조회 금형점검 소재교환"><div class="chips" id="chips"></div></div>
         <div class="c3"><label>특기사항 (불량내용 등)</label><input id="f_note" placeholder="예: 시타발43 수리중불량15"></div>
       </div>
-      <div class="readout" style="display:none"><div><b id="r_run"></b><b id="r_cap"></b><b id="r_oper"></b><b id="r_eff"></b></div></div>
+      <div class="fl" id="rline" style="font-size:12px;color:var(--muted);margin-top:2px"><span>가동 <b id="r_run">0</b>분</span><span>가능 <b id="r_cap">0</b> EA</span><span>가동율 <b id="r_oper">-</b></span><span>효율 <b id="r_eff">-</b></span></div>
     </div>
 
     <!-- 3. 생산이력(DB) -->
@@ -709,6 +709,18 @@ function editSel(){if(!editId){toast('아래 생산이력에서 수정할 줄을
   const r=S.recs.find(x=>x.id===editId);if(r){writeForm(r);window.scrollTo(0,0);toast('입력란으로 불러왔습니다')}}
 function delSel(){if(!editId){toast('아래 생산이력에서 삭제할 줄을 먼저 클릭하세요');return}delRec(editId)}
 ['f_spm','f_work','f_stop','f_brk','f_qty','f_ngp'].forEach(id=>$(id).addEventListener('input',readout));
+// 실적수량을 고치면 가동시간(=실적÷SPM)을 다시 잡아 가동율도 함께 바뀌게 한다
+function autoRun(){
+  if(!$('f_auto')||!$('f_auto').checked)return;
+  const spm=+$('f_spm').value||0, work=+$('f_work').value||0, qty=+$('f_qty').value||0;
+  if(!spm||!work)return;
+  const run=Math.min(work,Math.round(qty/spm));
+  $('f_stop').value=Math.max(0,work-run);
+  readout();
+}
+['f_qty','f_spm','f_work'].forEach(id=>$(id).addEventListener('input',autoRun));
+$('f_auto').addEventListener('change',autoRun);
+$('f_stop').addEventListener('input',()=>{$('f_auto').checked=false});
 $('f_pn').addEventListener('change',onPn);
 function spmFor(mc,pn){
   if(!pn)return 0;
@@ -843,6 +855,10 @@ function closeMask(){$('mask').classList.remove('on')}
 function mesSet(i,k,v){const r=MESROWS[i];if(!r)return;
   if(k==='use')r.use=v; else r[k]=(['work','stop','qty','ng','ngp','brk','spmFix'].includes(k))?(+v||0):v;
   if(k==='work'&&!r.noRun)r.stop=Math.max(0,r.work-r.run);
+  if(k==='qty'||k==='spmFix'||k==='work'){ // 실적을 고치면 가동시간(실적÷SPM)으로 정지시간을 다시 잡음
+    const sp=r.spmFix||spmFor(r.mc,r.pn)||0;
+    if(sp&&r.work){r.run=Math.min(r.work,Math.round(r.qty/sp));r.stop=Math.max(0,r.work-r.run);r.noRun=false}
+  }
   if(k==='mc'||k==='pn'){const it=S.master.items.find(x=>x.pn===r.pn);r.cust=it?it.cust:'';if(it)r.name2=it.name;r.dup=!!S.recs.find(x=>x.date===$('f_date').value&&x.mc===r.mc&&x.pn===r.pn)}
   drawMes($('f_date').value);
 }
