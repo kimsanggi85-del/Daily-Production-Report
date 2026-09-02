@@ -180,7 +180,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
   <a data-pg="master"><i>⚙</i>기준정보</a>
   <a data-pg="data"><i>⇅</i>데이터 관리</a>
   <a data-pg="help"><i>?</i>사용안내</a>
-  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v2.0</div>
+  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v2.2</div>
 </nav>
 <main>
   <div class="top">
@@ -402,7 +402,7 @@ const SEED_MASTER={"mcs":["01 쌍용200","02 심팩200","03 심팩150","04 심�
 /* ===== 상태 ===== */
 let S={recs:[],del:{},master:null,seedVer:'',ua:''};
 let month=new Date().toISOString().slice(0,7);
-let editId=null, pg='dash', sortKey='date', sortDir=-1, wView='sum';
+let editId=null, pg='dash', sortKey='date', sortDir=-1;
 const $=id=>document.getElementById(id);
 const fmt=n=>(Math.round(n||0)).toLocaleString('ko-KR');
 const fmtK=v=>v>=1e6?(v/1e4).toFixed(0)+'만':v>=1e4?(v/1e4).toFixed(1)+'만':fmt(v);
@@ -425,7 +425,21 @@ function load(){
     SEED.forEach(r=>{if(S.del[r.id])return;const e=byId.get(r.id);if(!e)S.recs.push(r);else if(e.brk===undefined)e.brk=r.brk});
     S.seedVer=SEED_VER;
   }
+  migrate();
   saveLocal();
+}
+// 이름 변경 등 1회성 정리 (모든 기기에서 같은 결과가 되도록 서버에도 반영됨)
+function renameCust(from,to){
+  let n=0;
+  S.recs.forEach(r=>{if(r.cust===from){r.cust=to;r.ua=now();n++}});
+  S.master.items.forEach(i=>{if(i.cust===from)i.cust=to});
+  S.master.custs=S.master.custs.map(c=>c===from?to:c).filter((c,i,a)=>a.indexOf(c)===i);
+  if(S.rpt){const o={};Object.entries(S.rpt).forEach(([k,v])=>{const[m,c]=k.split('|');o[m+'|'+(c===from?to:c)]=v});S.rpt=o}
+  return n;
+}
+function migrate(){
+  S.mig=S.mig||{};
+  if(!S.mig.custATC){renameCust('ATC','SKF SBC');S.mig.custATC=now()}
 }
 function saveLocal(){S.ua=now();localStorage.setItem(LS_KEY,JSON.stringify(S));$('cnt').textContent='일보 '+S.recs.length+'건';}
 function commit(){saveLocal();schedulePush();renderAll();}
@@ -440,6 +454,7 @@ function mergeIn(srv){
   Object.assign(S.del,srv.del||{});
   srv.recs.forEach(r=>{if(S.del[r.id])return;const l=map.get(r.id);if(!l||(r.ua||'')>=(l.ua||''))map.set(r.id,r)});
   S.recs=[...map.values()].filter(r=>!S.del[r.id]);
+  if(srv.mig){S.mig=Object.assign(S.mig||{},srv.mig)}
   if(srv.rpt){S.rpt=S.rpt||{};Object.entries(srv.rpt).forEach(([k,v])=>{if(!S.rpt[k]||(v.ua||'')>=(S.rpt[k].ua||''))S.rpt[k]=v})}
   if(srv.master){const m=S.master;const sm=srv.master;
     ['mcs','custs','workers','reasons'].forEach(k=>{(sm[k]||[]).forEach(v=>{if(!m[k].includes(v))m[k].push(v)})});
@@ -454,7 +469,7 @@ async function pull(manual){
     const r=await fetch(SB_URL+'/rest/v1/kv_store?key=eq.'+KV_KEY+'&select=value',{headers:hdr});
     if(!r.ok)throw new Error(r.status);
     const j=await r.json();
-    if(j.length){mergeIn(j[0].value);saveLocal();renderAll();}
+    if(j.length){mergeIn(j[0].value);migrate();saveLocal();renderAll();}
     setSync('ok','서버 연결됨');
     if(manual)toast('서버 자료를 받았습니다');
     await push();
@@ -464,7 +479,7 @@ function schedulePush(){clearTimeout(pushT);pushT=setTimeout(()=>push(),800);}
 async function push(manual){
   setSync('busy','서버에 올리는 중');
   try{
-    const body=[{key:KV_KEY,value:{recs:S.recs,del:S.del,master:S.master,rpt:S.rpt||{},ua:S.ua},updated_at:now()}];
+    const body=[{key:KV_KEY,value:{recs:S.recs,del:S.del,master:S.master,rpt:S.rpt||{},mig:S.mig||{},ua:S.ua},updated_at:now()}];
     const r=await fetch(SB_URL+'/rest/v1/kv_store?on_conflict=key',{method:'POST',headers:{...hdr,'Prefer':'resolution=merge-duplicates'},body:JSON.stringify(body)});
     if(!r.ok)throw new Error(r.status);
     setSync('ok','서버 연결됨');if(manual)toast('서버에 올렸습니다');
@@ -707,7 +722,6 @@ function svgHBars(rows,opt={}){ // rows:[{l,v,txt,c}]
   return rows.map(r=>`<div class="hb" style="grid-template-columns:${opt.lw||150}px 1fr ${opt.tw||90}px"><span title="${esc(r.l)}" style="overflow:hidden;text-overflow:ellipsis">${esc(r.l)}</span><div class="bar"><i style="width:${(r.v/mx*100).toFixed(1)}%;background:${r.c||C.bar}"></i></div><span class=num style="font-size:12px">${r.txt}</span></div>`).join('')}
 function stopWords(R){const words={};const dict=[...new Set([...S.master.reasons,'설비이상','금형수리','금형점검','소재교환','측정대기','치수조정','치수수정','청소','3정5행','조회','관리','박스정리','기종전환','금형교환','대기','종료','가동'])].filter(w=>!['기타','조회','가동','종료'].includes(w));
   R.forEach(r=>{const s=(r.sr||'');dict.forEach(w=>{if(s.includes(w))words[w]=(words[w]||0)+1})});return Object.entries(words).sort((a,b)=>b[1]-a[1])}
-function setWView(v){wView=v;renderReport()}
 function renderReport(){
   opts($('p_cust'),S.master.custs,$('p_cust').value,'고객사 전체');
   const cu=$('p_cust').value;const st=rptStats(month,cu);const pm=prevMonth(month);const pv=rptStats(pm,cu).total;const o=rptGet();const R=st.R;const T=st.total;
@@ -745,45 +759,18 @@ function renderReport(){
   const gwi={};R.forEach(r=>{const k=r.w1||'(미기재)';const c=calc(r);
     const o=(gwi[k]=gwi[k]||{})[r.pn]=gwi[k][r.pn]||{name:r.name,cust:r.cust,q:0,ng:0,n:0,run:0,work:0,cap:0,days:new Set()};
     o.q+=+r.qty||0;o.ng+=+r.ng||0;o.n++;o.run+=c.run;o.work+=+r.work||0;o.cap+=c.cap;o.days.add(r.date)});
-  // 같은 품목을 여러 작업자가 한 경우 (효율 편차 비교)
-  const gip={};R.forEach(r=>{const w=r.w1||'(미기재)';const c=calc(r);
-    const it=gip[r.pn]=gip[r.pn]||{name:r.name,cust:r.cust,w:{}};
-    const o=it.w[w]=it.w[w]||{q:0,ng:0,n:0,run:0,work:0,cap:0,days:new Set()};
-    o.q+=+r.qty||0;o.ng+=+r.ng||0;o.n++;o.run+=c.run;o.work+=+r.work||0;o.cap+=c.cap;o.days.add(r.date)});
-  const cmpl=Object.entries(gip).map(([pn,it])=>{
-      const ws=Object.entries(it.w).filter(([,o])=>o.cap>0).map(([w,o])=>({w,...o,eff:o.q/o.cap,oper:o.run/o.work}))
-        .sort((a,b)=>b.eff-a.eff);
-      const q=ws.reduce((a,x)=>a+x.q,0);
-      return{pn,name:it.name,cust:it.cust,ws,q,gap:ws.length>1?ws[0].eff-ws[ws.length-1].eff:0}})
-    .filter(x=>x.ws.length>1).sort((a,b)=>b.gap-a.gap);
   // 품목
   const gp={};R.forEach(r=>{const g=gp[r.pn]=gp[r.pn]||{name:r.name,cust:r.cust,q:0,ng:0,run:0,work:0,cap:0,n:0};const c=calc(r);g.q+=+r.qty||0;g.ng+=+r.ng||0;g.run+=c.run;g.work+=+r.work||0;g.cap+=c.cap;g.n++});
   const gpl=Object.entries(gp).sort((a,b)=>b[1].q-a[1].q);
   const wk=w=>`<tr><td>${w.i}주차 (${m}/${String(w.a).padStart(2,'0')}~${m}/${String(w.b).padStart(2,'0')})</td><td class=num>${w.days||''}</td><td class=num>${w.n?pct(w.oper):''}</td><td class=num>${w.days?fmt(w.runPerDay):''}</td><td class=num>${w.n?pct(w.eff):''}</td><td class=num>${w.n?fmt(w.qty):''}</td><td class=num>${w.n?fmt(w.ng):''}</td><td>${ta('i'+w.i)}</td><td>${ta('a'+w.i)}</td></tr>`;
-  // 10번 항목: 보기 3종
-  let wHtml='';
-  if(wView==='sum'){
-    wHtml='<div class="muted" style="font-size:12px;margin-bottom:6px">근무일·작업건수는 보조 작업자로 참여한 것도 포함, 생산수량·가동율·효율·불량은 중복을 피해 주작업자(작업자1) 기준</div>'
-      +'<table><tr><th>작업자</th><th class=num>근무일</th><th class=num>작업건수</th><th class=num>보조</th><th class=num>생산수량</th><th class=num>가동율</th><th class=num>효율</th><th class=num>불량</th></tr>'
-      +gwl.map(([k,g])=>`<tr><td>${esc(k)}</td><td class=num>${g.days.size}</td><td class=num>${g.n}</td><td class=num>${g.sub||''}</td><td class=num>${fmt(g.q)}</td><td class=num>${pct(g.run/g.work)}</td><td class=num>${pct(g.q/g.cap)}</td><td class=num>${g.ng||''}</td></tr>`).join('')
-      +'</table>';
-  }else if(wView==='item'){
-    const rows=gwl.filter(([k])=>gwi[k]).map(([k,g])=>{
-      const its=Object.entries(gwi[k]).sort((a,b)=>b[1].q-a[1].q);
-      const body=its.map(([pn,o],i)=>`<tr><td>${i===0?'<b>'+esc(k)+'</b>':''}</td><td>${esc(pn)}</td><td class=muted style="max-width:180px;overflow:hidden;text-overflow:ellipsis">${esc(o.name)}</td><td>${esc(o.cust)}</td><td class=num>${o.days.size}</td><td class=num>${o.n}</td><td class=num>${fmt(o.q)}</td><td class=num><span class="tag ${cls(o.run/o.work)}">${pct(o.run/o.work)}</span></td><td class=num><span class="tag ${cls(o.q/o.cap)}">${pct(o.q/o.cap)}</span></td><td class=num>${o.ng||''}</td></tr>`).join('');
-      return body+`<tr class=sum><td></td><td colspan=3>${esc(k)} 합계 (품목 ${its.length}종)</td><td class=num>${g.days.size}</td><td class=num>${g.n}</td><td class=num>${fmt(g.q)}</td><td class=num>${pct(g.run/g.work)}</td><td class=num>${pct(g.q/g.cap)}</td><td class=num>${fmt(g.ng)}</td></tr>`;
-    }).join('');
-    wHtml='<div class="muted" style="font-size:12px;margin-bottom:6px">주작업자(작업자1) 기준 · 작업자별로 어떤 품목을 얼마나 했는지</div>'
-      +'<div class="tw" style="max-height:none;border:0"><table><tr><th>작업자</th><th>품번</th><th>품명</th><th>고객사</th><th class=num>일수</th><th class=num>건수</th><th class=num>생산수량</th><th class=num>가동율</th><th class=num>효율</th><th class=num>불량</th></tr>'+rows+'</table></div>';
-  }else{
-    const rows=cmpl.map(it=>it.ws.map((x,i)=>{
-      const gapCell=i===0?`<td class=num rowspan=${it.ws.length}><b class="${it.gap>=0.15?'dn':''}">${(it.gap*100).toFixed(1)}%p</b></td>`:'';
-      return `<tr><td>${i===0?esc(it.pn):''}</td><td class=muted style="max-width:170px;overflow:hidden;text-overflow:ellipsis">${i===0?esc(it.name):''}</td><td>${i===0?esc(it.cust):''}</td><td>${esc(x.w)}</td><td class=num>${x.days.size}</td><td class=num>${x.n}</td><td class=num>${fmt(x.q)}</td><td class=num><span class="tag ${cls(x.oper)}">${pct(x.oper)}</span></td><td class=num><span class="tag ${cls(x.eff)}">${pct(x.eff)}</span></td><td class=num>${x.ng||''}</td>`+gapCell+'</tr>';
-    }).join('')).join('');
-    wHtml='<div class="muted" style="font-size:12px;margin-bottom:6px">같은 품목을 두 명 이상이 작업한 경우만 · 효율 높은 순 정렬 · 편차가 크면 작업 방법 차이, 모두 낮으면 금형·설비 문제일 가능성</div>'
-      +(cmpl.length?'<div class="tw" style="max-height:none;border:0"><table><tr><th>품번</th><th>품명</th><th>고객사</th><th>작업자</th><th class=num>일수</th><th class=num>건수</th><th class=num>생산수량</th><th class=num>가동율</th><th class=num>효율</th><th class=num>불량</th><th class=num>효율 편차</th></tr>'+rows+'</table></div>'
-        :'<div class=empty>같은 품목을 두 명 이상 작업한 경우가 없습니다</div>');
-  }
+  // 10번 항목: 작업자 × 품목
+  const wRows=gwl.filter(([k])=>gwi[k]).map(([k,g])=>{
+    const its=Object.entries(gwi[k]).sort((a,b)=>b[1].q-a[1].q);
+    const body=its.map(([pn,o],i)=>`<tr><td>${i===0?'<b>'+esc(k)+'</b>':''}</td><td>${esc(pn)}</td><td class=muted style="max-width:180px;overflow:hidden;text-overflow:ellipsis">${esc(o.name)}</td><td>${esc(o.cust)}</td><td class=num>${o.days.size}</td><td class=num>${o.n}</td><td class=num>${fmt(o.q)}</td><td class=num><span class="tag ${cls(o.run/o.work)}">${pct(o.run/o.work)}</span></td><td class=num><span class="tag ${cls(o.q/o.cap)}">${pct(o.q/o.cap)}</span></td><td class=num>${o.ng||''}</td></tr>`).join('');
+    return body+`<tr class=sum><td></td><td colspan=3>${esc(k)} 합계 (품목 ${its.length}종)</td><td class=num>${g.days.size}</td><td class=num>${g.n}</td><td class=num>${fmt(g.q)}</td><td class=num>${pct(g.run/g.work)}</td><td class=num>${pct(g.q/g.cap)}</td><td class=num>${fmt(g.ng)}</td></tr>`;
+  }).join('');
+  const wHtml='<div class="muted" style="font-size:12px;margin-bottom:6px">주작업자(작업자1) 기준 · 작업자별로 어떤 품목을 얼마나 했는지</div>'
+    +'<div class="tw" style="max-height:none;border:0"><table><tr><th>작업자</th><th>품번</th><th>품명</th><th>고객사</th><th class=num>일수</th><th class=num>건수</th><th class=num>생산수량</th><th class=num>가동율</th><th class=num>효율</th><th class=num>불량</th></tr>'+wRows+'</table></div>';
   $('rptBody').innerHTML=`
    <div class="sig"><table><tr><th>담당</th><th>검토</th><th>승인</th></tr><tr><td></td><td></td><td></td></tr></table></div>
    <div class="rpt-hd"><h2>${y}년 ${m}월 프레스 생산 실적 보고서</h2><span class="muted">${cu||'전 고객사'} · 기간 ${dates[0]||'-'} ~ ${dates[dates.length-1]||'-'} · 작성일 ${today()} · 작성 ${esc(localStorage.getItem('tj_me')||'')}</span></div>
@@ -794,7 +781,7 @@ function renderReport(){
     <div><small>평균 가동율</small><b>${pct(T.oper)}</b>${dlt(T.oper,pv.oper,1)}</div>
     <div><small>평균 효율</small><b>${pct(T.eff)}</b>${dlt(T.eff,pv.eff,1)}</div>
     <div><small>작업불량</small><b>${fmt(T.ng)}</b><em>${fmt(ppm)} PPM</em></div>
-    <div><small>가동일수 / 일보</small><b>${T.days}일</b><em>${T.n}건 · 설비 ${gml.length}대 · 품목 ${gpl.length}종</em></div>
+    <div><small>가동일수 / 작업건수</small><b>${T.days}일</b><em>${T.n}건 · 설비 ${gml.length}대 · 품목 ${gpl.length}종</em></div>
     <div><small>총 가동 / 정지시간</small><b>${(T.run/60).toFixed(0)}H</b><em>정지 ${(T.stop/60).toFixed(1)}H (${pct(T.stop/(T.work||1))})</em></div>
    </div></div>
 
@@ -841,7 +828,6 @@ function renderReport(){
    <div class="grid g2 rpt-sec">
     <div><h3>9. 품목별 생산 상위</h3><table><tr><th>품번</th><th>품명</th><th>고객사</th><th class=num>생산수량</th><th class=num>가동율</th><th class=num>효율</th></tr>${gpl.slice(0,15).map(([k,g])=>`<tr><td>${esc(k)}</td><td class=muted>${esc(g.name)}</td><td>${esc(g.cust)}</td><td class=num>${fmt(g.q)}</td><td class=num>${pct(g.run/g.work)}</td><td class=num>${pct(g.q/g.cap)}</td></tr>`).join('')}</table></div>
     <div><h3>10. 작업자별 실적</h3>
-     <div class="fl noprint" style="margin-bottom:6px"><span class="chip ${wView==='sum'?'on':''}" onclick="setWView('sum')">작업자 요약</span><span class="chip ${wView==='item'?'on':''}" onclick="setWView('item')">작업자 × 품목</span><span class="chip ${wView==='cmp'?'on':''}" onclick="setWView('cmp')">같은 품목 비교</span></div>
      ${wHtml}</div>
    </div>
 
@@ -857,27 +843,14 @@ function exportReport(){const cu=$('p_cust').value;const st=rptStats(month,cu);c
   rows.push({'구분':'작업자 인원','가동일수(일)':o.staff||''},{'구분':'지원 인원','가동일수(일)':o.support||''},{'구분':'야간근무','가동일수(일)':o.night||''},{'구분':'총 가동시간(분)','가동일수(일)':st.total.run},{'구분':'총 정지시간(분)','가동일수(일)':st.total.stop},{'구분':'특이사항','가동일수(일)':o.special||''});
   const days=st.days.map(d=>({'생산일':d.d,'건수':d.n,'생산수량':d.qty,'평균가동율(%)':+(d.oper*100).toFixed(2),'평균효율(%)':+(d.eff*100).toFixed(2),'불량':d.ng,'가동시간(분)':d.run,'정지시간(분)':d.stop}));
   const R=st.R;
-  const gwlRows=L=>{const g={};L.forEach(r=>{const ws=workers(r);const list=ws.length?ws:['(미기재)'];const c=calc(r);
-      list.forEach((k,i)=>{const o=g[k]=g[k]||{q:0,ng:0,n:0,sub:0,run:0,work:0,cap:0,days:new Set()};o.n++;o.days.add(r.date);
-        if(i===0){o.q+=+r.qty||0;o.ng+=+r.ng||0;o.run+=c.run;o.work+=+r.work||0;o.cap+=c.cap}else o.sub++})});
-    return Object.entries(g).sort((a,b)=>b[1].q-a[1].q).map(([k,o])=>({'작업자':k,'근무일':o.days.size,'작업건수':o.n,'보조건수':o.sub,'생산수량':o.q,'가동율(%)':+(o.run/o.work*100).toFixed(2)||'','효율(%)':+(o.q/o.cap*100).toFixed(2)||'','불량':o.ng}))};
   const gwiRows=L=>{const g={};L.forEach(r=>{const k=r.w1||'(미기재)';const c=calc(r);
       const o=(g[k]=g[k]||{})[r.pn]=g[k][r.pn]||{name:r.name,cust:r.cust,q:0,ng:0,n:0,run:0,work:0,cap:0,days:new Set()};
       o.q+=+r.qty||0;o.ng+=+r.ng||0;o.n++;o.run+=c.run;o.work+=+r.work||0;o.cap+=c.cap;o.days.add(r.date)});
     const out=[];Object.entries(g).sort((a,b)=>Object.values(b[1]).reduce((x,o)=>x+o.q,0)-Object.values(a[1]).reduce((x,o)=>x+o.q,0))
       .forEach(([k,its])=>Object.entries(its).sort((a,b)=>b[1].q-a[1].q).forEach(([pn,o])=>out.push({'작업자':k,'품번':pn,'품명':o.name,'고객사':o.cust,'일수':o.days.size,'건수':o.n,'생산수량':o.q,'가동율(%)':+(o.run/o.work*100).toFixed(2)||'','효율(%)':+(o.q/o.cap*100).toFixed(2)||'','불량':o.ng})));
     return out};
-  const cmpRows=L=>{const g={};L.forEach(r=>{const w=r.w1||'(미기재)';const c=calc(r);
-      const it=g[r.pn]=g[r.pn]||{name:r.name,cust:r.cust,w:{}};
-      const o=it.w[w]=it.w[w]||{q:0,ng:0,n:0,run:0,work:0,cap:0,days:new Set()};
-      o.q+=+r.qty||0;o.ng+=+r.ng||0;o.n++;o.run+=c.run;o.work+=+r.work||0;o.cap+=c.cap;o.days.add(r.date)});
-    const rows=[];Object.entries(g).map(([pn,it])=>{
-      const ws=Object.entries(it.w).filter(([,o])=>o.cap>0).map(([w,o])=>({w,...o,eff:o.q/o.cap,oper:o.run/o.work})).sort((a,b)=>b.eff-a.eff);
-      return{pn,it,ws,gap:ws.length>1?ws[0].eff-ws[ws.length-1].eff:0}}).filter(x=>x.ws.length>1)
-      .sort((a,b)=>b.gap-a.gap).forEach(x=>x.ws.forEach(w=>rows.push({'품번':x.pn,'품명':x.it.name,'고객사':x.it.cust,'작업자':w.w,'일수':w.days.size,'건수':w.n,'생산수량':w.q,'가동율(%)':+(w.oper*100).toFixed(2),'효율(%)':+(w.eff*100).toFixed(2),'불량':w.ng,'효율편차(%p)':+(x.gap*100).toFixed(1)})));
-    return rows};
   const grp=(kf,lf)=>{const g={};R.forEach(r=>{const k=kf(r);const o=g[k]=g[k]||{q:0,ng:0,n:0,run:0,stop:0,work:0,cap:0};const c=calc(r);o.q+=+r.qty||0;o.ng+=+r.ng||0;o.n++;o.run+=c.run;o.stop+=+r.stop||0;o.work+=+r.work||0;o.cap+=c.cap});return Object.entries(g).sort((a,b)=>b[1].q-a[1].q).map(([k,o])=>({[lf]:k,'일보':o.n,'생산수량':o.q,'가동율(%)':+(o.run/o.work*100).toFixed(2),'효율(%)':+(o.q/o.cap*100).toFixed(2),'불량':o.ng,'정지시간(분)':o.stop}))};
-  xl([{name:'월간보고서',rows},{name:'일별실적',rows:days},{name:'고객사별',rows:grp(r=>r.cust,'고객사')},{name:'설비별',rows:grp(r=>r.mc,'설비')},{name:'품목별',rows:grp(r=>r.pn,'품번')},{name:'작업자별',rows:gwlRows(R)},{name:'작업자x품목',rows:gwiRows(R)},{name:'같은품목비교',rows:cmpRows(R)},{name:'생산이력',rows:histRows(st.R.sort((a,b)=>a.date.localeCompare(b.date)))}],'월간보고서_'+month+(cu?'_'+cu:'')+'.xlsx')}
+  xl([{name:'월간보고서',rows},{name:'일별실적',rows:days},{name:'고객사별',rows:grp(r=>r.cust,'고객사')},{name:'설비별',rows:grp(r=>r.mc,'설비')},{name:'품목별',rows:grp(r=>r.pn,'품번')},{name:'작업자x품목',rows:gwiRows(R)},{name:'생산이력',rows:histRows(st.R.sort((a,b)=>a.date.localeCompare(b.date)))}],'월간보고서_'+month+(cu?'_'+cu:'')+'.xlsx')}
 
 /* 월간 보고서 PDF (A4 가로) */
 async function savePdf(){
