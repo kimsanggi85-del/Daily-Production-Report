@@ -102,6 +102,11 @@ tr.sum td{background:#EEF2F7;font-weight:700;border-top:2px solid var(--line)}
 .eff3 table{font-size:12px}
 .eff3 th,.eff3 td{padding:4px 6px}
 .eff3 h4{margin:0 0 6px;font-size:12px;color:var(--muted);font-weight:600}
+.rpt-sec{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px}
+@media print{
+  .rpt-sec{border:0;padding:0;margin:0 0 4mm}
+  #rptBody .sig,#rptBody .rpt-hd{break-after:avoid;page-break-after:avoid}
+}
 .act{position:sticky;bottom:0;z-index:3;box-shadow:0 -4px 12px rgba(20,30,45,.07);padding:10px 14px}
 .act .fl{gap:6px}
 @media (max-width:900px){.act{position:static;box-shadow:none}}
@@ -148,7 +153,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
 .rpt th{background:#EEF2F7;color:var(--ink);text-align:center;border:1px solid var(--line)}
 .rpt td{border:1px solid var(--line);white-space:normal;vertical-align:top}
 .rpt td.num{white-space:nowrap}
-.rpt textarea{border:0;background:transparent;width:100%;min-height:44px;resize:vertical;padding:2px 4px;font-size:12px}
+.rpt textarea{border:0;background:transparent;width:100%;min-height:30px;resize:vertical;padding:2px 4px;font-size:12px}
 .rpt textarea:focus{outline:1px solid var(--steel);background:#F7FAFF}
 .rpt tr.tot td{background:#F7F9FB;font-weight:700}
 .rpt tr.prev td{color:var(--muted)}
@@ -187,7 +192,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
   <a data-pg="master"><i>⚙</i>기준정보</a>
   <a data-pg="data"><i>⇅</i>데이터 관리</a>
   <a data-pg="help"><i>?</i>사용안내</a>
-  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v5.4</div>
+  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v6.9</div>
 </nav>
 <main>
   <div class="top">
@@ -200,7 +205,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
   <section class="pg on" id="pg-dash">
     <div class="grid g4" id="kpis"></div>
     <div class="grid g2" style="margin-top:14px">
-      <div class="panel"><h3>일별 생산수량</h3><div class="chart" id="chDay"></div><div style="height:16px"></div></div>
+      <div class="panel"><h3>일별 생산수량</h3><div id="chDay"></div></div>
       <div class="panel"><h3>고객사별 실적</h3><div id="chCust"></div></div>
     </div>
     <div class="panel"><h3>효율 추이 <span class="muted" style="font-weight:400;font-size:12px">가동율 / 효율 · 한 화면 비교</span></h3>
@@ -590,7 +595,7 @@ function renderDash(){
   const[y,m]=month.split('-').map(Number);const nd=new Date(y,m,0).getDate();
   const byD=Array(nd).fill(0);R.forEach(r=>{byD[+r.date.slice(8)-1]+=+r.qty||0});
   const mx=Math.max(1,...byD);
-  $('chDay').innerHTML=byD.map((v,i)=>{const we=[0,6].includes(new Date(y,m-1,i+1).getDay());return `<div class="${we?'we':''}" style="height:${Math.max(2,v/mx*100)}%" data-v="${i+1}일 ${fmt(v)}EA"><span>${(i+1)%5===0||i===0?i+1:''}</span></div>`}).join('');
+  $('chDay').innerHTML=svgVBars(byD.map((v,i)=>({d:i+1,v})).filter(x=>x.v>0).map(x=>{const we=[0,6].includes(new Date(y,m-1,x.d).getDay());return{l:String(x.d),v:x.v,txt:fmt(x.v)+' EA',c:we?'#B9C4D3':C.bar}}),{W:760,H:230});
   // 고객사
   const g={};R.forEach(r=>{const o=g[r.cust]=g[r.cust]||{q:0,ng:0,work:0,run:0,cap:0,n:0};const c=calc(r);o.q+=+r.qty||0;o.ng+=+r.ng||0;o.work+=+r.work||0;o.run+=c.run;o.cap+=c.cap;o.n++});
   const gl=Object.entries(g).sort((a,b)=>b[1].q-a[1].q);
@@ -1016,6 +1021,17 @@ function svgCombo(labels,bars,lines,opt={}){ // lines:[{v:[],c,name}] 0~1 값
   lines.forEach(ln=>{const pts=ln.v.map((v,i)=>isFinite(v)?[L+i*bw+bw/2,T+h-Math.min(1.2,v)*h]:null);let d='';pts.forEach(p=>{if(p)d+=(d?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)});s+=`<path d="${d}" fill="none" stroke="${ln.c}" stroke-width="2"/>`;pts.forEach((p,i)=>{if(p)s+=`<circle cx=${p[0].toFixed(1)} cy=${p[1].toFixed(1)} r=3 fill="${ln.c}"><title>${labels[i]} ${pct(ln.v[i])}</title></circle>`})});
   const step=Math.ceil(n/16);labels.forEach((l,i)=>{if(i%step===0||n<=16)s+=`<text x=${(L+i*bw+bw/2).toFixed(1)} y=${H-10} font-size=10 fill="${C.txt}" text-anchor=middle>${l}</text>`});
   return s+'</svg>'}
+function svgVBars(rows,opt={}){ // rows:[{l,v,txt,c}] — 세로 막대
+  const n=rows.length;if(!n)return'<div class=empty>자료 없음</div>';
+  const W=opt.W||900,H=opt.H||210,L=52,R=10,T=14,B=opt.B||34,w=W-L-R,h=H-T-B;
+  const mx=Math.max(1,...rows.map(r=>r.v));const bw=w/n;
+  let s=`<svg class=svgc viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`;
+  for(let i=0;i<=4;i++){const y=T+h-h*i/4;s+=`<line x1=${L} x2=${L+w} y1=${y} y2=${y} stroke="${C.grid}"/><text x=${L-6} y=${y+4} font-size=10 fill="${C.txt}" text-anchor=end>${fmtK(mx*i/4)}</text>`}
+  rows.forEach((r,i)=>{const bh=r.v/mx*h;s+=`<rect x=${(L+i*bw+bw*.18).toFixed(1)} y=${(T+h-bh).toFixed(1)} width=${(bw*.64).toFixed(1)} height=${Math.max(0,bh).toFixed(1)} fill="${r.c||C.bar}" rx=2><title>${esc(r.l)} ${r.txt||fmt(r.v)}</title></rect>`});
+  const step=Math.ceil(n/20);
+  rows.forEach((r,i)=>{if(i%step)return;const x=(L+i*bw+bw/2).toFixed(1);
+    s+=`<text x=${x} y=${H-B+16} font-size=10 fill="${C.txt}" text-anchor=${opt.rot?'end':'middle'}${opt.rot?` transform="rotate(-40 ${x} ${H-B+16})"`:''}>${esc(r.l)}</text>`});
+  return s+'</svg>'}
 function svgHBars(rows,opt={}){ // rows:[{l,v,txt,c}]
   if(!rows.length)return'<div class=empty>자료 없음</div>';const mx=Math.max(1,...rows.map(r=>r.v));
   return rows.map(r=>`<div class="hb" style="grid-template-columns:${opt.lw||150}px 1fr ${opt.tw||90}px"><span title="${esc(r.l)}" style="overflow:hidden;text-overflow:ellipsis">${esc(r.l)}</span><div class="bar"><i style="width:${(r.v/mx*100).toFixed(1)}%;background:${r.c||C.bar}"></i></div><span class=num style="font-size:12px">${r.txt}</span></div>`).join('')}
@@ -1034,7 +1050,8 @@ function renderReport(){
   for(let d=1;d<=nd;d++){const k=month+'-'+String(d).padStart(2,'0');const x=byD[k];lab.push(String(d));bq.push(x?x.qty:0);lo.push(x?x.oper:NaN);le.push(x?x.eff:NaN);cols.push([0,6].includes(new Date(y,m-1,d).getDay())?C.bar2:C.bar)}
   // 월별 추이(최근 6개월)
   const mons=[];for(let i=5;i>=0;i--){const d=new Date(y,m-1-i,1);mons.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'))}
-  const ms=mons.map(mo=>rptStats(mo,cu).total);
+  let ms=mons.map(mo=>rptStats(mo,cu).total);
+  {const fi=ms.findIndex(x=>x.n>0); if(fi>0){mons.splice(0,fi);ms=ms.slice(fi)}}
   // 고객사
   const gc={};R.forEach(r=>{const g=gc[r.cust]=gc[r.cust]||{q:0,ng:0,n:0,run:0,work:0,cap:0};const c=calc(r);g.q+=+r.qty||0;g.ng+=+r.ng||0;g.n++;g.run+=c.run;g.work+=+r.work||0;g.cap+=c.cap});
   const gcl=Object.entries(gc).sort((a,b)=>b[1].q-a[1].q);
@@ -1095,48 +1112,91 @@ function renderReport(){
      <div><label>지원 인원</label><input value="${esc(o.support||'')}" onchange="rptSet('support',this.value)" placeholder="예: 지원 2명"></div>
      <div><label>야간근무</label><input value="${esc(o.night||'')}" onchange="rptSet('night',this.value)" placeholder="예: 0명"></div>
      <div><label>총 불량 / 가동 / 정지</label><input readonly value="${fmt(T.ng)} EA / ${fmt(T.run)} 분 / ${fmt(T.stop)} 분"></div>
-     <div style="grid-column:span 4"><label>특이 사항</label><textarea style="border:1px solid var(--line);border-radius:6px;min-height:56px;width:100%;padding:6px 8px" onchange="rptSet('special',this.value)">${esc(o.special||'')}</textarea></div>
+     <div style="grid-column:span 4"><label>특이 사항</label><textarea style="border:1px solid var(--line);border-radius:6px;min-height:40px;width:100%;padding:6px 8px" onchange="rptSet('special',this.value)">${esc(o.special||'')}</textarea></div>
    </div></div>
 
-   <div class="rpt-sec"><h3>3. 일별 생산 추이</h3>${svgCombo(lab,bq,[{v:lo,c:C.l1},{v:le,c:C.l2}],{colors:cols})}
-   <div class="legend"><span><i style="background:${C.bar}"></i>생산수량(EA)</span><span><i style="background:${C.bar2}"></i>주말</span><span><i style="background:${C.l1}"></i>가동율</span><span><i style="background:${C.l2}"></i>효율</span></div></div>
+   <div class="rpt-sec"><h3>3. 일별 생산 추이</h3>${svgCombo(st.days.map(d=>+d.d.slice(8)),st.days.map(d=>d.qty),[{v:st.days.map(d=>d.oper),c:C.l1},{v:st.days.map(d=>d.eff),c:C.l2}],{colors:st.days.map(d=>[0,6].includes(new Date(d.d).getDay())?C.bar2:C.bar),W:900,H:155})}
+   <div class="legend"><span><i style="background:${C.bar}"></i>생산수량(EA)</span><span><i style="background:${C.bar2}"></i>휴일</span><span><i style="background:${C.l1}"></i>가동율</span><span><i style="background:${C.l2}"></i>효율</span></div></div>
 
-   <div class="grid g2 rpt-sec">
-    <div><h3>4. 월별 추이 (최근 6개월)</h3>${svgCombo(mons.map(x=>x.slice(2).replace('-','.')),ms.map(x=>x.qty),[{v:ms.map(x=>x.oper),c:C.l1},{v:ms.map(x=>x.eff),c:C.l2}],{W:560,H:220})}
+   <div class="rpt-sec">
+    <div><h3>4. 월별 추이 (최근 6개월)</h3>${svgCombo(mons.map(x=>x.slice(2).replace('-','.')),ms.map(x=>x.qty),[{v:ms.map(x=>x.oper),c:C.l1},{v:ms.map(x=>x.eff),c:C.l2}],{W:900,H:145})}
      <div class="legend"><span><i style="background:${C.bar}"></i>생산수량</span><span><i style="background:${C.l1}"></i>가동율</span><span><i style="background:${C.l2}"></i>효율</span></div>
      <table style="margin-top:8px"><tr><th>월</th><th class=num>가동일</th><th class=num>생산수량</th><th class=num>가동율</th><th class=num>효율</th><th class=num>불량</th></tr>${mons.map((mo,i)=>`<tr ${mo===month?'class=sum':''}><td>${mo}</td><td class=num>${ms[i].days||'-'}</td><td class=num>${ms[i].n?fmt(ms[i].qty):'-'}</td><td class=num>${ms[i].n?pct(ms[i].oper):'-'}</td><td class=num>${ms[i].n?pct(ms[i].eff):'-'}</td><td class=num>${ms[i].n?fmt(ms[i].ng):'-'}</td></tr>`).join('')}</table></div>
-    <div><h3>5. 고객사별 실적</h3>${svgHBars(gcl.map(([k,g])=>({l:k,v:g.q,txt:fmt(g.q)+' ('+(g.q/(T.qty||1)*100).toFixed(0)+'%)'})),{lw:100,tw:120})}
+   </div>
+
+   <div class="rpt-sec">
+    <div><h3>5. 고객사별 실적</h3>${svgVBars(gcl.map(([k,g])=>({l:k,v:g.q,txt:fmt(g.q)})),{W:900,H:140})}
      <table style="margin-top:8px"><tr><th>고객사</th><th class=num>일보</th><th class=num>생산수량</th><th class=num>구성비</th><th class=num>가동율</th><th class=num>효율</th><th class=num>불량</th><th class=num>PPM</th></tr>${gcl.map(([k,g])=>`<tr><td>${esc(k)}</td><td class=num>${g.n}</td><td class=num>${fmt(g.q)}</td><td class=num>${(g.q/(T.qty||1)*100).toFixed(1)}%</td><td class=num>${pct(g.run/g.work)}</td><td class=num>${pct(g.q/g.cap)}</td><td class=num>${fmt(g.ng)}</td><td class=num>${fmt(g.ng/(g.q||1)*1e6)}</td></tr>`).join('')}</table></div>
    </div>
 
    <div class="rpt-sec"><h3>6. 설비별 실적</h3>
-   <div class="grid g2"><div>${svgHBars(gml.map(([k,g])=>{const v=g.work?g.run/g.work:0;return{l:k,v,txt:pct(v),c:cls(v)==='r'?'#C8433A':cls(v)==='a'?'#D9822B':cls(v)==='g'?'#2F8F5B':C.bar}}),{lw:110,tw:60})}<div class="legend"><span>가동율 — <i style="background:#2F8F5B"></i>85%↑ <i style="background:${C.bar}"></i>70~85 <i style="background:#D9822B"></i>60~70 <i style="background:#C8433A"></i>60%↓</span></div></div>
-   <div class="tw" style="max-height:none"><table><tr><th>설비</th><th class=num>가동일</th><th class=num>품목</th><th class=num>근무(H)</th><th class=num>정지(H)</th><th class=num>가동율</th><th class=num>효율</th><th class=num>생산수량</th><th class=num>불량</th></tr>${gml.map(([k,g])=>`<tr><td>${esc(k)}</td><td class=num>${g.days.size}</td><td class=num>${g.pn.size}</td><td class=num>${(g.work/60).toFixed(1)}</td><td class=num>${(g.stop/60).toFixed(1)}</td><td class=num><span class="tag ${cls(g.run/g.work)}">${pct(g.run/g.work)}</span></td><td class=num><span class="tag ${cls(g.q/g.cap)}">${pct(g.q/g.cap)}</span></td><td class=num>${fmt(g.q)}</td><td class=num>${g.ng||''}</td></tr>`).join('')}</table></div></div></div>
+   ${svgCombo(gml.map(([k])=>k.split(' ')[0]),gml.map(([,g])=>g.q),[{v:gml.map(([,g])=>g.work?g.run/g.work:NaN),c:C.l1},{v:gml.map(([,g])=>g.cap?g.q/g.cap:NaN),c:C.l2}],{W:900,H:160})}
+   <div class="legend"><span><i style="background:${C.bar}"></i>생산수량(EA)</span><span><i style="background:${C.l1}"></i>가동율</span><span><i style="background:${C.l2}"></i>효율</span></div>
+   <div class="tw" style="max-height:none"><table><tr><th>설비</th><th class=num>가동일</th><th class=num>품목</th><th class=num>근무(H)</th><th class=num>가동(H)</th><th class=num>정지(H)</th><th class=num>가동율</th><th class=num>효율</th><th class=num>생산수량</th><th class=num>작업불량</th><th class=num>PPM</th></tr>${gml.map(([k,g])=>`<tr><td>${esc(k)}</td><td class=num>${g.days.size}</td><td class=num>${g.pn.size}</td><td class=num>${(g.work/60).toFixed(1)}</td><td class=num>${(g.run/60).toFixed(1)}</td><td class=num>${(g.stop/60).toFixed(1)}</td><td class=num><span class="tag ${cls(g.run/g.work)}">${pct(g.run/g.work)}</span></td><td class=num><span class="tag ${cls(g.q/g.cap)}">${pct(g.q/g.cap)}</span></td><td class=num>${fmt(g.q)}</td><td class=num>${g.ng||''}</td><td class=num>${g.ng?fmt(g.ng/(g.q||1)*1e6):''}</td></tr>`).join('')}
+   <tr class=sum><td>합계 ${gml.length}대</td><td class=num>-</td><td class=num>${gpl.length}</td><td class=num>${(T.work/60).toFixed(1)}</td><td class=num>${(T.run/60).toFixed(1)}</td><td class=num>${(T.stop/60).toFixed(1)}</td><td class=num>${pct(T.run/T.work)}</td><td class=num>${pct(T.qty/gml.reduce((a,[,g])=>a+g.cap,0))}</td><td class=num>${fmt(T.qty)}</td><td class=num>${fmt(T.ng)}</td><td class=num>${fmt(ppm)}</td></tr></table></div></div>
 
-   <div class="grid g2 rpt-sec">
+   <div class="rpt-sec">
     <div><h3>7. 정지시간 분석</h3>
      <div class="muted" style="font-size:12px;margin-bottom:6px">총 정지 ${fmt(T.stop)}분 (근무 대비 ${pct(T.stop/(T.work||1))}) · 정지사유 기재 건수 기준</div>
-     ${svgHBars(sw.slice(0,10).map(([k,v])=>({l:k,v,txt:v+'건',c:C.l1})),{lw:100,tw:50})}
-     <div class="muted" style="font-size:12px;margin:10px 0 4px">정지시간 많은 설비</div>
-     ${svgHBars(stopMc.map(([k,g])=>({l:k,v:g.stop,txt:fmt(g.stop)+'분 ('+pct(g.stop/(g.work||1))+')',c:'#C8433A'})),{lw:100,tw:120})}</div>
+     ${svgVBars(sw.slice(0,10).map(([k,v])=>({l:k,v,txt:v+'건',c:C.l1})),{W:900,H:150,rot:1,B:46})}
+     ${sw.length?`<table style="margin-top:8px"><tr><th>정지사유</th><th class=num>기재 건수</th><th class=num>구성비</th></tr>${sw.slice(0,10).map(([k,v])=>`<tr><td>${esc(k)}</td><td class=num>${v}</td><td class=num>${(v/sw.reduce((a,x)=>a+x[1],0)*100).toFixed(1)}%</td></tr>`).join('')}</table>`:''}
+     <div class="muted" style="font-size:12px;margin:12px 0 4px">정지시간 많은 설비</div>
+     ${svgVBars(stopMc.map(([k,g])=>({l:k.split(' ')[0],v:g.stop,txt:fmt(g.stop)+'분',c:'#C8433A'})),{W:900,H:140})}
+     ${stopMc.length?`<table style="margin-top:8px"><tr><th>설비</th><th class=num>정지(분)</th><th class=num>근무(분)</th><th class=num>정지 비율</th><th class=num>가동율</th></tr>${stopMc.map(([k,g])=>`<tr><td>${esc(k)}</td><td class=num>${fmt(g.stop)}</td><td class=num>${fmt(g.work)}</td><td class=num><span class="tag ${g.stop/(g.work||1)>=0.3?'r':g.stop/(g.work||1)>=0.2?'a':''}">${pct(g.stop/(g.work||1))}</span></td><td class=num>${pct((g.work-g.stop)/(g.work||1))}</td></tr>`).join('')}<tr class=sum><td>합계</td><td class=num>${fmt(T.stop)}</td><td class=num>${fmt(T.work)}</td><td class=num>${pct(T.stop/(T.work||1))}</td><td class=num>${pct(T.oper)}</td></tr></table>`:''}</div>
+   </div>
+
+   <div class="rpt-sec">
     <div><h3>8. 불량 분석</h3>
      <div class="muted" style="font-size:12px;margin-bottom:6px">작업불량 ${fmt(T.ng)} EA · ${fmt(ppm)} PPM &nbsp;|&nbsp; 시타발·검사폐기 ${fmt(T.ngp||0)} EA <span style="font-size:11px">(공정상 폐기 · 불량률에서 제외)</span></div>
      ${gnl.length?'<div class="tw" style="max-height:none;border:0"><table><tr><th>품번</th><th>품명</th><th>고객사</th><th class=num>작업불량</th><th class=num>불량률</th><th class=num>시타발·검사</th><th>주요 내용</th></tr>'+gnl.map(([k,g])=>`<tr><td>${esc(k)}</td><td class=muted style="max-width:170px;overflow:hidden;text-overflow:ellipsis">${esc(g.name)}</td><td>${esc(g.cust)}</td><td class=num><b>${fmt(g.ng)}</b></td><td class=num>${(g.ng/(g.q||1)*100).toFixed(2)}%</td><td class=num>${g.ngp?fmt(g.ngp):''}</td><td class=muted style="font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis" title="${esc(Object.entries(g.notes).sort((a,b)=>b[1]-a[1]).map(x=>x[0]).join(', '))}">${esc(Object.entries(g.notes).sort((a,b)=>b[1]-a[1]).slice(0,2).map(x=>x[0]).join(', '))}</td></tr>`).join('')+'</table></div>':'<div class=empty>불량 없음</div>'}</div>
    </div>
 
-   <div class="grid g2 rpt-sec">
+   <div class="rpt-sec">
     <div><h3>9. 품목별 생산 상위</h3><table><tr><th>품번</th><th>품명</th><th>고객사</th><th class=num>생산수량</th><th class=num>가동율</th><th class=num>효율</th></tr>${gpl.slice(0,15).map(([k,g])=>`<tr><td>${esc(k)}</td><td class=muted>${esc(g.name)}</td><td>${esc(g.cust)}</td><td class=num>${fmt(g.q)}</td><td class=num>${pct(g.run/g.work)}</td><td class=num>${pct(g.q/g.cap)}</td></tr>`).join('')}</table></div>
+   </div>
+
+   <div class="rpt-sec">
     <div><h3>10. 작업자별 실적</h3>
      ${wHtml}</div>
    </div>
 
    <div class="rpt-sec"><h3>11. 일별 실적</h3>
+   ${svgCombo(st.days.map(d=>+d.d.slice(8)),st.days.map(d=>d.qty),[{v:st.days.map(d=>d.oper),c:C.l1},{v:st.days.map(d=>d.eff),c:C.l2}],{W:900,H:155})}
+   <div class="legend"><span><i style="background:${C.bar}"></i>생산수량(EA)</span><span><i style="background:${C.l1}"></i>가동율</span><span><i style="background:${C.l2}"></i>효율</span></div>
    <div class="tw" style="max-height:none"><table><tr><th>생산일</th><th class=num>건수</th><th class=num>생산수량</th><th class=num>평균 가동율</th><th class=num>평균 효율</th><th class=num>불량</th><th class=num>가동시간(분)</th><th class=num>정지시간(분)</th></tr>
    ${st.days.length?st.days.map(d=>`<tr><td>${d.d.slice(5).replace('-','/')}</td><td class=num>${d.n}</td><td class=num>${fmt(d.qty)}</td><td class=num><span class="tag ${cls(d.oper)}">${pct(d.oper)}</span></td><td class=num><span class="tag ${cls(d.eff)}">${pct(d.eff)}</span></td><td class=num>${d.ng||''}</td><td class=num>${fmt(d.run)}</td><td class=num>${fmt(d.stop)}</td></tr>`).join('')+`<tr class=sum><td>합계 ${st.days.length}일</td><td class=num>${T.n}</td><td class=num>${fmt(T.qty)}</td><td class=num>${pct(T.oper)}</td><td class=num>${pct(T.eff)}</td><td class=num>${fmt(T.ng)}</td><td class=num>${fmt(T.run)}</td><td class=num>${fmt(T.stop)}</td></tr>`:'<tr><td colspan=8 class=empty>이 달 자료가 없습니다</td></tr>'}
    </table></div></div>`;
 }
 $('p_cust').addEventListener('change',renderReport);
+// 보고서 집계 묶음 (엑셀 서식 출력용)
+function rptGroups(st,cu){
+  const R=st.R,T=st.total;const[y,m]=month.split('-').map(Number);
+  const dates=R.map(r=>r.date).sort();
+  const ppm=T.qty?T.ng/T.qty*1e6:0;
+  const mons=[];for(let i=5;i>=0;i--){const d=new Date(y,m-1-i,1);mons.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'))}
+  let ms=mons.map(mo=>rptStats(mo,cu).total);
+  {const fi=ms.findIndex(x=>x.n>0); if(fi>0){mons.splice(0,fi);ms=ms.slice(fi)}}
+  const gc={};R.forEach(r=>{const g=gc[r.cust]=gc[r.cust]||{q:0,ng:0,n:0,run:0,work:0,cap:0};const c=calc(r);g.q+=+r.qty||0;g.ng+=+r.ng||0;g.n++;g.run+=c.run;g.work+=+r.work||0;g.cap+=c.cap});
+  const gcl=Object.entries(gc).sort((a,b)=>b[1].q-a[1].q);
+  const gm={};R.forEach(r=>{const g=gm[r.mc]=gm[r.mc]||{q:0,ng:0,run:0,stop:0,work:0,cap:0,days:new Set(),pn:new Set()};const c=calc(r);g.q+=+r.qty||0;g.ng+=+r.ng||0;g.run+=c.run;g.stop+=+r.stop||0;g.work+=+r.work||0;g.cap+=c.cap;g.days.add(r.date);g.pn.add(r.pn)});
+  const gml=Object.entries(gm).sort((a,b)=>a[0].localeCompare(b[0],'ko',{numeric:true}));
+  const stopMc=Object.entries(gm).sort((a,b)=>b[1].stop-a[1].stop).slice(0,8);
+  const gp={};R.forEach(r=>{const g=gp[r.pn]=gp[r.pn]||{name:r.name,cust:r.cust,q:0,ng:0,run:0,work:0,cap:0,n:0};const c=calc(r);g.q+=+r.qty||0;g.ng+=+r.ng||0;g.run+=c.run;g.work+=+r.work||0;g.cap+=c.cap;g.n++});
+  const gpl=Object.entries(gp).sort((a,b)=>b[1].q-a[1].q);
+  const gn={};R.forEach(r=>{if(+r.ng||+r.ngp){const g=gn[r.pn]=gn[r.pn]||{ng:0,ngp:0,q:0,name:r.name,cust:r.cust,notes:{}};g.ng+=+r.ng||0;g.ngp+=+r.ngp||0;g.q+=+r.qty||0;if(r.note)g.notes[r.note]=(g.notes[r.note]||0)+1}});
+  const gnl=Object.entries(gn).sort((a,b)=>b[1].ng-a[1].ng);
+  const gw={};R.forEach(r=>{const ws=workers(r);const list=ws.length?ws:['(미기재)'];const c=calc(r);
+    list.forEach((k,i)=>{const g=gw[k]=gw[k]||{q:0,ng:0,n:0,sub:0,run:0,work:0,cap:0,days:new Set()};g.n++;g.days.add(r.date);
+      if(i===0){g.q+=+r.qty||0;g.ng+=+r.ng||0;g.run+=c.run;g.work+=+r.work||0;g.cap+=c.cap}else g.sub++})});
+  const gwl=Object.entries(gw).sort((a,b)=>b[1].q-a[1].q);
+  const gwi={};R.forEach(r=>{const k=r.w1||'(미기재)';const c=calc(r);
+    const o=(gwi[k]=gwi[k]||{})[r.pn]=gwi[k][r.pn]||{name:r.name,cust:r.cust,q:0,ng:0,n:0,run:0,work:0,cap:0,days:new Set()};
+    o.q+=+r.qty||0;o.ng+=+r.ng||0;o.n++;o.run+=c.run;o.work+=+r.work||0;o.cap+=c.cap;o.days.add(r.date)});
+  const sw=stopWords(R);
+  return{T,dates,ppm,mons,ms,gcl,gml,stopMc,gpl,gnl,gwl,gwi,sw};
+}
 function exportReport(){const cu=$('p_cust').value;const st=rptStats(month,cu);const pv=rptStats(prevMonth(month),cu).total;const o=rptGet();const m=+month.slice(5);
+  const {T,dates,ppm,mons,ms,gcl,gml,stopMc,gpl,gnl,gwl,gwi,sw}=rptGroups(st,cu);
   const row=(lab,s,i,a)=>({'구분':lab,'가동일수(일)':s.days,'평균가동율(%)':+(s.oper*100).toFixed(2)||'','평균가동시간(분/일)':Math.round(s.runPerDay),'평균효율(%)':+(s.eff*100).toFixed(2)||'','생산수량(EA)':s.qty,'불량(EA)':s.ng,'문제점':i||'','대책 및 개선내용':a||''});
   const rows=st.weeks.map(w=>row(`${w.i}주차 (${m}/${w.a}~${m}/${w.b})`,w,o['i'+w.i],o['a'+w.i]));rows.push(row('당월 실적',st.total,o.im,''));rows.push(row('전월 비교',pv,'',''));
   rows.push({'구분':'작업자 인원','가동일수(일)':o.staff||''},{'구분':'지원 인원','가동일수(일)':o.support||''},{'구분':'야간근무','가동일수(일)':o.night||''},{'구분':'총 가동시간(분)','가동일수(일)':st.total.run},{'구분':'총 정지시간(분)','가동일수(일)':st.total.stop},{'구분':'특이사항','가동일수(일)':o.special||''});
@@ -1149,7 +1209,71 @@ function exportReport(){const cu=$('p_cust').value;const st=rptStats(month,cu);c
       .forEach(([k,its])=>Object.entries(its).sort((a,b)=>b[1].q-a[1].q).forEach(([pn,o])=>out.push({'작업자':k,'품번':pn,'품명':o.name,'고객사':o.cust,'일수':o.days.size,'건수':o.n,'생산수량':o.q,'가동율(%)':+(o.run/o.work*100).toFixed(2)||'','효율(%)':+(o.q/o.cap*100).toFixed(2)||'','불량':o.ng})));
     return out};
   const grp=(kf,lf)=>{const g={};R.forEach(r=>{const k=kf(r);const o=g[k]=g[k]||{q:0,ng:0,n:0,run:0,stop:0,work:0,cap:0};const c=calc(r);o.q+=+r.qty||0;o.ng+=+r.ng||0;o.n++;o.run+=c.run;o.stop+=+r.stop||0;o.work+=+r.work||0;o.cap+=c.cap});return Object.entries(g).sort((a,b)=>b[1].q-a[1].q).map(([k,o])=>({[lf]:k,'일보':o.n,'생산수량':o.q,'가동율(%)':+(o.run/o.work*100).toFixed(2),'효율(%)':+(o.q/o.cap*100).toFixed(2),'불량':o.ng,'정지시간(분)':o.stop}))};
-  xl([{name:'월간보고서',rows},{name:'일별실적',rows:days},{name:'고객사별',rows:grp(r=>r.cust,'고객사')},{name:'설비별',rows:grp(r=>r.mc,'설비')},{name:'품목별',rows:grp(r=>r.pn,'품번')},{name:'작업자x품목',rows:gwiRows(R)},{name:'생산이력',rows:histRows(st.R.sort((a,b)=>a.date.localeCompare(b.date)))}],'월간보고서_'+month+(cu?'_'+cu:'')+'.xlsx')}
+  // 보고서 서식 그대로 (PDF와 같은 순서·구성)
+  const A=[],MG=[];const NC=11;
+  const push=(...r)=>{A.push(r);return A.length-1};
+  const blank=()=>A.push([]);
+  const title=s=>{const i=push(s);MG.push({s:{r:i,c:0},e:{r:i,c:NC-1}});return i};
+  const p=v=>isFinite(v)?+(v*100).toFixed(1):'';
+  const i0=push('','','','','','','','','담당','검토','승인');
+  push('','','','','','','','','','','');
+  const ti=push(month.slice(0,4)+'년 '+m+'월 프레스 생산 실적 보고서','','','','',(cu||'전 고객사')+' · 기간 '+(dates[0]||'')+' ~ '+(dates[dates.length-1]||'')+' · 작성일 '+today());
+  MG.push({s:{r:ti,c:0},e:{r:ti,c:4}},{s:{r:ti,c:5},e:{r:ti,c:NC-1}});
+  blank();
+  title('1. 월 실적 요약');
+  push('생산수량','평균 가동율(%)','평균 효율(%)','작업불량','시타발·검사폐기','가동일수','일보 건수','총 가동(분)','총 정지(분)','PPM');
+  push(T.qty,p(T.oper),p(T.eff),T.ng,T.ngp||0,T.days,T.n,T.run,T.stop,Math.round(ppm));
+  blank();
+  title('2. 주차별 실적 및 문제점·대책');
+  push('구분','가동일수(일)','평균가동율(%)','평균가동시간(분/일)','평균효율(%)','생산수량(EA)','불량(EA)','문제점','대책 및 개선내용');
+  st.weeks.forEach(w=>push(`${w.i}주차 (${m}/${w.a}~${m}/${w.b})`,w.days,p(w.oper),Math.round(w.runPerDay),p(w.eff),w.qty,w.ng,o['i'+w.i]||'',o['a'+w.i]||''));
+  push('당월 실적',T.days,p(T.oper),Math.round(T.runPerDay),p(T.eff),T.qty,T.ng,o.im||'','');
+  push('전월 비교',pv.days,p(pv.oper),Math.round(pv.runPerDay),p(pv.eff),pv.qty,pv.ng,'','');
+  push('작업자 인원',o.staff||'','지원 인원',o.support||'','야간근무',o.night||'','특이사항',o.special||'');
+  blank();
+  title('3. 일별 생산 추이 / 11. 일별 실적');
+  push('생산일','건수','생산수량','평균가동율(%)','평균효율(%)','작업불량','시타발·검사','가동시간(분)','정지시간(분)');
+  st.days.forEach(d=>push(d.d,d.n,d.qty,p(d.oper),p(d.eff),d.ng,d.ngp||0,d.run,d.stop));
+  push('합계 '+st.days.length+'일',T.n,T.qty,p(T.oper),p(T.eff),T.ng,T.ngp||0,T.run,T.stop);
+  blank();
+  title('4. 월별 추이 (최근 6개월)');
+  push('월','가동일수','생산수량','가동율(%)','효율(%)','불량');
+  mons.forEach((mo,i)=>push(mo,ms[i].days||'',ms[i].qty||'',p(ms[i].oper),p(ms[i].eff),ms[i].ng||''));
+  blank();
+  title('5. 고객사별 실적');
+  push('고객사','일보','생산수량','구성비(%)','가동율(%)','효율(%)','불량','PPM');
+  gcl.forEach(([k,g])=>push(k,g.n,g.q,+(g.q/(T.qty||1)*100).toFixed(1),p(g.run/g.work),p(g.q/g.cap),g.ng,Math.round(g.ng/(g.q||1)*1e6)));
+  blank();
+  title('6. 설비별 실적');
+  push('설비','가동일','품목','근무(H)','가동(H)','정지(H)','가동율(%)','효율(%)','생산수량','작업불량','PPM');
+  gml.forEach(([k,g])=>push(k,g.days.size,g.pn.size,+(g.work/60).toFixed(1),+(g.run/60).toFixed(1),+(g.stop/60).toFixed(1),p(g.run/g.work),p(g.q/g.cap),g.q,g.ng,g.ng?Math.round(g.ng/(g.q||1)*1e6):''));
+  push('합계 '+gml.length+'대','',gpl.length,+(T.work/60).toFixed(1),+(T.run/60).toFixed(1),+(T.stop/60).toFixed(1),p(T.run/T.work),p(T.eff),T.qty,T.ng,Math.round(ppm));
+  blank();
+  title('7. 정지시간 분석');
+  push('정지사유','기재 건수','구성비(%)');
+  const swT=sw.reduce((a,x)=>a+x[1],0)||1;
+  sw.slice(0,10).forEach(([k,v])=>push(k,v,+(v/swT*100).toFixed(1)));
+  blank();
+  push('설비','정지(분)','근무(분)','정지 비율(%)','가동율(%)');
+  stopMc.forEach(([k,g])=>push(k,g.stop,g.work,p(g.stop/(g.work||1)),p((g.work-g.stop)/(g.work||1))));
+  push('합계',T.stop,T.work,p(T.stop/(T.work||1)),p(T.oper));
+  blank();
+  title('8. 불량 분석');
+  push('품번','품명','고객사','작업불량','불량률(%)','시타발·검사','주요 내용');
+  gnl.forEach(([k,g])=>push(k,g.name,g.cust,g.ng,+(g.ng/(g.q||1)*100).toFixed(2),g.ngp||'',Object.entries(g.notes).sort((a,b)=>b[1]-a[1]).map(x=>x[0]).join(' / ')));
+  blank();
+  title('9. 품목별 생산 상위');
+  push('품번','품명','고객사','생산수량','가동율(%)','효율(%)');
+  gpl.slice(0,20).forEach(([k,g])=>push(k,g.name,g.cust,g.q,p(g.run/g.work),p(g.q/g.cap)));
+  blank();
+  title('10. 작업자별 실적 (작업자 × 품목)');
+  push('작업자','품번','품명','고객사','일수','건수','생산수량','가동율(%)','효율(%)','불량');
+  gwl.filter(([k])=>gwi[k]).forEach(([k,g])=>{
+    Object.entries(gwi[k]).sort((a,b)=>b[1].q-a[1].q).forEach(([pn,x],i)=>push(i===0?k:'',pn,x.name,x.cust,x.days.size,x.n,x.q,p(x.run/x.work),p(x.q/x.cap),x.ng||''));
+    push(k+' 합계',' ',' ',' ',g.days.size,g.n,g.q,p(g.run/g.work),p(g.q/g.cap),g.ng||'');
+  });
+  const cols=[{wch:22},{wch:26},{wch:14},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:14},{wch:14},{wch:12}];
+  xl([{name:'보고서',aoa:A,cols,merges:MG},{name:'월간보고서(원자료)',rows},{name:'일별실적',rows:days},{name:'고객사별',rows:grp(r=>r.cust,'고객사')},{name:'설비별',rows:grp(r=>r.mc,'설비')},{name:'품목별',rows:grp(r=>r.pn,'품번')},{name:'작업자x품목',rows:gwiRows(R)},{name:'생산이력',rows:histRows(st.R.sort((a,b)=>a.date.localeCompare(b.date)))}],'월간보고서_'+month+(cu?'_'+cu:'')+'.xlsx')}
 
 /* 월간 보고서 PDF (A4 가로) */
 async function savePdf(){
@@ -1171,29 +1295,32 @@ async function savePdf(){
   try{
     const secs=[...body.children].filter(e=>e.offsetHeight>0);
     const pdf=new J({orientation:'landscape',unit:'mm',format:'a4'});
-    const PW=297,PH=210,M=7,W=PW-M*2,H=PH-M*2;
+    const PW=297,PH=210,M=6,W=PW-M*2,H=PH-M*2;
     let y=M,first=true;
+    // 종이를 남기지 않도록 위에서부터 빈틈없이 채우고, 남은 자리를 넘으면 그 자리에서 잘라 다음 장으로 이어 붙인다
     for(let i=0;i<secs.length;i++){
       btn.textContent=`PDF 만드는 중 ${i+1}/${secs.length}`;
-      const cv=await html2canvas(secs[i],{scale:2,backgroundColor:'#ffffff',logging:false,scrollX:0,scrollY:0,width:secs[i].scrollWidth,height:secs[i].scrollHeight});
-      let h=cv.height*W/cv.width;
-      if(h>H){ // 한 장을 넘으면 세로로 잘라 여러 장에
-        const per=Math.floor(cv.width*H/W);let sy=0;
-        while(sy<cv.height){
-          const ph=Math.min(per,cv.height-sy);
-          const c2=document.createElement('canvas');c2.width=cv.width;c2.height=ph;
-          c2.getContext('2d').drawImage(cv,0,sy,cv.width,ph,0,0,cv.width,ph);
-          if(!first)pdf.addPage();first=false;
-          pdf.addImage(c2.toDataURL('image/jpeg',0.92),'JPEG',M,M,W,ph*W/cv.width);
-          sy+=ph;
-        }
-        y=M+H+1;
-      }else{
-        if(!first&&y+h>PH-M){pdf.addPage();y=M}
-        if(first){y=M;first=false}
-        pdf.addImage(cv.toDataURL('image/jpeg',0.92),'JPEG',M,y,W,h);
-        y+=h+2;
+      const cv=await html2canvas(secs[i],{scale:1.6,backgroundColor:'#ffffff',logging:false,scrollX:0,scrollY:0,width:secs[i].scrollWidth,height:secs[i].scrollHeight});
+      const mmPerPx=W/cv.width;
+      let sy=0;
+      while(sy<cv.height){
+        if(!first&&y>=PH-M-4){pdf.addPage();y=M}
+        first=false;
+        const availMm=PH-M-y;
+        const availPx=Math.floor(availMm/mmPerPx);
+        const ph=Math.min(availPx,cv.height-sy);
+        if(ph<=2){pdf.addPage();y=M;continue}
+        const c2=document.createElement('canvas');c2.width=cv.width;c2.height=ph;
+        const cx=c2.getContext('2d');cx.fillStyle='#fff';cx.fillRect(0,0,cv.width,ph);
+        cx.drawImage(cv,0,sy,cv.width,ph,0,0,cv.width,ph);
+        pdf.addImage(c2.toDataURL('image/jpeg',0.88),'JPEG',M,y,W,ph*mmPerPx);
+        c2.width=c2.height=0;
+        y+=ph*mmPerPx;sy+=ph;
+        await new Promise(r=>setTimeout(r,0));
+        if(sy<cv.height){pdf.addPage();y=M}
       }
+      cv.width=cv.height=0;
+      y+=2; // 항목 사이 최소 간격
     }
     pdf.save('월간보고서_'+month+($('p_cust').value?'_'+$('p_cust').value:'')+'.pdf');
     toast('PDF를 저장했습니다');
@@ -1249,7 +1376,10 @@ $('fRes').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;c
 function wipe(){if(!confirm('모든 일보를 삭제합니다. 백업하셨습니까?'))return;if(prompt('확인을 위해 "삭제" 를 입력하세요')!=='삭제')return;S.recs.forEach(r=>S.del[r.id]=now());S.recs=[];commit();toast('모두 삭제했습니다');}
 function dl(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
 function xl(sheets,name){
-  if(window.XLSX){const wb=XLSX.utils.book_new();sheets.forEach(s=>{const ws=XLSX.utils.json_to_sheet(s.rows);XLSX.utils.book_append_sheet(wb,ws,s.name)});XLSX.writeFile(wb,name);}
+  if(window.XLSX){const wb=XLSX.utils.book_new();sheets.forEach(s=>{
+    const ws=s.aoa?XLSX.utils.aoa_to_sheet(s.aoa):XLSX.utils.json_to_sheet(s.rows);
+    if(s.cols)ws['!cols']=s.cols;if(s.merges)ws['!merges']=s.merges;
+    XLSX.utils.book_append_sheet(wb,ws,s.name)});XLSX.writeFile(wb,name);}
   else{const s=sheets[0];const keys=Object.keys(s.rows[0]||{});const csv='\uFEFF'+[keys.join(','),...s.rows.map(r=>keys.map(k=>'"'+String(r[k]??'').replace(/"/g,'""')+'"').join(','))].join('\n');dl(new Blob([csv],{type:'text/csv'}),name.replace('.xlsx','.csv'));toast('엑셀 라이브러리를 못 불러와 CSV로 저장했습니다');}
 }
 /* 엑셀 가져오기 */
