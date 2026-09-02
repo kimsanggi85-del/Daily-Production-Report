@@ -187,7 +187,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
   <a data-pg="master"><i>⚙</i>기준정보</a>
   <a data-pg="data"><i>⇅</i>데이터 관리</a>
   <a data-pg="help"><i>?</i>사용안내</a>
-  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v5.2</div>
+  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v5.4</div>
 </nav>
 <main>
   <div class="top">
@@ -429,6 +429,12 @@ const DEF_MESMC={'003':'34 심팩250','004':'03 심팩150','005':'28 국일250',
 // MES 품번 → 앱 품번 (표기가 다른 것만)
 const DEF_MESPN={'54610-D3501-(BK)':'54610-D3501','1958-365-2(2호)':'1958-365-2','AT3037-GC-00':'AT3037-GC-01','IW/OW-BDA-1159B':'IW/OW BDA 1159B'};
 const MES_FROM='2026-09-01'; // 8월까지 실적은 손대지 않음
+// MES 가동설비 모니터링 서버(정지사유 daily_downtime)
+const DT_URL='https://omngtyewdaqpphnzeate.supabase.co';
+// MES 불량코드(ICOM_RECIEVE_DATA_NG NG_REASON_CODE) → 불량유형
+const NG_CODE={'P01':'형상불량','P02':'크랙(터짐)','P03':'기즈','P04':'치수','P05':'Burr','P06':'원자재','P07':'찍힘','P08':'발청','P09':'수리중불량','P10':'기타','P11':'시타발초물폐기','P12':'초중종검사품'};
+const ngName=s=>String(s||'').replace(/불량사유\s*/,'').replace(/P\d{2}/g,c=>NG_CODE[c]||c);
+const DT_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9tbmd0eWV3ZGFxcHBobnplYXRlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4ODk4ODksImV4cCI6MjA5MDQ2NTg4OX0.Zxur3t02JHtOcXforCMSwO3i2mMaf5sViE0tXXUC0-s';
 // 품번 표기를 MES 기준으로 통일 (기존 '(무)/(유)' 표기 정리)
 const PN_FIX={"S0162":"IW/OW-BDA-1113-2","S0163":"IW/OW-BDA-1106-3","S0164":"IW/OW-BDA-1113-1","S0165":"IW/OW-BDA-1179-2","S0166":"IW/OW-BDA-1179-3","S0167":"IW/OW-BDA-1113-2","S0168":"IW/OW-BDA-1106-3","S0169":"IW/OW-BDA-1113-1","S0170":"IW/OW-BDA-1159B","S0171":"IW/OW-BDA-1179-2","S0172":"IW/OW-BDA-1179-3","S0173":"IW/OW-BDA-1113-2","S0174":"IW/OW-BDA-1106-3","S0175":"IW/OW-BDA-1159B","S0176":"IW/OW-BDA-1179-2","S0177":"IW/OW-BDA-1179-3","S0178":"IW/OW-BDA-1113-2","S0179":"IW/OW-BDA-1106-3","S0180":"IW/OW-BDA-1159B","S0181":"IW/OW-BDA-1179-2","S0182":"IW/OW-BDA-1179-3","S0183":"IW/OW-BDA-1113-2","S0184":"IW/OW-BDA-1113-2","S0185":"IW/OW-BDA-1106-3","S0186":"IW/OW-BDA-1159B","S0187":"IW/OW-BDA-1179-2","S0188":"IW/OW-BDA-1179-3","S0189":"IW/OW-BDA-1113-2","S0190":"IW/OW-BDA-1106-3","S0191":"IW/OW-BDA-1159B","S0192":"IW/OW-BDA-1179-2","S0193":"IW/OW-BDA-1179-3","S0194":"IW/OW-BDA-1113-2","S0195":"IW/OW-BDA-1106-3","S0196":"IW/OW-BDA-1159B","S0197":"IW/OW-BDA-1179-2","S0198":"IW/OW-BDA-1179-3","S0199":"IW/OW-BDA-1113-2","S0200":"IW/OW-BDA-1106-3","S0201":"IW/OW-BDA-1159B","S0202":"IW/OW-BDA-1179-2","S0203":"IW/OW-BDA-1179-3","S0204":"IW/OW-BDA-1113-2","S0205":"IW/OW-BDA-1106-3","S0206":"IW/OW-BDA-1159B","S0207":"IW/OW-BDA-1179-2","S0208":"IW/OW-BDA-1179-3","S0209":"IW/OW-BDA-1113-2","S0210":"IW/OW-BDA-1106-3","S0211":"IW/OW-BDA-1159B","S0212":"IW/OW-BDA-1179-2","S0213":"IW/OW-BDA-1179-3","S0214":"IW/OW-BDA-1113-2","S0215":"IW/OW-BDA-1113-2","S0216":"IW/OW-BDA-1106-3","S0217":"IW/OW-BDA-1159B","S0218":"IW/OW-BDA-1179-2","S0219":"IW/OW-BDA-1179-3","S0220":"IW/OW-BDA-1113-2","S0221":"IW/OW-BDA-1106-3","S0222":"IW/OW-BDA-1159B","S0223":"IW/OW-BDA-1179-2","S0224":"IW/OW-BDA-1179-3","S0225":"IW/OW-BDA-1113-2","S0226":"IW/OW-BDA-1106-3","S0227":"IW/OW-BDA-1159B","S0228":"IW/OW-BDA-1179-2","S0229":"IW/OW-BDA-1179-3","S0230":"IW/OW-BDA-1113-2","S0231":"IW/OW-BDA-1106-3","S0232":"IW/OW-BDA-1159B","S0233":"IW/OW-BDA-1179-2","S0234":"IW/OW-BDA-1179-3","S0235":"IW/OW-BDA-1113-2","S0236":"IW/OW-BDA-1106-3","S0237":"IW/OW-BDA-1159B","S0238":"IW/OW-BDA-1179-3","S0239":"IW/OW-BDA-1106-2","S0240":"IW/OW-BDA-1106-3","S0241":"IW/OW-BDA-1159B","S0242":"IW/OW-BDA-1179-3","S0243":"IW/OW-BDA-1106-2","S0244":"IW/OW-BDA-1106-3","S0245":"IW/OW-BDA-1159B","S0246":"IW/OW-BDA-1179-1","S0247":"IW/OW-BDA-1179-2","S0248":"IW/OW-BDA-1179-3","S0249":"IW/OW-BDA-1106-2","S0250":"IW/OW-BDA-1106-3","S0251":"IW/OW-BDA-1179-1","S0252":"IW/OW-BDA-1179-2","S0253":"IW/OW-BDA-1179-3","S0254":"IW/OW-BDA-1106-2","S0255":"IW/OW-BDA-1106-3","S0256":"IW/OW-BDA-1179-1","S0257":"IW/OW-BDA-1179-3"};
 const PN_FAM={'36 심팩300':{'1106':'IW/OW-BDA-1106-2','1113':'IW/OW-BDA-1113-2'},'45 심팩300':{'1106':'IW/OW-BDA-1106-3','1113':'IW/OW-BDA-1113-2'},'47 심팩300':{'1113':'IW/OW-BDA-1113-1','1159':'IW/OW-BDA-1159B','1179':'IW/OW-BDA-1179-1','1106':'IW/OW-BDA-1106-2'},'48 심팩300':{'1179':'IW/OW-BDA-1179-2'},'49 심팩300':{'1179':'IW/OW-BDA-1179-3'}};
@@ -654,7 +660,7 @@ function onPn(){const it=S.master.items.find(i=>i.pn===$('f_pn').value);if(!it)r
   readout();}
 function readout(){const r=readForm();const c=calc(r);$('r_run').textContent=fmt(c.run);$('r_cap').textContent=fmt(c.cap);const o=$('r_oper'),e=$('r_eff');o.textContent=pct(c.oper);e.textContent=pct(c.eff);o.className=isFinite(c.oper)?cls(c.oper):'';e.className=isFinite(c.eff)?cls(c.eff):'';}
 function readForm(){return{date:$('f_date').value,mc:$('f_mc').value,proc:$('f_proc').value.trim()||'P/R',cust:$('f_cust').value,pn:$('f_pn').value,name:$('f_name').value.trim(),w1:$('f_w1').value.trim(),w2:$('f_w2').value.trim(),w3:$('f_w3').value.trim(),w4:$('f_w4').value.trim(),spm:+$('f_spm').value||0,work:+$('f_work').value||0,stop:+$('f_stop').value||0,brk:+$('f_brk').value||0,qty:+$('f_qty').value||0,ng:+$('f_ng').value||0,reg:+$('f_reg').value,sr:$('f_sr').value.trim(),note:$('f_note').value.trim()}}
-function writeForm(r){$('f_date').value=r.date;$('f_mc').value=r.mc;$('f_proc').value=r.proc||'P/R';$('f_cust').value=r.cust;fillPn();$('f_pn').value=r.pn;$('f_name').value=r.name;['w1','w2','w3','w4'].forEach(k=>$('f_'+k).value=r[k]||'');$('f_spm').value=r.spm;$('f_work').value=r.work;$('f_stop').value=r.stop;$('f_brk').value=r.brk||'';$('f_qty').value=r.qty;$('f_ng').value=r.ng||'';$('f_reg').value=r.reg??1;$('f_sr').value=r.sr||'';$('f_note').value=r.note||'';readout();}
+function writeForm(r){$('f_date').value=r.date;$('f_mc').value=r.mc;$('f_proc').value=r.proc||'P/R';$('f_cust').value=r.cust;fillPn();$('f_pn').value=r.pn;$('f_name').value=r.name;['w1','w2','w3','w4'].forEach(k=>$('f_'+k).value=r[k]||'');$('f_spm').value=r.spm;$('f_work').value=r.work;$('f_stop').value=r.stop;$('f_brk').value=r.brk||'';$('f_qty').value=r.qty;$('f_ng').value=r.ng||'';$('f_ngp').value=r.ngp||'';$('f_reg').value=r.reg??1;$('f_sr').value=r.sr||'';$('f_note').value=r.note||'';readout();}
 function resetForm(keepDate){const d=keepDate?$('f_date').value:today();editId=null;$('entryTitle').textContent='새 일보';if($('btnSave')){$('btnSave').textContent='저장 (Ctrl+Enter)';$('btnEdit').disabled=true;$('btnDel').disabled=true}writeForm({date:d,mc:'',proc:'P/R',cust:'',pn:'',name:'',spm:'',work:'',stop:'',brk:'',qty:'',ng:'',reg:1,sr:'',note:''});$('fmsg').textContent='';renderEntry();}
 function saveRec(cont){
   const r=readForm();
@@ -734,14 +740,17 @@ async function openMes(){
   if(d<MES_FROM){toast(MES_FROM.slice(0,7)+'월부터 MES 연동을 씁니다. 그 이전은 기존 자료를 그대로 두세요');return}
   $('modal').innerHTML='<h2>MES 실적 불러오기</h2><p class="muted">'+d+' 자료를 읽는 중…</p>';
   $('mask').classList.add('on');
-  let led=[],use=[];
+  let led=[],use=[],dt=[];
   try{
     const q1=SB_URL+'/rest/v1/stock_ledger?select=pn,kind,qty,party,lot,note&led_date=eq.'+d+'&kind=in.(%EC%83%9D%EC%82%B0%EC%9E%85%EA%B3%A0,%EB%B6%88%EB%9F%89%ED%8F%90%EA%B8%B0)&limit=500';
     const q2=SB_URL+'/rest/v1/raw_use?select=machine_code,item_code,item_name,start_time,end_time&use_date=eq.'+d+'&limit=1000';
-    const [r1,r2]=await Promise.all([fetch(q1,{headers:hdr}),fetch(q2,{headers:hdr})]);
+    const q3=DT_URL+'/rest/v1/daily_downtime?select=machine_code,stop_events,planned_events,stop_min,planned_min,run_min&ymd=eq.'+d+'&limit=100';
+    const dh={'apikey':DT_KEY,'Authorization':'Bearer '+DT_KEY};
+    const [r1,r2,r3]=await Promise.all([fetch(q1,{headers:hdr}),fetch(q2,{headers:hdr}),fetch(q3,{headers:dh}).catch(()=>null)]);
     if(!r1.ok)throw new Error(r1.status);
     led=await r1.json();
     use=r2.ok?await r2.json():[];
+    dt=(r3&&r3.ok)?await r3.json():[];
   }catch(e){$('modal').innerHTML='<h2>MES 실적 불러오기</h2><p>MES 자료를 읽지 못했습니다. 인터넷 연결을 확인하세요.</p><div class="fl"><button onclick="closeMask()">닫기</button></div>';return}
   // 설비별 가동시간(분) — 소재사용 기록에서 계산
   const runMap={},nameMap={},ranKeys=new Set();
@@ -756,6 +765,15 @@ async function openMes(){
   const byMc={};
   use.forEach(x=>{if(x.start_time)(byMc[x.machine_code]=byMc[x.machine_code]||[]).push(x)});
   const hhmm=s=>{const t2=new Date(s);return String(t2.getUTCHours()).padStart(2,'0')+':'+String(t2.getUTCMinutes()).padStart(2,'0')};
+  // MES 정지사유(daily_downtime) — 사유별 합산
+  const dtTxt={},dtMin={};
+  dt.forEach(x=>{
+    const ev=[].concat(x.stop_events||[],x.planned_events||[]);
+    const g={};ev.forEach(e=>{const k=e.name||'기타';g[k]=(g[k]||0)+(+e.min||0)});
+    const list=Object.entries(g).sort((a,b)=>b[1]-a[1]).map(([k,v])=>k+' '+Math.round(v)+'분');
+    if(list.length)dtTxt[x.machine_code]=list.join(' / ');
+    dtMin[x.machine_code]=Math.round((+x.stop_min||0)+(+x.planned_min||0));
+  });
   const stopTxt={};
   Object.entries(byMc).forEach(([code,list])=>{
     const L=list.filter(x=>x.end_time).sort((a,b)=>new Date(a.start_time)-new Date(b.start_time));
@@ -767,7 +785,16 @@ async function openMes(){
     }
     if(gaps.length)stopTxt[code]='정지 '+gaps.slice(0,6).join(' / ');
   });
-  const badNote={};led.filter(x=>x.kind==='불량폐기').forEach(x=>{if(x.note)badNote[x.pn]=String(x.note)});
+  // 불량폐기를 '작업불량'과 '시타발·검사 폐기(P11·P12)'로 나눔
+  const PROC_NG={'P11':1,'P12':1};
+  const badNote={},badSplit={};
+  led.filter(x=>x.kind==='불량폐기').forEach(x=>{
+    if(x.note)badNote[x.pn]=ngName(x.note);
+    let real=0,proc=0;
+    String(x.note||'').replace(/(P\d{2})\s*:\s*(\d+)/g,(m,c,v)=>{if(PROC_NG[c])proc+=+v;else real+=+v;return m});
+    if(real+proc===0)real=+x.qty||0;
+    badSplit[x.pn]={real,proc};
+  });
   const prod=led.filter(x=>x.kind==='생산입고'&&(+x.qty||0)!==0);
   // 불량폐기는 품번 기준이라 같은 품번 생산입고에 수량 비율로 나눔
   const bad={};led.filter(x=>x.kind==='불량폐기').forEach(x=>bad[x.pn]=(bad[x.pn]||0)+(+x.qty||0));
@@ -796,17 +823,19 @@ async function openMes(){
     const brk=last?(last.brk||0):0;
     const dup=S.recs.find(r=>r.date===d&&r.mc===mc&&r.pn===(pn||x.pn));
     const noRun=run===0&&(+x.qty||0)>0; // MES 가동기록이 없는 경우(정지시간을 근무 전체로 잡으면 안 됨)
-    const ng=Math.round((bad[x.pn]||0)*(sumByPn[x.pn]?(+x.qty)/sumByPn[x.pn]:1));
+    const share=sumByPn[x.pn]?(+x.qty)/sumByPn[x.pn]:1;
+    const sp=badSplit[x.pn]||{real:bad[x.pn]||0,proc:0};
+    const ng=Math.round(sp.real*share), ngp=Math.round(sp.proc*share);
     return{i,code,pnCode:x.pn,name:nameMap[x.pn]||'',lot:x.lot||'',mc,pn:pn||'@'+x.pn,
       name2:it?it.name:(nameMap[x.pn]||''),cust:it?it.cust:'',run,work,brk,
-      stop:noRun?(last?last.stop:0):Math.max(0,work-run),noRun,qty:+x.qty||0,ng,ab:bad[x.pn]||0,
-      w1:last?last.w1:'',sr:stopTxt[code]||'',note:badNote[x.pn]||'',pending:!!x.pending,use:!dup&&!!mc&&!x.pending,dup:!!dup};
+      stop:(dtMin[code]!=null?dtMin[code]:(noRun?(last?last.stop:0):Math.max(0,work-run))),noRun,qty:+x.qty||0,ng,ngp,ab:bad[x.pn]||0,
+      w1:last?last.w1:'',sr:dtTxt[code]||stopTxt[code]||'',dtMin:dtMin[code],note:badNote[x.pn]||'',pending:!!x.pending,use:!dup&&!!mc&&!x.pending,dup:!!dup};
   });
   drawMes(d);
 }
 function closeMask(){$('mask').classList.remove('on')}
 function mesSet(i,k,v){const r=MESROWS[i];if(!r)return;
-  if(k==='use')r.use=v; else r[k]=(['work','stop','qty','ng','brk','spmFix'].includes(k))?(+v||0):v;
+  if(k==='use')r.use=v; else r[k]=(['work','stop','qty','ng','ngp','brk','spmFix'].includes(k))?(+v||0):v;
   if(k==='work'&&!r.noRun)r.stop=Math.max(0,r.work-r.run);
   if(k==='mc'||k==='pn'){const it=S.master.items.find(x=>x.pn===r.pn);r.cust=it?it.cust:'';if(it)r.name2=it.name;r.dup=!!S.recs.find(x=>x.date===$('f_date').value&&x.mc===r.mc&&x.pn===r.pn)}
   drawMes($('f_date').value);
@@ -829,6 +858,7 @@ function drawMes(d){
     <td><input type=number value="${r.qty}" onchange="mesSet(${r.i},'qty',this.value)" style="width:90px;padding:3px 5px"></td>
     <td class=num title="MES 불량폐기(품번 기준)">${fmt(r.ab)}</td>
     <td><input type=number value="${r.ng}" onchange="mesSet(${r.i},'ng',this.value)" style="width:70px;padding:3px 5px"></td>
+    <td><input type=number value="${r.ngp||''}" onchange="mesSet(${r.i},'ngp',this.value)" style="width:80px;padding:3px 5px" placeholder="0"></td>
     <td><input value="${esc(r.sr)}" onchange="mesSet(${r.i},'sr',this.value)" placeholder="정지사유" style="min-width:210px;padding:3px 5px"></td>
     <td><input value="${esc(r.note)}" onchange="mesSet(${r.i},'note',this.value)" placeholder="특기사항" style="min-width:170px;padding:3px 5px"></td>
     <td style="font-size:11px">${(()=>{const exp=spm*Math.max(0,r.run);const low=exp>0&&r.qty<exp*0.6;return low?`<b style="color:var(--red)">실적 확인 (예상 ${fmt(exp)})</b> `:''})()}${r.dup?'<span class=muted>이미 저장됨</span>':(!r.mc?'<b style="color:var(--red)">설비 지정 필요</b>':(r.pending?'<b style="color:var(--amber)">생산마감 미완료</b>':(r.noRun?'<b style="color:var(--amber)">MES 가동시간 없음 · 정지 확인</b>':(r.pn.startsWith('@')?'<span class=muted>신규 품번 등록됨</span>':''))))}</td></tr>`;
@@ -839,10 +869,10 @@ function drawMes(d){
     nNoSpm=MESROWS.filter(r=>!(r.spmFix||spmFor(r.mc,r.pn)||(r.run>=45?Math.round(r.qty/r.run):0))).length;
   const warn=[nNoMc?`설비 미지정 ${nNoMc}줄`:'',nPend?`생산마감 미완료 ${nPend}줄`:'',nNoRun?`가동시간 없음 ${nNoRun}줄`:'',nNoSpm?`SPM 입력 필요 ${nNoSpm}줄`:'',nDup?`이미 저장 ${nDup}줄`:''].filter(Boolean).join(' · ');
   $('modal').innerHTML=`<div class="fl" style="margin-bottom:10px"><h2 style="flex:1">MES 실적 불러오기 · ${d}</h2><button onclick="closeMask()">닫기</button></div>
-  <p class="muted" style="margin-top:0">MES 일 생산수량(생산마감 집계)을 실적으로, 불량폐기를 불량으로 채웠습니다. 근무시간·작업자·정지사유를 확인·수정한 뒤 저장하세요. 정지시간은 근무−MES가동으로 자동 계산되며 직접 고칠 수 있습니다. MES에는 정지사유 항목이 없어 <b>가동이 끊긴 시간대</b>를 대신 넣어 두었으니 사유를 덧붙여 주세요. 특기사항에는 MES 불량폐기 사유가 들어옵니다.</p>
+  <p class="muted" style="margin-top:0">MES 일 생산수량(생산마감 집계)을 실적으로, 불량폐기를 불량으로 채웠습니다. 근무시간·작업자·정지사유를 확인·수정한 뒤 저장하세요. 정지시간은 근무−MES가동으로 자동 계산되며 직접 고칠 수 있습니다. 정지사유·정지시간은 <b>MES 가동설비 모니터링</b>의 비가동 집계에서 그대로 가져옵니다(없으면 가동이 끊긴 시간대로 대체). 특기사항에는 MES 불량폐기 사유가 <b>코드 대신 불량유형 이름</b>으로 들어옵니다.</p>
   <div class="fl" style="margin-bottom:8px"><span class="tag">설비 ${nMc}대 · ${MESROWS.length}줄</span>${warn?`<span class="tag a">${warn}</span>`:''}</div>
-  <div class="tw" style="max-height:60vh"><table><tr><th></th><th>MES</th><th>설비</th><th>품번</th><th>작업자</th><th class=num>SPM</th><th>근무(분)</th><th class=num>MES가동</th><th>정지(분)</th><th>실적(일생산)</th><th class=num>MES불량</th><th>불량</th><th>정지사유</th><th>특기사항(불량사유)</th><th></th></tr>
-  ${MESROWS.length?rows:'<tr><td colspan=15 class=empty>이 날짜의 MES 자료가 없습니다</td></tr>'}</table></div>
+  <div class="tw" style="max-height:60vh"><table><tr><th></th><th>MES</th><th>설비</th><th>품번</th><th>작업자</th><th class=num>SPM</th><th>근무(분)</th><th class=num>MES가동</th><th>정지(분)</th><th>실적(일생산)</th><th class=num>MES불량</th><th>작업불량</th><th>시타발·검사</th><th>정지사유</th><th>특기사항(불량사유)</th><th></th></tr>
+  ${MESROWS.length?rows:'<tr><td colspan=16 class=empty>이 날짜의 MES 자료가 없습니다</td></tr>'}</table></div>
   <div class="fl" style="margin-top:12px"><button class="p" onclick="saveMes()" ${n?'':'disabled'}>선택 ${n}건 일보로 저장</button><span class="grow"></span><span class="muted">설비·품번을 여기서 고르면 다음부터 자동으로 연결됩니다</span></div>`;
 }
 function saveMes(){
@@ -868,7 +898,7 @@ function saveMes(){
     if(!S.master.spmdb.find(x=>x.mc===r.mc&&x.pn===r.pn))S.master.spmdb.push({mc:r.mc,pn:r.pn,spm});
     if(r.w1&&!S.master.workers.includes(r.w1))S.master.workers.push(r.w1);
     S.recs.push({id:uid(),date:d,mc:r.mc,proc:'P/R',cust:it?it.cust:'',pn:r.pn,name:it?it.name:r.name2,
-      w1:r.w1,w2:'',w3:'',w4:'',spm:spm,work:r.work,stop:r.stop,brk:r.brk,qty:r.qty,ng:r.ng,
+      w1:r.w1,w2:'',w3:'',w4:'',spm:spm,work:r.work,stop:r.stop,brk:r.brk,qty:r.qty,ng:r.ng,ngp:r.ngp||0,
       sr:r.sr,note:r.note,reg:1,mes:r.qty,mesRun:r.run,src:'MES',ua:now(),by:localStorage.getItem('tj_me')||''});
     n++;
   });
@@ -908,7 +938,7 @@ function sortBy(k){if(sortKey===k)sortDir*=-1;else{sortKey=k;sortDir=k==='date'?
 ['h_range','h_from','h_to','h_cust','h_mc','h_pn','h_w'].forEach(id=>$(id).addEventListener('change',renderHist));
 $('sp_q').addEventListener('input',renderSpm);
 $('h_q').addEventListener('input',renderHist);
-function histRows(L){return L.map(r=>{const c=calc(r);return{'생산일자':r.date.replace(/-/g,''),'설비명':r.mc,'공정명':r.proc,'고객사':r.cust,'품명':r.name,'품번':r.pn,'작업자1':r.w1||'','작업자2':r.w2||'','작업자3':r.w3||'','작업자4':r.w4||'','SPM':r.spm,'근무시간':r.work,'정지시간':r.stop,'휴식시간':r.brk||0,'가동시간':c.run,'가능수량':c.cap,'실적수량':r.qty,'가동율(%)':+(c.oper*100).toFixed(2),'효율(%)':+(c.eff*100).toFixed(2),'작업불량수량':r.ng||0,'정지사유':r.sr,'특기사항':r.note,'생등':r.reg??1}})}
+function histRows(L){return L.map(r=>{const c=calc(r);return{'생산일자':r.date.replace(/-/g,''),'설비명':r.mc,'공정명':r.proc,'고객사':r.cust,'품명':r.name,'품번':r.pn,'작업자1':r.w1||'','작업자2':r.w2||'','작업자3':r.w3||'','작업자4':r.w4||'','SPM':r.spm,'근무시간':r.work,'정지시간':r.stop,'휴식시간':r.brk||0,'가동시간':c.run,'가능수량':c.cap,'실적수량':r.qty,'가동율(%)':+(c.oper*100).toFixed(2),'효율(%)':+(c.eff*100).toFixed(2),'작업불량수량':r.ng||0,'시타발·검사폐기':r.ngp||0,'정지사유':r.sr,'특기사항':r.note,'생등':r.reg??1}})}
 function exportHist(){xl([{name:'생산이력',rows:histRows(histList().sort((a,b)=>a.date.localeCompare(b.date)||a.mc.localeCompare(b.mc,'ko',{numeric:true})))}],'생산이력_'+($('h_range').value.startsWith('m:')?$('h_range').value.slice(2):'전체')+'.xlsx')}
 
 /* ===== 월간 ===== */
@@ -964,13 +994,13 @@ function rptStats(mo,cu){
   const R=S.recs.filter(r=>r.date.slice(0,7)===mo&&(!cu||r.cust===cu));
   // 기존 엑셀 보고서와 같은 방식: 하루 안의 일보 평균을 낸 뒤, 그 날짜들의 평균
   const dayAgg=L=>{let oper=0,eff=0,n=0,qty=0,ng=0,run=0,stop=0,work=0;
-    L.forEach(r=>{const c=calc(r);if(isFinite(c.oper)){oper+=c.oper;eff+=isFinite(c.eff)?c.eff:0;n++}qty+=+r.qty||0;ng+=+r.ng||0;run+=c.run;stop+=+r.stop||0;work+=+r.work||0});
-    return{n,oper:n?oper/n:NaN,eff:n?eff/n:NaN,qty,ng,run,stop,work}};
+    let ngp=0;L.forEach(r=>{const c=calc(r);if(isFinite(c.oper)){oper+=c.oper;eff+=isFinite(c.eff)?c.eff:0;n++}qty+=+r.qty||0;ng+=+r.ng||0;ngp+=+r.ngp||0;run+=c.run;stop+=+r.stop||0;work+=+r.work||0});
+    return{n,oper:n?oper/n:NaN,eff:n?eff/n:NaN,qty,ng,ngp,run,stop,work}};
   const agg=L=>{const g={};L.forEach(r=>{(g[r.date]=g[r.date]||[]).push(r)});
     const ds=Object.keys(g).sort().map(d=>({d,...dayAgg(g[d])}));
     let oper=0,eff=0,k=0,qty=0,ng=0,run=0,stop=0,work=0,n=0;
-    ds.forEach(x=>{if(isFinite(x.oper)){oper+=x.oper;eff+=isFinite(x.eff)?x.eff:0;k++}qty+=x.qty;ng+=x.ng;run+=x.run;stop+=x.stop;work+=x.work;n+=x.n});
-    return{n,days:ds.length,oper:k?oper/k:NaN,eff:k?eff/k:NaN,runPerDay:ds.length?run/ds.length:0,qty,ng,run,stop,work,ds}};
+    let ngp=0;ds.forEach(x=>{if(isFinite(x.oper)){oper+=x.oper;eff+=isFinite(x.eff)?x.eff:0;k++}qty+=x.qty;ng+=x.ng;ngp+=x.ngp||0;run+=x.run;stop+=x.stop;work+=x.work;n+=x.n});
+    return{n,days:ds.length,oper:k?oper/k:NaN,eff:k?eff/k:NaN,runPerDay:ds.length?run/ds.length:0,qty,ng,ngp,run,stop,work,ds}};
   const weeks=weeksOf(mo).map(([a,b],i)=>{const L=R.filter(r=>{const d=+r.date.slice(8);return d>=a&&d<=b});return{i:i+1,a,b,...agg(L)}});
   const total=agg(R);
   return{weeks,total,days:total.ds,R};
@@ -1014,7 +1044,7 @@ function renderReport(){
   // 정지
   const sw=stopWords(R);const stopMc=[...gml].sort((a,b)=>b[1].stop-a[1].stop).slice(0,8);
   // 불량
-  const gn={};R.forEach(r=>{if(+r.ng){const g=gn[r.pn]=gn[r.pn]||{ng:0,q:0,name:r.name,cust:r.cust,notes:{}};g.ng+=+r.ng;if(r.note)g.notes[r.note]=(g.notes[r.note]||0)+1}});
+  const gn={};R.forEach(r=>{if(+r.ng||+r.ngp){const g=gn[r.pn]=gn[r.pn]||{ng:0,ngp:0,q:0,name:r.name,cust:r.cust,notes:{}};g.ng+=+r.ng||0;g.ngp+=+r.ngp||0;g.q+=+r.qty||0;if(r.note)g.notes[r.note]=(g.notes[r.note]||0)+1}});
   R.forEach(r=>{if(gn[r.pn])gn[r.pn].q+=+r.qty||0});const gnl=Object.entries(gn).sort((a,b)=>b[1].ng-a[1].ng).slice(0,10);
   // 작업자
   // 작업자1~4 모두 집계. 근무일·작업건수는 보조 작업자도 포함, 수량·가동율·효율·불량은 중복 계상을 막기 위해 작업자1(주작업자) 기준
@@ -1090,8 +1120,8 @@ function renderReport(){
      <div class="muted" style="font-size:12px;margin:10px 0 4px">정지시간 많은 설비</div>
      ${svgHBars(stopMc.map(([k,g])=>({l:k,v:g.stop,txt:fmt(g.stop)+'분 ('+pct(g.stop/(g.work||1))+')',c:'#C8433A'})),{lw:100,tw:120})}</div>
     <div><h3>8. 불량 분석</h3>
-     <div class="muted" style="font-size:12px;margin-bottom:6px">총 불량 ${fmt(T.ng)} EA · ${fmt(ppm)} PPM</div>
-     ${gnl.length?'<div class="tw" style="max-height:none;border:0"><table><tr><th>품번</th><th>품명</th><th>고객사</th><th class=num>불량</th><th class=num>불량률</th><th>주요 내용</th></tr>'+gnl.map(([k,g])=>`<tr><td>${esc(k)}</td><td class=muted style="max-width:170px;overflow:hidden;text-overflow:ellipsis">${esc(g.name)}</td><td>${esc(g.cust)}</td><td class=num><b>${fmt(g.ng)}</b></td><td class=num>${(g.ng/(g.q||1)*100).toFixed(2)}%</td><td class=muted style="font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis" title="${esc(Object.entries(g.notes).sort((a,b)=>b[1]-a[1]).map(x=>x[0]).join(', '))}">${esc(Object.entries(g.notes).sort((a,b)=>b[1]-a[1]).slice(0,2).map(x=>x[0]).join(', '))}</td></tr>`).join('')+'</table></div>':'<div class=empty>불량 없음</div>'}</div>
+     <div class="muted" style="font-size:12px;margin-bottom:6px">작업불량 ${fmt(T.ng)} EA · ${fmt(ppm)} PPM &nbsp;|&nbsp; 시타발·검사폐기 ${fmt(T.ngp||0)} EA <span style="font-size:11px">(공정상 폐기 · 불량률에서 제외)</span></div>
+     ${gnl.length?'<div class="tw" style="max-height:none;border:0"><table><tr><th>품번</th><th>품명</th><th>고객사</th><th class=num>작업불량</th><th class=num>불량률</th><th class=num>시타발·검사</th><th>주요 내용</th></tr>'+gnl.map(([k,g])=>`<tr><td>${esc(k)}</td><td class=muted style="max-width:170px;overflow:hidden;text-overflow:ellipsis">${esc(g.name)}</td><td>${esc(g.cust)}</td><td class=num><b>${fmt(g.ng)}</b></td><td class=num>${(g.ng/(g.q||1)*100).toFixed(2)}%</td><td class=num>${g.ngp?fmt(g.ngp):''}</td><td class=muted style="font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis" title="${esc(Object.entries(g.notes).sort((a,b)=>b[1]-a[1]).map(x=>x[0]).join(', '))}">${esc(Object.entries(g.notes).sort((a,b)=>b[1]-a[1]).slice(0,2).map(x=>x[0]).join(', '))}</td></tr>`).join('')+'</table></div>':'<div class=empty>불량 없음</div>'}</div>
    </div>
 
    <div class="grid g2 rpt-sec">
