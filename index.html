@@ -79,8 +79,8 @@ tr.sum td{background:#EEF2F7;font-weight:700;border-top:2px solid var(--line)}
 .tag{display:inline-block;padding:1px 7px;border-radius:10px;font-size:11px;font-weight:600;background:var(--steel2);color:var(--steel)}
 .tag.a{background:var(--amber2);color:#9A5A16}.tag.g{background:var(--green2);color:#1E6B41}.tag.r{background:var(--red2);color:#9C2F27}
 .bar{height:8px;background:var(--line2);border-radius:4px;overflow:hidden;min-width:60px}
-.bar i{display:block;height:100%;background:#6B6B6B}
-.bar.g i{background:#2E2E2E}.bar.a i{background:#9A9A9A}.bar.r i{background:#C4C4C4}
+.bar i{display:block;height:100%;background:var(--steel)}
+.bar.a i{background:var(--amber)}.bar.r i{background:var(--red)}.bar.g i{background:var(--green)}
 .muted{color:var(--muted)}
 .empty{padding:36px;text-align:center;color:var(--muted)}
 .fl{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
@@ -108,8 +108,8 @@ tr.sel td{background:var(--steel2)!important;box-shadow:inset 3px 0 0 var(--stee
 
 /* charts */
 .chart{display:flex;align-items:flex-end;gap:3px;height:140px;padding:6px 0 0}
-.chart div{flex:1;background:#5A5A5A;border-radius:2px 2px 0 0;position:relative;min-width:6px}
-.chart div.we{background:#BDBDBD}
+.chart div{flex:1;background:var(--steel);border-radius:2px 2px 0 0;position:relative;min-width:6px}
+.chart div.we{background:#B9C4D3}
 .chart div span{position:absolute;bottom:-18px;left:0;right:0;text-align:center;font-size:10px;color:var(--muted)}
 .chart div:hover:after{content:attr(data-v);position:absolute;bottom:100%;left:50%;transform:translateX(-50%);background:#1B2C45;color:#fff;font-size:11px;padding:2px 6px;border-radius:4px;white-space:nowrap;margin-bottom:3px}
 .hb{display:grid;grid-template-columns:120px 1fr 60px;gap:8px;align-items:center;font-size:13px;padding:3px 0}
@@ -184,7 +184,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
   <a data-pg="master"><i>⚙</i>기준정보</a>
   <a data-pg="data"><i>⇅</i>데이터 관리</a>
   <a data-pg="help"><i>?</i>사용안내</a>
-  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v4.3</div>
+  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v4.2</div>
 </nav>
 <main>
   <div class="top">
@@ -887,7 +887,7 @@ function rptStats(mo,cu){
 }
 function prevMonth(mo){const[y,m]=mo.split('-').map(Number);const d=new Date(y,m-2,1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')}
 /* SVG 차트 */
-const C={bar:'#5A5A5A',bar2:'#BDBDBD',l1:'#1F1F1F',l2:'#9A9A9A',grid:'#E3E8EF',txt:'#66717F'};
+const C={bar:'#23456E',bar2:'#9FB4D0',l1:'#D9822B',l2:'#2F8F5B',grid:'#E3E8EF',txt:'#66717F'};
 function svgCombo(labels,bars,lines,opt={}){ // lines:[{v:[],c,name}] 0~1 값
   const W=opt.W||900,H=opt.H||230,L=60,R=44,T=14,B=30,w=W-L-R,h=H-T-B,n=labels.length;if(!n)return'<div class=empty>자료 없음</div>';
   const bw=w/n;const mx=Math.max(1,...bars)*1.1;let s=`<svg class=svgc viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`;
@@ -990,15 +990,15 @@ function renderReport(){
    </div>
 
    <div class="rpt-sec"><h3>6. 설비별 실적</h3>
-   <div class="grid g2"><div>${svgHBars(gml.map(([k,g])=>{const v=g.work?g.run/g.work:0;return{l:k,v,txt:pct(v),c:cls(v)==='r'?'#C4C4C4':cls(v)==='a'?'#9A9A9A':cls(v)==='g'?'#2E2E2E':'#6B6B6B'}}),{lw:110,tw:60})}<div class="legend"><span>가동율 — <i style="background:#2E2E2E"></i>85%↑ <i style="background:#6B6B6B"></i>70~85 <i style="background:#9A9A9A"></i>60~70 <i style="background:#C4C4C4"></i>60%↓</span></div></div>
+   <div class="grid g2"><div>${svgHBars(gml.map(([k,g])=>{const v=g.work?g.run/g.work:0;return{l:k,v,txt:pct(v),c:cls(v)==='r'?'#C8433A':cls(v)==='a'?'#D9822B':cls(v)==='g'?'#2F8F5B':C.bar}}),{lw:110,tw:60})}<div class="legend"><span>가동율 — <i style="background:#2F8F5B"></i>85%↑ <i style="background:${C.bar}"></i>70~85 <i style="background:#D9822B"></i>60~70 <i style="background:#C8433A"></i>60%↓</span></div></div>
    <div class="tw" style="max-height:none"><table><tr><th>설비</th><th class=num>가동일</th><th class=num>품목</th><th class=num>근무(H)</th><th class=num>정지(H)</th><th class=num>가동율</th><th class=num>효율</th><th class=num>생산수량</th><th class=num>불량</th></tr>${gml.map(([k,g])=>`<tr><td>${esc(k)}</td><td class=num>${g.days.size}</td><td class=num>${g.pn.size}</td><td class=num>${(g.work/60).toFixed(1)}</td><td class=num>${(g.stop/60).toFixed(1)}</td><td class=num><span class="tag ${cls(g.run/g.work)}">${pct(g.run/g.work)}</span></td><td class=num><span class="tag ${cls(g.q/g.cap)}">${pct(g.q/g.cap)}</span></td><td class=num>${fmt(g.q)}</td><td class=num>${g.ng||''}</td></tr>`).join('')}</table></div></div></div>
 
    <div class="grid g2 rpt-sec">
     <div><h3>7. 정지시간 분석</h3>
      <div class="muted" style="font-size:12px;margin-bottom:6px">총 정지 ${fmt(T.stop)}분 (근무 대비 ${pct(T.stop/(T.work||1))}) · 정지사유 기재 건수 기준</div>
-     ${svgHBars(sw.slice(0,10).map(([k,v])=>({l:k,v,txt:v+'건',c:'#6B6B6B'})),{lw:100,tw:50})}
+     ${svgHBars(sw.slice(0,10).map(([k,v])=>({l:k,v,txt:v+'건',c:C.l1})),{lw:100,tw:50})}
      <div class="muted" style="font-size:12px;margin:10px 0 4px">정지시간 많은 설비</div>
-     ${svgHBars(stopMc.map(([k,g])=>({l:k,v:g.stop,txt:fmt(g.stop)+'분 ('+pct(g.stop/(g.work||1))+')',c:'#2E2E2E'})),{lw:100,tw:120})}</div>
+     ${svgHBars(stopMc.map(([k,g])=>({l:k,v:g.stop,txt:fmt(g.stop)+'분 ('+pct(g.stop/(g.work||1))+')',c:'#C8433A'})),{lw:100,tw:120})}</div>
     <div><h3>8. 불량 분석</h3>
      <div class="muted" style="font-size:12px;margin-bottom:6px">총 불량 ${fmt(T.ng)} EA · ${fmt(ppm)} PPM</div>
      ${gnl.length?'<div class="tw" style="max-height:none;border:0"><table><tr><th>품번</th><th>품명</th><th>고객사</th><th class=num>불량</th><th class=num>불량률</th><th>주요 내용</th></tr>'+gnl.map(([k,g])=>`<tr><td>${esc(k)}</td><td class=muted style="max-width:170px;overflow:hidden;text-overflow:ellipsis">${esc(g.name)}</td><td>${esc(g.cust)}</td><td class=num><b>${fmt(g.ng)}</b></td><td class=num>${(g.ng/(g.q||1)*100).toFixed(2)}%</td><td class=muted style="font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis" title="${esc(Object.entries(g.notes).sort((a,b)=>b[1]-a[1]).map(x=>x[0]).join(', '))}">${esc(Object.entries(g.notes).sort((a,b)=>b[1]-a[1]).slice(0,2).map(x=>x[0]).join(', '))}</td></tr>`).join('')+'</table></div>':'<div class=empty>불량 없음</div>'}</div>
