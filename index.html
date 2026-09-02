@@ -192,7 +192,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
   <a data-pg="master"><i>⚙</i>기준정보</a>
   <a data-pg="data"><i>⇅</i>데이터 관리</a>
   <a data-pg="help"><i>?</i>사용안내</a>
-  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v7.3</div>
+  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v7.5</div>
 </nav>
 <main>
   <div class="top">
@@ -324,11 +324,12 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
 
   <!-- 기준정보 -->
   <section class="pg" id="pg-master">
-    <div class="grid g2">
-      <div class="panel"><h3>품목 마스터 <span class="muted">(고객사 · 품번 · 품명 · 기본SPM)</span></h3>
+    <div class="panel"><h3>품목 마스터 <span class="muted">(고객사 · 품번 · 품명 · 기본SPM)</span> <span class="muted" style="font-weight:400;font-size:12px" id="itemCnt"></span></h3>
         <div class="fl" style="margin-bottom:8px"><input id="mi_cust" list="dlC" placeholder="고객사" style="min-width:110px"><input id="mi_pn" placeholder="품번"><input id="mi_name" placeholder="품명" class="grow"><input id="mi_spm" type="number" placeholder="SPM" style="min-width:70px;width:80px"><button class="p s" onclick="addItem()">추가</button></div>
-        <div class="tw" style="max-height:420px"><table id="tItems"></table></div>
-      </div>
+        <div class="tw" style="max-height:60vh"><table id="tItems"></table></div>
+    </div>
+
+    <div class="grid g2">
       <div>
         <div class="panel"><h3>설비 목록</h3>
           <div class="fl" style="margin-bottom:8px"><input id="mm_mc" placeholder="예: 50 심팩300" class="grow"><button class="p s" onclick="addMc()">추가</button></div>
@@ -336,17 +337,19 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
         <div class="panel"><h3>작업자</h3>
           <div class="fl" style="margin-bottom:8px"><input id="mw" placeholder="이름" class="grow"><button class="p s" onclick="addW()">추가</button></div>
           <div id="lW" class="chips"></div></div>
-        <div class="panel"><h3>SPM 표준 <span class="muted" style="font-weight:400;font-size:12px" id="spmCnt"></span></h3>
-          <p class="muted" style="font-size:12px;margin:0 0 8px">설비×품번 표준 SPM입니다. 일보 입력·MES 불러오기에서 SPM을 자동으로 채우는 데 씁니다. 설비를 비우면 그 품번의 공통값이 됩니다.</p>
-          <div class="fl" style="margin-bottom:8px"><input id="sp_q" placeholder="설비·품번 검색" class="grow"><button class="s" onclick="restoreSpm()">기본값 복구</button><input id="sp_mc" list="dlMc" placeholder="설비(비우면 공통)" style="min-width:120px"><input id="sp_pn" placeholder="품번" style="min-width:120px"><input id="sp_v" type="number" placeholder="SPM" style="width:80px"><button class="p s" onclick="addSpm()">추가</button></div>
-          <div class="tw" style="max-height:300px"><table id="tSpm"></table></div>
-          <datalist id="dlMc"></datalist></div>
-        <div class="panel"><h3>MES 설비코드 연결</h3>
-          <p class="muted" style="font-size:12px;margin:0 0 8px">MES 설비코드가 우리 설비 어느 것인지 한 번만 지정하면 됩니다. 비어 있으면 MES 불러오기 화면에서 직접 고를 수 있습니다.</p>
-          <div class="tw" style="max-height:260px"><table id="tMesMc"></table></div></div>
         <div class="panel"><h3>정지사유 버튼 (입력화면 빠른 선택)</h3>
           <div class="fl" style="margin-bottom:8px"><input id="mr" placeholder="사유" class="grow"><button class="p s" onclick="addR()">추가</button></div>
           <div id="lR" class="chips"></div></div>
+      </div>
+      <div>
+        <div class="panel"><h3>SPM 표준 <span class="muted" style="font-weight:400;font-size:12px" id="spmCnt"></span></h3>
+          <p class="muted" style="font-size:12px;margin:0 0 8px">설비×품번 표준 SPM입니다. 일보 입력·MES 불러오기에서 SPM을 자동으로 채우는 데 씁니다. 설비를 비우면 그 품번의 공통값이 됩니다.</p>
+          <div class="fl" style="margin-bottom:8px"><input id="sp_q" placeholder="설비·품번 검색" class="grow"><button class="s" onclick="restoreSpm()">기본값 복구</button><input id="sp_mc" list="dlMc" placeholder="설비(비우면 공통)" style="min-width:120px"><input id="sp_pn" placeholder="품번" style="min-width:120px"><input id="sp_v" type="number" placeholder="SPM" style="width:80px"><button class="p s" onclick="addSpm()">추가</button></div>
+          <div class="tw" style="max-height:52vh"><table id="tSpm"></table></div>
+          <datalist id="dlMc"></datalist></div>
+        <div class="panel"><h3>MES 설비코드 연결</h3>
+          <p class="muted" style="font-size:12px;margin:0 0 8px">MES 설비코드가 우리 설비 어느 것인지 한 번만 지정하면 됩니다. 비어 있으면 MES 불러오기 화면에서 직접 고를 수 있습니다.</p>
+          <div class="tw" style="max-height:40vh"><table id="tMesMc"></table></div></div>
       </div>
     </div>
     <datalist id="dlC"></datalist>
@@ -1368,9 +1371,10 @@ async function savePdf(){
 function mdel(t,v){S.master.mdel=S.master.mdel||{};S.master.mdel[t+'|'+v]=now();}
 function renderMaster(){
   const m=S.master;
-  $('tItems').innerHTML='<tr><th>고객사</th><th>품번</th><th>품명</th><th class=num>SPM</th><th class=num>일보수</th><th></th></tr>'+m.items.slice().sort((a,b)=>a.cust.localeCompare(b.cust,'ko')||a.pn.localeCompare(b.pn,'ko',{numeric:true})).map(i=>{const n=S.recs.filter(r=>r.pn===i.pn).length;return `<tr><td><span class=tag>${esc(i.cust)}</span></td><td>${esc(i.pn)}</td><td><input value="${esc(i.name)}" onchange="upItem('${esc(i.pn)}','name',this.value)" style="padding:3px 6px"></td><td><input type=number value="${i.spm||''}" onchange="upItem('${esc(i.pn)}','spm',+this.value)" style="width:70px;padding:3px 6px"></td><td class=num>${n}</td><td><button class="s d" onclick="delItem('${esc(i.pn)}')" ${n?'disabled title="일보가 있는 품번은 삭제할 수 없습니다"':''}>삭제</button></td></tr>`}).join('');
+  $('tItems').innerHTML='<tr><th>고객사</th><th>품번</th><th>품명</th><th class=num>SPM</th><th class=num>일보수</th><th></th></tr>'+m.items.slice().sort((a,b)=>a.cust.localeCompare(b.cust,'ko')||a.pn.localeCompare(b.pn,'ko',{numeric:true})).map(i=>{const n=S.recs.filter(r=>r.pn===i.pn).length;return `<tr><td><input value="${esc(i.cust)}" list="dlC" onchange="upItemCust('${esc(i.pn)}',this.value)" placeholder="고객사" style="min-width:110px;padding:3px 6px"></td><td><input value="${esc(i.pn)}" onchange="upItemPn('${esc(i.pn)}',this.value)" style="min-width:120px;padding:3px 6px"></td><td><input value="${esc(i.name)}" onchange="upItem('${esc(i.pn)}','name',this.value)" style="padding:3px 6px"></td><td><input type=number value="${i.spm||''}" onchange="upItem('${esc(i.pn)}','spm',+this.value)" style="width:70px;padding:3px 6px"></td><td class=num>${n}</td><td><button class="s d" onclick="delItem('${esc(i.pn)}')" ${n?'disabled title="일보가 있는 품번은 삭제할 수 없습니다"':''}>삭제</button></td></tr>`}).join('');
   $('lMc').innerHTML=m.mcs.slice().sort((a,b)=>a.localeCompare(b,'ko',{numeric:true})).map(v=>`<span class=chip>${esc(v)} <a onclick="delM('mcs','${esc(v)}')" style="cursor:pointer;color:var(--red)">×</a></span>`).join('');
   $('lW').innerHTML=m.workers.map(v=>`<span class=chip>${esc(v)} <a onclick="delM('workers','${esc(v)}')" style="cursor:pointer;color:var(--red)">×</a></span>`).join('');
+  if($('itemCnt'))$('itemCnt').textContent=`${m.items.length}종 · 설비 ${m.mcs.length}대 · 작업자 ${m.workers.length}명`;
   renderSpm();
   const codes=[...new Set(Object.keys(S.master.mesMc||{}))].sort();
   const mcs=m.mcs.slice().sort((a,b)=>a.localeCompare(b,'ko',{numeric:true}));
@@ -1380,6 +1384,27 @@ function renderMaster(){
 function addItem(){const cu=$('mi_cust').value.trim(),pn=$('mi_pn').value.trim(),nm=$('mi_name').value.trim(),spm=+$('mi_spm').value||'';if(!cu||!pn){toast('고객사와 품번을 입력하세요');return}if(S.master.items.find(i=>i.pn===pn)){toast('이미 있는 품번입니다');return}
   S.master.items.push({pn,name:nm,cust:cu,spm});if(!S.master.custs.includes(cu))S.master.custs.push(cu);delete (S.master.mdel||{})['item|'+pn];['mi_cust','mi_pn','mi_name','mi_spm'].forEach(i=>$(i).value='');commit();toast('추가했습니다');}
 function upItem(pn,k,v){const it=S.master.items.find(i=>i.pn===pn);if(it){it[k]=v;commit()}}
+function upItemCust(pn,v){
+  v=(v||'').trim();const it=S.master.items.find(i=>i.pn===pn);if(!it)return;
+  it.cust=v;
+  if(v&&!S.master.custs.includes(v)){S.master.custs.push(v);delete (S.master.mdel||{})['custs|'+v]}
+  // 같은 품번의 일보 고객사도 함께 맞춤
+  let n=0;S.recs.forEach(r=>{if(r.pn===pn&&r.cust!==v){r.cust=v;r.ua=now();n++}});
+  commit();toast(n?`고객사를 바꾸고 일보 ${n}건에도 반영했습니다`:'고객사를 바꿨습니다');
+}
+function upItemPn(old,v){
+  v=(v||'').trim();
+  if(!v||v===old){renderMaster();return}
+  if(S.master.items.some(i=>i.pn===v)){toast('이미 있는 품번입니다');renderMaster();return}
+  const n=S.recs.filter(r=>r.pn===old).length;
+  if(!confirm(`품번을 '${old}' → '${v}' 로 바꿉니다.`+(n?`\n일보 ${n}건과 SPM 표준도 함께 바뀝니다.`:'')))
+    {renderMaster();return}
+  const it=S.master.items.find(i=>i.pn===old);if(it)it.pn=v;
+  S.recs.forEach(r=>{if(r.pn===old){r.pn=v;r.ua=now()}});
+  (S.master.spmdb||[]).forEach(x=>{if(x.pn===old)x.pn=v});
+  Object.keys(S.master.mesPn||{}).forEach(k=>{if(S.master.mesPn[k]===old)S.master.mesPn[k]=v});
+  commit();toast(`품번을 바꿨습니다 (일보 ${n}건 반영)`);
+}
 function delItem(pn){if(!confirm(pn+' 품번을 삭제할까요?'))return;S.master.items=S.master.items.filter(i=>i.pn!==pn);mdel('item',pn);commit();}
 function addTo(k,id){const v=$(id).value.trim();if(!v)return;if(S.master[k].includes(v)){toast('이미 있습니다');return}S.master[k].push(v);delete (S.master.mdel||{})[k+'|'+v];$(id).value='';commit();}
 function renderSpm(){
