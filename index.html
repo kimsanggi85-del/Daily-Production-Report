@@ -109,15 +109,16 @@ tr.sum td{background:#EEF2F7;font-weight:700;border-top:2px solid var(--line)}
 .kpis.exec b{display:block;font-size:21px;font-weight:800;letter-spacing:-.5px;margin:1px 0 2px}
 .kpis.exec em{display:block;font-style:normal;font-size:11px;color:var(--muted);margin-top:2px}
 .kpis.exec em.up{color:var(--green)}.kpis.exec em.dn{color:var(--red)}
-.exec-hd .sign{position:absolute;top:12px;right:16px;width:280px}
+.exec-hd .sign{position:absolute;top:12px;right:16px;width:200px}
 .exec-hd{position:relative}
 .rpt h4{margin:0 0 4px;font-size:13px}
 @media(max-width:900px){.kpis.exec{grid-template-columns:repeat(2,1fr)}}
 .cover{min-height:420px;position:relative;padding:26px 30px}
-.cover h1{font-size:30px;font-weight:800;letter-spacing:-1px;margin:60px 0 26px}
-.cover .cust-list{font-size:16px;line-height:2;margin-left:6px}
+.cover h1{font-size:30px;font-weight:800;letter-spacing:-1px;margin:70px 0 10px;text-align:center}
+.cover .cover-sign{position:static;margin:26px auto 0;width:260px}
+.cover .cover-sign td{height:52px}
 .cover .made{position:absolute;right:30px;bottom:26px;color:var(--muted);font-size:13px}
-.sign{position:absolute;top:22px;right:30px;width:300px;border-collapse:collapse}
+.sign{position:absolute;top:22px;right:30px;width:210px;border-collapse:collapse}
 .sign th,.sign td{border:1px solid #333;text-align:center;font-size:12px;padding:4px}
 .sign td{height:46px}
 .sign .sv{width:24px;writing-mode:vertical-rl;letter-spacing:6px}
@@ -219,7 +220,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
   <a data-pg="master"><i>⚙</i>기준정보</a>
   <a data-pg="data"><i>⇅</i>데이터 관리</a>
   <a data-pg="help"><i>?</i>사용안내</a>
-  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v9.8</div>
+  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v9.9</div>
 </nav>
 <main>
   <div class="top">
@@ -1112,11 +1113,14 @@ function svgVBars(rows,opt={}){ // rows:[{l,v,txt,c}] — 세로 막대
   const W=opt.W||900,H=opt.H||210,L=52,R=10,T=14,B=opt.B||34,w=W-L-R,h=H-T-B;
   const mx=Math.max(1,...rows.map(r=>r.v));const bw=w/n;
   let s=`<svg class=svgc viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`;
-  for(let i=0;i<=4;i++){const y=T+h-h*i/4;s+=`<line x1=${L} x2=${L+w} y1=${y} y2=${y} stroke="${C.grid}"/><text x=${L-6} y=${y+4} font-size=10 fill="${C.txt}" text-anchor=end>${fmtK(mx*i/4)}</text>`}
-  rows.forEach((r,i)=>{const bh=r.v/mx*h;s+=`<rect x=${(L+i*bw+bw*.18).toFixed(1)} y=${(T+h-bh).toFixed(1)} width=${(bw*.64).toFixed(1)} height=${Math.max(0,bh).toFixed(1)} fill="${r.c||C.bar}" rx=2><title>${esc(r.l)} ${r.txt||fmt(r.v)}</title></rect>`});
+  for(let i=0;i<=4;i++){const y=T+h-h*i/4;s+=`<line x1=${L} x2=${L+w} y1=${y} y2=${y} stroke="${C.grid}" stroke-dasharray="${i?'3 4':'0'}"/><text x=${L-6} y=${y+4} font-size=10 fill="${C.txt}" text-anchor=end>${fmtK(mx*i/4)}</text>`}
+  rows.forEach((r,i)=>{const bh=r.v/mx*h;const cx=(L+i*bw+bw/2);
+    s+=`<rect x=${(L+i*bw+bw*.22).toFixed(1)} y=${(T+h-bh).toFixed(1)} width=${(bw*.56).toFixed(1)} height=${Math.max(0,bh).toFixed(1)} fill="${r.c||C.bar}" rx=3><title>${esc(r.l)} ${r.txt||fmt(r.v)}</title></rect>`;
+    if(n<=12)s+=`<text x=${cx.toFixed(1)} y=${(T+h-bh-5).toFixed(1)} font-size=10 font-weight=700 fill="#3A4351" text-anchor=middle>${esc(r.txt||fmt(r.v))}</text>`;});
+  const rot=opt.rot!==undefined?opt.rot:(bw<58&&rows.some(r=>String(r.l).length>4));
   const step=Math.ceil(n/20);
   rows.forEach((r,i)=>{if(i%step)return;const x=(L+i*bw+bw/2).toFixed(1);
-    s+=`<text x=${x} y=${H-B+16} font-size=10 fill="${C.txt}" text-anchor=${opt.rot?'end':'middle'}${opt.rot?` transform="rotate(-40 ${x} ${H-B+16})"`:''}>${esc(r.l)}</text>`});
+    s+=`<text x=${x} y=${H-B+16} font-size="10.5" fill="#3A4351" text-anchor=${rot?'end':'middle'}${rot?` transform="rotate(-35 ${x} ${H-B+16})"`:''}>${esc(r.l)}</text>`});
   return s+'</svg>'}
 function svgHBars(rows,opt={}){ // rows:[{l,v,txt,c}]
   if(!rows.length)return'<div class=empty>자료 없음</div>';const mx=Math.max(1,...rows.map(r=>r.v));
@@ -1145,11 +1149,10 @@ function renderReport(){
 
   /* ── 표지 ── */
   const cover=`<div class="rpt-sec cover pgnew">
-    <table class="sign"><tr><th rowspan=2 class="sv">결<br>재</th><th>작성</th><th>생산팀장</th><th>공장장</th><th>대표이사</th></tr>
-    <tr><td></td><td></td><td></td><td></td></tr></table>
     <h1>${y}년 ${m}월 생산실적 및 프레스 가동율 현황</h1>
-    <div class="cust-list">${custs.map(c=>`<div>고객사 ${esc(c)}</div>`).join('')}</div>
-    <div class="made">작성일자 : ${today()}${localStorage.getItem('tj_me')?' · 작성 '+esc(localStorage.getItem('tj_me')):''}</div>
+    <table class="sign cover-sign"><tr><th rowspan=2 class="sv">결<br>재</th><th>작성</th><th>대표이사</th></tr>
+    <tr><td></td><td></td></tr></table>
+    <div class="made">작성일자 : ${today()}</div>
   </div>`;
   let html = rptView==='all' ? '' : cover;
 
@@ -1400,9 +1403,9 @@ function execHtml(){
 
   return `
   <div class="rpt-sec pgnew exec-hd">
-    <table class="sign"><tr><th rowspan=2 class="sv">결<br>재</th><th>작성</th><th>생산팀장</th><th>공장장</th><th>대표이사</th></tr><tr><td></td><td></td><td></td><td></td></tr></table>
+    <table class="sign"><tr><th rowspan=2 class="sv">결<br>재</th><th>작성</th><th>대표이사</th></tr><tr><td></td><td></td></tr></table>
     <h1 style="font-size:26px;margin:6px 0 2px">${y}년 ${m}월 생산관리 실적 보고</h1>
-    <div class="muted">${cu||'전 고객사'} · ${(st.days[0]||{}).d||''} ~ ${(st.days[st.days.length-1]||{}).d||''} · 작성일 ${today()}${localStorage.getItem('tj_me')?' · 작성 '+esc(localStorage.getItem('tj_me')):''}</div>
+    <div class="muted">${cu||'전 고객사'} · ${(st.days[0]||{}).d||''} ~ ${(st.days[st.days.length-1]||{}).d||''} · 작성일 ${today()}</div>
     <div class="fl noprint" style="margin:8px 0 2px;font-size:12px">
       <span class="muted">목표</span>
       가동율 <input type=number value="${Math.round(tgtO*100)}" onchange="rptSet('tgtOper',this.value)" style="width:60px;padding:2px 4px">%
@@ -1461,7 +1464,7 @@ function execHtml(){
   <div class="rpt-sec pgnew">
     <h3>5. 정지 원인 상위</h3>
     <div class="grid g2">
-      <div>${svgVBars(stopTop.map(([k,v])=>({l:k,v,txt:v+'건',c:C.l1})),{W:460,H:190,rot:1,B:52})}</div>
+      <div>${svgVBars(stopTop.map(([k,v])=>({l:k,v,txt:v+'건',c:C.l1})),{W:470,H:200,rot:0,B:34})}</div>
       <div><table><tr><th>정지사유</th><th class=num>건수</th><th class=num>구성비</th></tr>
         ${stopTop.map(([k,v])=>`<tr><td>${esc(k)}</td><td class=num>${v}</td><td class=num>${(v/swT*100).toFixed(1)}%</td></tr>`).join('')}
       </table></div></div>
