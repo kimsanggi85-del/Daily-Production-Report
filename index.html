@@ -109,25 +109,31 @@ tr.sum td{background:#EEF2F7;font-weight:700;border-top:2px solid var(--line)}
 .kpis.exec b{display:block;font-size:21px;font-weight:800;letter-spacing:-.5px;margin:1px 0 2px}
 .kpis.exec em{display:block;font-style:normal;font-size:11px;color:var(--muted);margin-top:2px}
 .kpis.exec em.up{color:var(--green)}.kpis.exec em.dn{color:var(--red)}
-.exec-hd .sign{position:absolute;top:12px;right:16px;width:200px}
+.exec-hd .sign{position:absolute;top:12px;right:16px;width:250px}
 .exec-hd{position:relative}
 .rpt h4{margin:0 0 4px;font-size:13px}
+#rptBody .grid>*{min-width:0}
+#rptBody .grid.g2>table{width:100%;table-layout:fixed}
+#rptBody .grid.g2>table td,#rptBody .grid.g2>table th{overflow:hidden;text-overflow:ellipsis;white-space:normal}
 @media(max-width:900px){.kpis.exec{grid-template-columns:repeat(2,1fr)}}
-.cover{min-height:420px;position:relative;padding:26px 30px}
-.cover h1{font-size:30px;font-weight:800;letter-spacing:-1px;margin:70px 0 10px;text-align:center}
-.cover .cover-sign{position:static;margin:26px auto 0;width:260px}
+.cover{min-height:300px;position:relative;padding:18px 30px 26px}
+.toc.cover h1{margin:6px 0 4px}
+.toc.cover .made{position:static;text-align:right;margin-top:6px}
+.toc.cover .cover-sign{margin:8px auto 0}
+.cover h1{font-size:26px;font-weight:800;letter-spacing:-1px;margin:8px 0 6px;text-align:center}
+.cover .cover-sign{position:static;margin:6px auto 0;width:330px}
 .cover .cover-sign td{height:52px}
 .cover .made{position:absolute;right:30px;bottom:26px;color:var(--muted);font-size:13px}
-.sign{position:absolute;top:22px;right:30px;width:210px;border-collapse:collapse}
+.sign{position:absolute;top:22px;right:30px;width:270px;border-collapse:collapse}
 .sign th,.sign td{border:1px solid #333;text-align:center;font-size:12px;padding:4px}
 .sign td{height:46px}
 .sign .sv{width:24px;writing-mode:vertical-rl;letter-spacing:6px}
 .cust-hd{font-size:19px;font-weight:800;margin:0 0 2px}
 .rpt table{font-size:14px}
-.rpt table th,.rpt table td{padding:2px 8px}
+.rpt table th,.rpt table td{padding:1px 8px}
 .rpt h3{font-size:17px}
 .rpt textarea{font-size:13px}
-table.mh th,table.mh td{font-size:13px;padding:5px 7px;white-space:nowrap}
+table.mh th,table.mh td{font-size:12px;padding:2px 6px;white-space:nowrap}
 table.mh tr.sum td{background:#EEF2F7;font-weight:700}
 @media print{
   .rpt-sec{border:0;padding:0;margin:0 0 4mm}
@@ -181,7 +187,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
 .rpt th{background:#EEF2F7;color:var(--ink);text-align:center;border:1px solid var(--line)}
 .rpt td{border:1px solid var(--line);white-space:normal;vertical-align:top}
 .rpt td.num{white-space:nowrap}
-.rpt textarea{border:0;background:transparent;width:100%;min-height:34px;resize:vertical;padding:2px 4px;font-size:12.5px}
+.rpt textarea{border:0;background:transparent;width:100%;min-height:26px;resize:vertical;padding:1px 4px;font-size:12px}
 .rpt textarea:focus{outline:1px solid var(--steel);background:#F7FAFF}
 .rpt tr.tot td{background:#F7F9FB;font-weight:700}
 .rpt tr.prev td{color:var(--muted)}
@@ -220,7 +226,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
   <a data-pg="master"><i>⚙</i>기준정보</a>
   <a data-pg="data"><i>⇅</i>데이터 관리</a>
   <a data-pg="help"><i>?</i>사용안내</a>
-  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v9.9</div>
+  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v11.0</div>
 </nav>
 <main>
   <div class="top">
@@ -348,7 +354,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
         <button class="p" onclick="savePdf()" id="btnPdf">PDF 내려받기</button><button onclick="window.print()">인쇄</button>
       </div>
     </div>
-    <div class="panel" id="rptBody"></div>
+    <div class="panel rpt" id="rptBody"></div>
   </section>
 
   <!-- 기준정보 -->
@@ -1150,8 +1156,8 @@ function renderReport(){
   /* ── 표지 ── */
   const cover=`<div class="rpt-sec cover pgnew">
     <h1>${y}년 ${m}월 생산실적 및 프레스 가동율 현황</h1>
-    <table class="sign cover-sign"><tr><th rowspan=2 class="sv">결<br>재</th><th>작성</th><th>대표이사</th></tr>
-    <tr><td></td><td></td></tr></table>
+    <table class="sign cover-sign"><tr><th rowspan=2 class="sv">결<br>재</th><th>작성</th><th>검토</th><th>승인</th></tr>
+    <tr><td></td><td></td><td></td></tr></table>
     <div class="made">작성일자 : ${today()}</div>
   </div>`;
   let html = rptView==='all' ? '' : cover;
@@ -1169,7 +1175,7 @@ function renderReport(){
     const sum=rows.reduce((a,x)=>({work:a.work+x.work,stop:a.stop+x.stop,run:a.run+x.run,cap:a.cap+x.cap,qty:a.qty+x.qty,ng:a.ng+x.ng}),{work:0,stop:0,run:0,cap:0,qty:0,ng:0});
     const avgSpm=rows.length?rows.reduce((a,x)=>a+(x.spm.length?x.spm.reduce((s,v)=>s+v,0)/x.spm.length:0),0)/rows.length:0;
     const wname=x=>Object.entries(x.w).sort((a,b)=>b[1]-a[1]).map(e=>e[0]);
-    html+=`<div class="rpt-sec pgnew"><h3>${NB(7)} 고객사별 생산실적 상세 (제품별) &nbsp;<span class="muted">${esc(c)} · ${y}년 ${m}월</span></h3>
+    html+=`<div class="rpt-sec pgnew"><h3>${NB(9)} 고객사별 실적 : ${esc(c)} &nbsp;<span class="muted">${y}년 ${m}월 · 기간 ${(dates[0]||'').replace(/-/g,'')}~${(dates[dates.length-1]||'').replace(/-/g,'')} · 목표효율 <input type=number value="${+(o['tgt_'+c]||75)}" onchange="rptSet('tgt_${c}',this.value)" style="width:56px;padding:1px 4px">%</span></h3>
     <div class="tw" style="max-height:none"><table class="mh"><tr>
       <th>NO</th><th>설비명</th><th>공정명</th><th>고객사</th><th>품명</th><th>품번</th>
       <th>작업자1</th><th>작업자2</th><th>작업자3</th><th>작업자4</th>
@@ -1181,27 +1187,27 @@ function renderReport(){
       <td>${esc(w[0]||'')}</td><td>${esc(w[1]||'')}</td><td>${esc(w[2]||'')}</td><td>${esc(w[3]||'')}</td>
       <td class=num>${spm.toFixed(1)}</td><td class=num>${fmt(H(x.work))}</td><td class=num>${fmt(H(x.stop))}</td><td class=num>${fmt(H(x.run))}</td>
       <td class=num>${fmt(x.cap)}</td><td class=num>${fmt(x.qty)}</td><td class=num>${P(x.run/x.work)}</td><td class=num>${P(x.qty/x.cap)}</td><td class=num>${x.ng||''}</td></tr>`}).join('')}
-    </table></div></div>`;
+    </table></div>`;
 
-    /* 고객사 요약 */
+    /* 고객사 요약 (같은 장에 이어서) */
     const days=cst.days;
     const target=+(o['tgt_'+c]||75);
-    html+=`<div class="rpt-sec pgnew"><h2 class="cust-hd" style="margin-bottom:2px">${NB(7)} 고객사 요약 : ${esc(c)}</h2>
-      <div class="muted" style="font-size:12px;margin:-4px 0 4px">기간 : ${(dates[0]||'').replace(/-/g,'')} ~ ${(dates[dates.length-1]||'').replace(/-/g,'')} &nbsp;·&nbsp; 목표효율 <input type=number value="${target}" onchange="rptSet('tgt_${c}',this.value)" style="width:64px;padding:2px 4px">%</div>
-      ${svgCombo(days.map(d=>d.d.slice(5).replace('-','/')),days.map(d=>d.qty),[{v:days.map(d=>d.oper),c:C.l1},{v:days.map(d=>d.eff),c:C.l2}],{W:900,H:120,rot:1,target:target/100})}
-      <div class="legend" style="margin:10px 0 4px"><span><i style="background:${C.bar}"></i>생산수량</span><span><i style="background:${C.l1}"></i>가동율</span><span><i style="background:${C.l2}"></i>효율</span><span><i style="background:#C8433A"></i>목표효율 ${target}%</span></div>
-      <div style="margin-top:6px">
-        <table><tr><th>구분</th><th class=num>가동일수(일)</th><th class=num>평균가동율(%)</th><th class=num>평균가동시간(분)</th><th class=num>평균효율(%)</th><th class=num>생산수량(ea)</th></tr>
-        ${cst.weeks.map(w=>`<tr><td>${w.i}주차(${m}/${w.a}~${m}/${w.b})</td><td class=num>${w.days||'-'}</td><td class=num>${w.days?(w.oper*100).toFixed(1):'-'}</td><td class=num>${w.days?fmt(Math.round(w.runPerDay)):'-'}</td><td class=num>${w.days?(w.eff*100).toFixed(1):'-'}</td><td class=num>${w.days?fmt(w.qty):'-'}</td></tr>`).join('')}
+    html+=`<div style="height:8px"></div>
+      <div class="grid g2" style="grid-template-columns:1fr 1.15fr;align-items:start;gap:12px">
+      <div>${svgCombo(days.map(d=>d.d.slice(5).replace('-','/')),days.map(d=>d.qty),[{v:days.map(d=>d.oper),c:C.l1},{v:days.map(d=>d.eff),c:C.l2}],{W:520,H:140,rot:1,target:target/100})}
+      <div class="legend" style="margin:6px 0 0"><span><i style="background:${C.bar}"></i>생산수량</span><span><i style="background:${C.l1}"></i>가동율</span><span><i style="background:${C.l2}"></i>효율</span><span><i style="background:#C8433A"></i>목표효율 ${target}%</span></div>
+      </div>
+        <table style="font-size:12px"><tr><th>구분</th><th class=num>가동일수(일)</th><th class=num>평균가동율(%)</th><th class=num>평균가동시간(분)</th><th class=num>평균효율(%)</th><th class=num>생산수량(ea)</th></tr>
+        ${cst.weeks.map(w=>`<tr><td>${w.i}주차 ${m}/${w.a}~${w.b}</td><td class=num>${w.days||'-'}</td><td class=num>${w.days?(w.oper*100).toFixed(1):'-'}</td><td class=num>${w.days?fmt(Math.round(w.runPerDay)):'-'}</td><td class=num>${w.days?(w.eff*100).toFixed(1):'-'}</td><td class=num>${w.days?fmt(w.qty):'-'}</td></tr>`).join('')}
         <tr class=sum><td>당월 실적</td><td class=num>${cT.days}</td><td class=num>${(cT.oper*100).toFixed(1)}</td><td class=num>${fmt(Math.round(cT.runPerDay))}</td><td class=num>${(cT.eff*100).toFixed(1)}</td><td class=num>${fmt(cT.qty)}</td></tr>
-        <tr><td>전월 비교(${+pm.slice(5)}월)</td><td class=num>${cPv.days||'-'}</td><td class=num>${cPv.n?(cPv.oper*100).toFixed(1):'-'}</td><td class=num>${cPv.n?fmt(Math.round(cPv.runPerDay)):'-'}</td><td class=num>${cPv.n?(cPv.eff*100).toFixed(1):'-'}</td><td class=num>${cPv.n?fmt(cPv.qty):'-'}</td></tr>
+        <tr><td>전월 비교 ${+pm.slice(5)}월</td><td class=num>${cPv.days||'-'}</td><td class=num>${cPv.n?(cPv.oper*100).toFixed(1):'-'}</td><td class=num>${cPv.n?fmt(Math.round(cPv.runPerDay)):'-'}</td><td class=num>${cPv.n?(cPv.eff*100).toFixed(1):'-'}</td><td class=num>${cPv.n?fmt(cPv.qty):'-'}</td></tr>
         <tr><td>작업자 인원</td><td colspan=2>${inp('staff_'+c)}</td><td>야간근무</td><td colspan=2>${inp('night_'+c)}</td></tr>
         <tr><td>총 불량수량</td><td class=num>${fmt(cT.ng+(cT.ngp||0))} EA</td><td>총 가동시간</td><td class=num>${fmt(cT.run)} 분</td><td>총 정지시간</td><td class=num>${fmt(cT.stop)} 분</td></tr>
         </table>
-        <table style="margin-top:10px"><tr><th style="width:34%">문제점</th><th>대책 및 개선내용</th></tr>
-        ${[1,2].map(k=>`<tr><td>${ta('pb'+k+'_'+c,'예: 12/05 1106-2 인 아웃 내 외경 상한')}</td><td>${ta('pa'+k+'_'+c,'예: 리스트라이너 편차이너 1.4→1.3')}</td></tr>`).join('')}
-        </table>
-      </div></div>`;
+      </div>
+      <table style="font-size:12px;margin-top:4px"><tr><th style="width:34%">문제점</th><th>대책 및 개선내용</th></tr>
+      ${[1,2].map(k=>`<tr><td>${ta('pb'+k+'_'+c,'예: 8/12 1106-2 내경 상한')}</td><td>${ta('pa'+k+'_'+c,'예: 펀치 라이너 1.4→1.3')}</td></tr>`).join('')}
+      </table></div>`;
   });
 
   /* ── 설비 정지 원인별 분포도 ── */
@@ -1221,38 +1227,45 @@ function renderReport(){
       x.w[nm]=(x.w[nm]||0)+(v||1)})});
   Object.values(gs).forEach(x=>{if(!Object.keys(x.w).length&&x.stop>0)x.w['사유 미기재']=x.stop});
   const mcs=Object.entries(gs).filter(([,x])=>Object.keys(x.w).length)
-    .sort((a,b)=>b[1].stop-a[1].stop);
+    .sort((a,b)=>b[1].stop-a[1].stop).slice(0,8);   // 정지시간 상위 8대
   for(let i=0;i<mcs.length;i+=4){
     const part=mcs.slice(i,i+4);
-    html+=`<div class="rpt-sec pgnew"><h3>${NB(8)} 설비 정지 원인별 분포도${mcs.length>4?` <span class="muted" style="font-weight:400;font-size:12px">(${i+1}~${i+part.length} / ${mcs.length}대)</span>`:''}</h3><div class="grid g2">${
+    html+=`<div class="rpt-sec pgnew"><h3>${NB(10)} 설비 정지 원인별 분포도${mcs.length>4?` <span class="muted" style="font-weight:400;font-size:12px">정지시간 상위 ${i+1}~${i+part.length}위</span>`:''}</h3><div class="grid g2">${
       part.map(([mc,x])=>{const top=Object.entries(x.pn).sort((a,b)=>b[1]-a[1])[0];
         return `<div style="text-align:center"><div style="font-weight:700;margin-bottom:4px">${esc(mc)}${top?' &nbsp;'+esc(top[0]):''}</div>${svgPie(Object.entries(x.w).sort((a,b)=>b[1]-a[1]).slice(0,8))}</div>`}).join('')}</div></div>`;
   }
-  $('rptBody').innerHTML = rptView==='all' ? cover+execHtml()+html : html;
-  if(rptView==='all')buildToc();
+  $('rptBody').innerHTML = rptView==='all' ? execHtml()+html : html;
+  if(rptView==='all')buildToc(y,m);
 }
 
 /* 목차 자동 생성 (항목 = 한 장) */
-function buildToc(){
+function buildToc(y,m){
   const body=$('rptBody');
   const secs=[...body.children];
-  if(secs.length<2)return;
-  const rows=secs.slice(1).map((e,i)=>{
-    const h=e.querySelector('h1,h2,h3');
-    let t2=(h?h.textContent:'').replace(/\s+/g,' ').trim();
-    const sub=t2.match(/(.*?)\s{0,2}(시간가동율|원 크기|정지시간이|목표|·\s?\d{4}년).*/);
-    if(sub)t2=sub[1];
-    return{t:t2.slice(0,60),p:i+3};
+  if(!secs.length)return;
+  const rows=[];
+  secs.forEach((e,i)=>{
+    const hs=[...e.querySelectorAll('h1,h2,h3')].filter(h=>/^\s*\d+\./.test(h.textContent));
+    (hs.length?hs:[e.querySelector('h1,h2,h3')].filter(Boolean)).forEach(h=>{
+      const cl=h.cloneNode(true);[...cl.querySelectorAll('.muted,input')].forEach(x=>x.remove());
+      let t2=(cl.textContent||'').replace(/\s+/g,' ').trim();
+      rows.push({t:t2.slice(0,60),p:i+2});
+    });
   });
-  const html=`<div class="rpt-sec pgnew toc">
-    <h3>목 차</h3>
-    <table style="font-size:12.5px"><tr><th style="width:60px">항목</th><th>내용</th><th class=num style="width:70px">페이지</th></tr>
-    ${rows.map((r,i)=>`<tr><td class=num style="padding:1px 8px">${i+1}</td><td style="padding:1px 8px">${esc(r.t)}</td><td class=num style="padding:1px 8px">${r.p}</td></tr>`).join('')}
-    </table>
-    <div class="muted" style="font-size:12px;margin-top:8px">표지 1쪽 · 목차 2쪽 · 본문 ${rows.length}쪽 (총 ${rows.length+2}쪽)</div>
+  const html=`<div class="rpt-sec pgnew toc cover">
+    <h1>${y}년 ${m}월 생산실적 및 프레스 가동율 현황</h1>
+    <h3 style="margin-top:8px">목 차</h3>
+    <div class="grid g2" style="gap:14px">${[0,1].map(col=>{
+      const half=Math.ceil(rows.length/2), part=col?rows.slice(half):rows.slice(0,half);
+      return `<table style="font-size:12px"><tr><th>내용</th><th class=num style="width:60px">쪽</th></tr>
+      ${part.map(r=>`<tr><td style="padding:1px 8px">${esc(r.t)}</td><td class=num style="padding:1px 8px">${r.p}</td></tr>`).join('')}</table>`}).join('')}</div>
+    <table class="sign cover-sign" style="margin-top:8px"><tr><th rowspan=2 class="sv">결<br>재</th><th>작성</th><th>검토</th><th>승인</th></tr>
+    <tr><td></td><td></td><td></td></tr></table>
+    <div class="made">작성일자 : ${today()}</div>
+    <div class="muted" style="font-size:11px;margin-top:4px">표지·목차 1쪽 · 본문 ${secs.length}쪽 (총 ${secs.length+1}쪽)</div>
   </div>`;
   const tmp=document.createElement('div');tmp.innerHTML=html;
-  body.insertBefore(tmp.firstElementChild,secs[1]);
+  body.insertBefore(tmp.firstElementChild,secs[0]);
 }
 
 /* 보고서 집계 묶음 */
@@ -1392,18 +1405,11 @@ function execHtml(){
     const spm=L.filter(r=>+r.spm).reduce((a,r)=>a+ +r.spm,0)/(L.filter(r=>+r.spm).length||1);
     const why=Object.entries(srBy[k]||{}).sort((a,b)=>b[1]-a[1]).slice(0,3).map(e=>e[0]).join(' · ');
     return{k,stop,rate:work?stop/work:0,loss:stop*spm,why}}).sort((a,b)=>b.loss-a.loss).slice(0,6);
-  // 전월 대비 설비 효율 변화
-  const pvR=rptStats(pm,cu).R, pvBy={};
-  pvR.forEach(r=>{(pvBy[r.mc]=pvBy[r.mc]||[]).push(r)});
-  const effOf=L=>{let q=0,cap=0;L.forEach(r=>{const c=calc(r);q+=+r.qty||0;cap+=c.cap});return cap?q/cap:NaN};
-  const chg=Object.keys(byMc).filter(k=>pvBy[k]).map(k=>{const c=effOf(byMc[k]),p2=effOf(pvBy[k]);return{k,c,p:p2,d:c-p2}})
-    .filter(x=>isFinite(x.d)).sort((a,b)=>b.d-a.d);
   const stopTop=G.sw.slice(0,6), swT=G.sw.reduce((a,x)=>a+x[1],0)||1;
   const ngTop=G.gnl.slice(0,6);
 
   return `
   <div class="rpt-sec pgnew exec-hd">
-    <table class="sign"><tr><th rowspan=2 class="sv">결<br>재</th><th>작성</th><th>대표이사</th></tr><tr><td></td><td></td></tr></table>
     <h1 style="font-size:26px;margin:6px 0 2px">${y}년 ${m}월 생산관리 실적 보고</h1>
     <div class="muted">${cu||'전 고객사'} · ${(st.days[0]||{}).d||''} ~ ${(st.days[st.days.length-1]||{}).d||''} · 작성일 ${today()}</div>
     <div class="fl noprint" style="margin:8px 0 2px;font-size:12px">
@@ -1413,71 +1419,47 @@ function execHtml(){
       불량 <input type=number value="${tgtP}" onchange="rptSet('tgtPpm',this.value)" style="width:80px;padding:2px 4px">PPM</div>
     <h3>1. 핵심 지표</h3>
     ${kpi}
-    <h3 style="margin-top:10px">1-2. 추이 및 고객사별 실적</h3>
+    <h3 style="margin-top:10px">2. 추이 및 고객사별 실적</h3>
     ${trend}
-    <h3 style="margin-top:10px">1-3. 총평</h3>
+    <h3 style="margin-top:10px">3. 총평</h3>
     <table><tr><th style="width:50%">이번 달 요약</th><th>다음 달 중점 관리</th></tr>
       <tr><td>${ta('exSum','예: 생산 312만EA로 전월 대비 회복, 효율은 목표 대비 1.2%p 미달')}</td>
           <td>${ta('exNext','예: 43 화일800 정지율 45% 개선, SPM 표준 재검토')}</td></tr></table>
   </div>
 
   <div class="rpt-sec pgnew">
-    <h3>2. OEE 설비종합효율 <span class="muted" style="font-weight:400;font-size:12px">시간가동율 × 성능가동율 × 양품율 · 세계 최고 수준 85%</span></h3>
+    <h3>3. OEE 설비종합효율 <span class="muted" style="font-weight:400;font-size:12px">시간가동율 × 성능가동율 × 양품율 · 세계 최고 수준 85%</span></h3>
     <div class="grid g2">
       <div>${svgCombo(mons0.map(x=>x.slice(2).replace('-','.')),oeeMs.map(x=>Math.round((x.oee||0)*1000)/10),
         [{v:oeeMs.map(x=>x.A||0),c:C.l1},{v:oeeMs.map(x=>x.P||0),c:C.l2},{v:oeeMs.map(x=>isFinite(x.Q)?x.Q:0),c:'#8A6BBE'}],{W:520,H:180})}
         <div class="legend"><span><i style="background:${C.bar}"></i>OEE(%)</span><span><i style="background:${C.l1}"></i>시간가동율</span><span><i style="background:${C.l2}"></i>성능가동율</span><span><i style="background:#8A6BBE"></i>양품율</span></div></div>
-      <div><table><tr><th>설비</th><th class=num>OEE</th><th class=num>시간</th><th class=num>성능</th><th class=num>양품</th><th>등급</th></tr>
-      ${oeeMc.slice(0,8).map(x=>`<tr><td>${esc(x.k)}</td><td class=num><span class="tag ${x.oee>=.6?'g':x.oee>=.4?'a':'r'}">${pct(x.oee)}</span></td><td class=num>${pct(x.A)}</td><td class=num>${pct(x.P)}</td><td class=num>${pct(x.Q)}</td><td>${oeeGrade(x.oee)}</td></tr>`).join('')}
+      <div><table><tr><th>설비</th><th class=num>OEE</th><th class=num>시간</th><th class=num>성능</th><th class=num>양품</th><th>원인 / 대책</th></tr>
+      ${oeeMc.slice(0,8).map((x,i)=>`<tr><td>${esc(x.k)}</td><td class=num><span class="tag ${x.oee>=.6?'g':x.oee>=.4?'a':'r'}">${pct(x.oee)}</span></td><td class=num>${pct(x.A)}</td><td class=num>${pct(x.P)}</td><td class=num>${pct(x.Q)}</td><td>${ta('exFix'+i,'원인과 대책')}</td></tr>`).join('')}
       <tr class=sum><td>전체</td><td class=num>${pct(OE.oee)}</td><td class=num>${pct(OE.A)}</td><td class=num>${pct(OE.P)}</td><td class=num>${pct(OE.Q)}</td><td>${oeeGrade(OE.oee)}</td></tr></table>
       <div class="muted" style="font-size:11px;margin-top:4px">OEE가 낮은 순 · 성능가동율이 낮으면 SPM 표준 대비 실제 속도가 느리다는 뜻입니다</div></div>
     </div>
-    <h3 style="margin-top:10px">2-2. 손실 시간 분석 <span class="muted" style="font-weight:400;font-size:12px">정지시간이 생산에 미친 영향</span></h3>
+    <h3 style="margin-top:10px">4. 손실 시간 분석 <span class="muted" style="font-weight:400;font-size:12px">정지시간이 생산에 미친 영향</span></h3>
     <table><tr><th>설비</th><th class=num>정지(H)</th><th class=num>정지율</th><th class=num>손실 추정(EA)</th><th class=num>월 생산 대비</th><th>주요 정지사유</th></tr>
     ${lossTop.slice(0,5).map(x=>`<tr><td>${esc(x.k)}</td><td class=num>${fmt(Math.round(x.stop/60))}</td><td class=num><span class="tag ${x.rate>=.3?'r':x.rate>=.2?'a':''}">${pct(x.rate)}</span></td><td class=num><b>${fmt(Math.round(x.loss))}</b></td><td class=num>${(x.loss/(T.qty||1)*100).toFixed(1)}%</td><td class=muted>${esc(x.why)}</td></tr>`).join('')}
     <tr class=sum><td>합계</td><td class=num>${fmt(Math.round(T.stop/60))}</td><td class=num>${pct(stopR)}</td><td class=num>${fmt(Math.round(lossTop.reduce((a,x)=>a+x.loss,0)))}</td><td class=num>${(lossTop.reduce((a,x)=>a+x.loss,0)/(T.qty||1)*100).toFixed(1)}%</td><td></td></tr></table>
   </div>
 
   <div class="rpt-sec pgnew">
-    <h3>3. 전월 대비 개선 · 악화 설비</h3>
+    <h3>5. 설비 성과 매트릭스 <span class="muted" style="font-weight:400;font-size:12px">원 크기 = 생산수량 · 초록 = 가동율·효율 모두 목표 이상 · 빨강 = 둘 다 미달</span></h3>
+    ${svgScatter(mcPts,{vmax,target:Math.min(tgtO,tgtE),W:900,H:172})}
+    <h3 style="margin-top:12px">6. 정지 원인 상위</h3>
     <div class="grid g2">
-      <div><h4 style="color:var(--green)">개선 TOP 5</h4>
-        <table><tr><th>설비</th><th class=num>전월 효율</th><th class=num>당월 효율</th><th class=num>변화</th></tr>
-        ${chg.filter(x=>x.d>0).slice(0,5).map(x=>`<tr><td>${esc(x.k)}</td><td class=num>${pct(x.p)}</td><td class=num>${pct(x.c)}</td><td class=num><span class="tag g">▲ ${(x.d*100).toFixed(1)}%p</span></td></tr>`).join('')||'<tr><td colspan=4 class=empty>전월 자료 없음</td></tr>'}
-        </table></div>
-      <div><h4 style="color:var(--red)">악화 TOP 5</h4>
-        <table><tr><th>설비</th><th class=num>전월 효율</th><th class=num>당월 효율</th><th class=num>변화</th></tr>
-        ${chg.filter(x=>x.d<0).slice(-5).reverse().map(x=>`<tr><td>${esc(x.k)}</td><td class=num>${pct(x.p)}</td><td class=num>${pct(x.c)}</td><td class=num><span class="tag r">▼ ${Math.abs(x.d*100).toFixed(1)}%p</span></td></tr>`).join('')||'<tr><td colspan=4 class=empty>전월 자료 없음</td></tr>'}
-        </table></div>
-    </div>
-  </div>
-
-  <div class="rpt-sec pgnew">
-    <h3>4. 설비 성과 매트릭스 <span class="muted" style="font-weight:400;font-size:12px">원 크기 = 생산수량 · 초록 = 가동율·효율 모두 목표 이상 · 빨강 = 둘 다 미달</span></h3>
-    ${svgScatter(mcPts,{vmax,target:Math.min(tgtO,tgtE),W:900,H:280})}
-    <h3 style="margin-top:10px">4-2. 개선 우선순위 (효율 하위 5개 설비)</h3>
-    <table><tr><th>순위</th><th>설비</th><th class=num>생산수량</th><th class=num>가동율</th><th class=num>효율</th><th class=num>정지율</th><th class=num>불량</th><th>원인 / 대책</th></tr>
-    ${low.map((x,i)=>`<tr><td class=num>${i+1}</td><td>${esc(x.k)}</td><td class=num>${fmt(x.q)}</td><td class=num><span class="tag ${cls(x.oper)}">${pct(x.oper)}</span></td><td class=num><span class="tag ${cls(x.eff)}">${pct(x.eff)}</span></td><td class=num>${pct(x.stop/(x.work||1))}</td><td class=num>${x.ng||''}</td><td>${ta('exFix'+i,'원인과 대책을 적어주세요')}</td></tr>`).join('')}
-    </table>
-  </div>
-
-  <div class="rpt-sec pgnew">
-    <h3>5. 정지 원인 상위</h3>
-    <div class="grid g2">
-      <div>${svgVBars(stopTop.map(([k,v])=>({l:k,v,txt:v+'건',c:C.l1})),{W:470,H:200,rot:0,B:34})}</div>
+      <div>${svgVBars(stopTop.map(([k,v])=>({l:k,v,txt:v+'건',c:C.l1})),{W:470,H:140,rot:0,B:30})}</div>
       <div><table><tr><th>정지사유</th><th class=num>건수</th><th class=num>구성비</th></tr>
         ${stopTop.map(([k,v])=>`<tr><td>${esc(k)}</td><td class=num>${v}</td><td class=num>${(v/swT*100).toFixed(1)}%</td></tr>`).join('')}
       </table></div></div>
-    <h3 style="margin-top:10px">5-2. 불량 상위 품목</h3>
+    <h3 style="margin-top:10px">7. 불량 상위 품목</h3>
     <table><tr><th>품번</th><th>품명</th><th>고객사</th><th class=num>작업불량</th><th class=num>불량률</th><th class=num>시타발·검사</th><th>주요 내용</th></tr>
-    ${ngTop.map(([k,g])=>`<tr><td>${esc(k)}</td><td class=muted>${esc(g.name)}</td><td>${esc(g.cust)}</td><td class=num><b>${fmt(g.ng)}</b></td><td class=num>${(g.ng/(g.q||1)*100).toFixed(2)}%</td><td class=num>${g.ngp?fmt(g.ngp):''}</td><td class=muted>${esc(ngBrief(g.notes))}</td></tr>`).join('')}
+    ${ngTop.slice(0,5).map(([k,g])=>`<tr><td>${esc(k)}</td><td class=muted>${esc(g.name)}</td><td>${esc(g.cust)}</td><td class=num><b>${fmt(g.ng)}</b></td><td class=num>${(g.ng/(g.q||1)*100).toFixed(2)}%</td><td class=num>${g.ngp?fmt(g.ngp):''}</td><td class=muted>${esc(ngBrief(g.notes))}</td></tr>`).join('')}
     </table>
-  </div>
-
-  <div class="rpt-sec pgnew">
-    <h3>6. 조치 계획</h3>
+    <h3 style="margin-top:10px">8. 조치 계획</h3>
     <table><tr><th style="width:26%">항목</th><th style="width:37%">조치 내용</th><th>담당 / 기한</th></tr>
-    ${[1,2,3].map(k=>`<tr><td>${ta('acT'+k,'예: 05 심팩110 카운터 점검')}</td><td>${ta('acD'+k,'')}</td><td>${ta('acW'+k,'')}</td></tr>`).join('')}
+    ${[1,2].map(k=>`<tr><td>${ta('acT'+k,'예: 05 심팩110 카운터 점검')}</td><td>${ta('acD'+k,'')}</td><td>${ta('acW'+k,'')}</td></tr>`).join('')}
     </table>
   </div>`;
 }
