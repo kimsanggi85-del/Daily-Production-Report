@@ -219,7 +219,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
   <a data-pg="master"><i>⚙</i>기준정보</a>
   <a data-pg="data"><i>⇅</i>데이터 관리</a>
   <a data-pg="help"><i>?</i>사용안내</a>
-  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v9.7</div>
+  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v9.8</div>
 </nav>
 <main>
   <div class="top">
@@ -1095,14 +1095,16 @@ function prevMonth(mo){const[y,m]=mo.split('-').map(Number);const d=new Date(y,m
 const C={bar:'#23456E',bar2:'#9FB4D0',l1:'#D9822B',l2:'#2F8F5B',grid:'#E3E8EF',txt:'#66717F'};
 function svgCombo(labels,bars,lines,opt={}){ // lines:[{v:[],c,name}] 0~1 값
   const n0=labels.length;const rot=opt.rot!==undefined?opt.rot:((900-104)/Math.max(1,n0)<20);
-  const W=opt.W||900,H=(opt.H||230)+(rot?14:0),L=60,R=44,T=14,B=rot?44:30,w=W-L-R,h=H-T-B,n=n0;if(!n)return'<div class=empty>자료 없음</div>';
+  const W=opt.W||900,H=(opt.H||230)+(rot?22:0),L=60,R=44,T=14,B=rot?52:30,w=W-L-R,h=H-T-B,n=n0;if(!n)return'<div class=empty>자료 없음</div>';
   const bw=w/n;const mx=Math.max(1,...bars)*1.1;let s=`<svg class=svgc viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`;
   for(let i=0;i<=4;i++){const y=T+h-h*i/4;s+=`<line x1=${L} x2=${L+w} y1=${y} y2=${y} stroke="${C.grid}"/><text x=${L-6} y=${y+4} font-size=10 fill="${C.txt}" text-anchor=end>${fmtK(mx*i/4)}</text><text x=${L+w+6} y=${y+4} font-size=10 fill="${C.txt}">${i*25}%</text>`}
   bars.forEach((v,i)=>{const bh=v/mx*h;s+=`<rect x=${(L+i*bw+bw*.15).toFixed(1)} y=${(T+h-bh).toFixed(1)} width=${(bw*.7).toFixed(1)} height=${bh.toFixed(1)} fill="${opt.colors?opt.colors[i]:C.bar}" rx=2><title>${labels[i]} ${fmt(v)}</title></rect>`});
   lines.forEach(ln=>{const pts=ln.v.map((v,i)=>isFinite(v)?[L+i*bw+bw/2,T+h-Math.min(1.2,v)*h]:null);let d='';pts.forEach(p=>{if(p)d+=(d?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)});s+=`<path d="${d}" fill="none" stroke="${ln.c}" stroke-width="2"/>`;pts.forEach((p,i)=>{if(p)s+=`<circle cx=${p[0].toFixed(1)} cy=${p[1].toFixed(1)} r=3 fill="${ln.c}"><title>${labels[i]} ${pct(ln.v[i])}</title></circle>`})});
-  if(opt.target){const ty=T+h-h*opt.target;s+=`<line x1=${L} x2=${L+w} y1=${ty.toFixed(1)} y2=${ty.toFixed(1)} stroke="#C8433A" stroke-width="1.4" stroke-dasharray="6 4"/><text x=${L+w+4} y=${(ty+4).toFixed(1)} font-size=10 fill="#C8433A">목표 ${Math.round(opt.target*100)}%</text>`}
+  if(opt.target){const ty=T+h-h*opt.target;
+    s+=`<line x1=${L} x2=${L+w} y1=${ty.toFixed(1)} y2=${ty.toFixed(1)} stroke="#C8433A" stroke-width="1.2" stroke-dasharray="5 4"/>`;
+    s+=`<text x=${L+8} y=${(ty-5).toFixed(1)} font-size="9.5" fill="#C8433A" stroke="#fff" stroke-width="2.5" paint-order="stroke">목표 ${Math.round(opt.target*100)}%</text>`;}
   labels.forEach((l,i)=>{const x=(L+i*bw+bw/2).toFixed(1);
-    s+=rot?`<text x=${x} y=${H-12} font-size=9 fill="${C.txt}" text-anchor=end transform="rotate(-45 ${x} ${H-12})">${l}</text>`
+    s+=rot?`<text x=${x} y=${H-24} font-size="9.5" fill="${C.txt}" text-anchor=end transform="rotate(-40 ${x} ${H-24})">${l}</text>`
           :`<text x=${x} y=${H-10} font-size=10 fill="${C.txt}" text-anchor=middle>${l}</text>`});
   return s+'</svg>'}
 function svgVBars(rows,opt={}){ // rows:[{l,v,txt,c}] — 세로 막대
@@ -1183,8 +1185,8 @@ function renderReport(){
     const target=+(o['tgt_'+c]||75);
     html+=`<div class="rpt-sec pgnew"><h2 class="cust-hd" style="margin-bottom:2px">${NB(7)} 고객사 요약 : ${esc(c)}</h2>
       <div class="muted" style="font-size:12px;margin:-4px 0 4px">기간 : ${(dates[0]||'').replace(/-/g,'')} ~ ${(dates[dates.length-1]||'').replace(/-/g,'')} &nbsp;·&nbsp; 목표효율 <input type=number value="${target}" onchange="rptSet('tgt_${c}',this.value)" style="width:64px;padding:2px 4px">%</div>
-      ${svgCombo(days.map(d=>d.d.slice(5).replace('-','/')),days.map(d=>d.qty),[{v:days.map(d=>d.oper),c:C.l1},{v:days.map(d=>d.eff),c:C.l2}],{W:900,H:128,rot:1,target:target/100})}
-      <div class="legend" style="margin:2px 0 4px"><span><i style="background:${C.bar}"></i>생산수량</span><span><i style="background:${C.l1}"></i>가동율</span><span><i style="background:${C.l2}"></i>효율</span><span><i style="background:#C8433A"></i>목표효율 ${target}%</span></div>
+      ${svgCombo(days.map(d=>d.d.slice(5).replace('-','/')),days.map(d=>d.qty),[{v:days.map(d=>d.oper),c:C.l1},{v:days.map(d=>d.eff),c:C.l2}],{W:900,H:120,rot:1,target:target/100})}
+      <div class="legend" style="margin:10px 0 4px"><span><i style="background:${C.bar}"></i>생산수량</span><span><i style="background:${C.l1}"></i>가동율</span><span><i style="background:${C.l2}"></i>효율</span><span><i style="background:#C8433A"></i>목표효율 ${target}%</span></div>
       <div style="margin-top:6px">
         <table><tr><th>구분</th><th class=num>가동일수(일)</th><th class=num>평균가동율(%)</th><th class=num>평균가동시간(분)</th><th class=num>평균효율(%)</th><th class=num>생산수량(ea)</th></tr>
         ${cst.weeks.map(w=>`<tr><td>${w.i}주차(${m}/${w.a}~${m}/${w.b})</td><td class=num>${w.days||'-'}</td><td class=num>${w.days?(w.oper*100).toFixed(1):'-'}</td><td class=num>${w.days?fmt(Math.round(w.runPerDay)):'-'}</td><td class=num>${w.days?(w.eff*100).toFixed(1):'-'}</td><td class=num>${w.days?fmt(w.qty):'-'}</td></tr>`).join('')}
