@@ -192,7 +192,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
   <a data-pg="master"><i>⚙</i>기준정보</a>
   <a data-pg="data"><i>⇅</i>데이터 관리</a>
   <a data-pg="help"><i>?</i>사용안내</a>
-  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v7.5</div>
+  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v7.6</div>
 </nav>
 <main>
   <div class="top">
@@ -350,6 +350,15 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
         <div class="panel"><h3>MES 설비코드 연결</h3>
           <p class="muted" style="font-size:12px;margin:0 0 8px">MES 설비코드가 우리 설비 어느 것인지 한 번만 지정하면 됩니다. 비어 있으면 MES 불러오기 화면에서 직접 고를 수 있습니다.</p>
           <div class="tw" style="max-height:40vh"><table id="tMesMc"></table></div></div>
+      </div>
+    </div>
+    <div class="panel act">
+      <div class="fl">
+        <button class="p" onclick="saveMaster()">기준정보 저장</button>
+        <button onclick="backupMaster()">기준정보 백업(JSON)</button>
+        <button onclick="pull(1)">서버에서 다시 불러오기</button>
+        <span class="grow"></span>
+        <span class="muted" id="mstMsg">고친 내용은 자동 저장되지만, 확실히 해두려면 저장을 눌러 서버에 바로 올리세요</span>
       </div>
     </div>
     <datalist id="dlC"></datalist>
@@ -1368,6 +1377,19 @@ async function savePdf(){
 }
 
 /* ===== 기준정보 ===== */
+async function saveMaster(){
+  const m=S.master;
+  saveLocal();
+  $('mstMsg').textContent='서버에 올리는 중…';
+  await push(1);
+  $('mstMsg').textContent=`저장 완료 · ${new Date().toLocaleString('ko-KR')} · 품목 ${m.items.length}종 · 설비 ${m.mcs.length}대 · 작업자 ${m.workers.length}명 · SPM ${(m.spmdb||[]).length}건`;
+  toast('기준정보를 저장했습니다');
+}
+function backupMaster(){
+  const b={ver:1,exported:now(),master:S.master};
+  dl(new Blob([JSON.stringify(b,null,1)],{type:'application/json'}),'기준정보_백업_'+today()+'.json');
+  toast('기준정보를 파일로 내려받았습니다');
+}
 function mdel(t,v){S.master.mdel=S.master.mdel||{};S.master.mdel[t+'|'+v]=now();}
 function renderMaster(){
   const m=S.master;
