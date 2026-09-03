@@ -7,6 +7,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
 :root{
   --bg:#F2F4F7;--panel:#FFFFFF;--ink:#1A2230;--muted:#66717F;--line:#D9DFE7;--line2:#EDF0F4;
@@ -203,7 +205,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
   <a data-pg="master"><i>⚙</i>기준정보</a>
   <a data-pg="data"><i>⇅</i>데이터 관리</a>
   <a data-pg="help"><i>?</i>사용안내</a>
-  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v8.2</div>
+  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v8.8</div>
 </nav>
 <main>
   <div class="top">
@@ -327,7 +329,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
         <select id="p_cust"><option value="">고객사 전체</option></select>
         <span class="muted">평균 가동율·효율은 기존 엑셀 보고서와 같은 방식(일자별 평균의 평균), 평균가동시간은 1일 총 가동시간(분)</span>
         <span class="grow"></span>
-        <button class="p" onclick="savePdf()" id="btnPdf">PDF 내려받기</button><button onclick="exportReport()">엑셀 내려받기</button><button onclick="window.print()">인쇄</button>
+        <button class="p" onclick="savePdf()" id="btnPdf">PDF 내려받기</button><button onclick="exportReportX()">엑셀 내려받기</button><button class="s" onclick="exportReport()" title="표 형태의 원자료 시트만">원자료 엑셀</button><button onclick="window.print()">인쇄</button>
       </div>
     </div>
     <div class="panel" id="rptBody"></div>
@@ -1181,14 +1183,18 @@ function renderReport(){
     [/조회|교육|회의/,'조회·교육'],[/휴식|식사|중식/,'휴식·식사'],[/대기/,'대기']];
   const catOf=s=>{for(const[re,n]of CAT)if(re.test(s))return n;return '기타'};
   const gs={};
-  R.forEach(r=>{const t2=(r.sr||'').trim();if(!t2)return;
-    const x=gs[r.mc]=gs[r.mc]||{pn:{},w:{}};
-    (r.pn)&&(x.pn[r.pn]=(x.pn[r.pn]||0)+(+r.qty||1));
+  R.forEach(r=>{
+    const x=gs[r.mc]=gs[r.mc]||{pn:{},w:{},stop:0};
+    x.stop+=+r.stop||0;
+    if(r.pn)x.pn[r.pn]=(x.pn[r.pn]||0)+(+r.qty||1);
+    const t2=(r.sr||'').trim();if(!t2)return;
     const parts=t2.split(/\s*\/\s*|,/).filter(Boolean);
     parts.forEach(s=>{const mm=s.match(/(\d+)\s*분/);const v=mm?+mm[1]:0;
       const nm=catOf(s.replace(/\d+\s*분/,''));
       x.w[nm]=(x.w[nm]||0)+(v||1)})});
-  const mcs=Object.entries(gs).filter(([,x])=>Object.keys(x.w).length).sort((a,b)=>Object.values(b[1].w).reduce((s,v)=>s+v,0)-Object.values(a[1].w).reduce((s,v)=>s+v,0)).slice(0,8);
+  Object.values(gs).forEach(x=>{if(!Object.keys(x.w).length&&x.stop>0)x.w['사유 미기재']=x.stop});
+  const mcs=Object.entries(gs).filter(([,x])=>Object.keys(x.w).length)
+    .sort((a,b)=>b[1].stop-a[1].stop);
   if(mcs.length){
     html+=`<div class="rpt-sec"><h3>설비 정지 원인별 분포도</h3><div class="grid g2">${
       mcs.map(([mc,x])=>{const top=Object.entries(x.pn).sort((a,b)=>b[1]-a[1])[0];
@@ -1373,6 +1379,282 @@ async function savePdf(){
     toast('PDF를 저장했습니다');
   }catch(e){console.error(e);toast('PDF 저장에 실패했습니다 — [인쇄]에서 PDF로 저장하세요')}
   finally{swapped.forEach(([el,d])=>{d.remove();el.style.display=''});styled.forEach(([el,s])=>el.setAttribute('style',s));btn.disabled=false;btn.textContent=lab}
+}
+
+/* ===== 엑셀 네이티브 차트 삽입 (ExcelJS 저장 후 xlsx 안에 차트 XML을 넣음) ===== */
+const XE=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const colName=n=>{let s='';while(n>0){const r=(n-1)%26;s=String.fromCharCode(65+r)+s;n=(n-r-1)/26}return s};
+function refStr(sheet,c,r1,r2){return `'${sheet.replace(/'/g,"''")}'!$${colName(c)}$${r1}:$${colName(c)}$${r2}`}
+function numCache(vals){return `<c:numCache><c:formatCode>General</c:formatCode><c:ptCount val="${vals.length}"/>${vals.map((v,i)=>`<c:pt idx="${i}"><c:v>${isFinite(v)?v:0}</c:v></c:pt>`).join('')}</c:numCache>`}
+function strCache(vals){return `<c:strCache><c:ptCount val="${vals.length}"/>${vals.map((v,i)=>`<c:pt idx="${i}"><c:v>${XE(v)}</c:v></c:pt>`).join('')}</c:strCache>`}
+function comboChartXml(o){ // o:{sheet,cats,catRef,bars:{name,ref,vals},lines:[{name,ref,vals,color}],title}
+  const catBlk=`<c:cat><c:strRef><c:f>${XE(o.catRef)}</c:f>${strCache(o.cats)}</c:strRef></c:cat>`;
+  const bar=`<c:barChart><c:barDir val="col"/><c:grouping val="clustered"/><c:varyColors val="0"/>
+    <c:ser><c:idx val="0"/><c:order val="0"/>
+      <c:tx><c:strRef><c:f>${XE(o.bars.nameRef)}</c:f>${strCache([o.bars.name])}</c:strRef></c:tx>
+      <c:spPr><a:solidFill><a:srgbClr val="23456E"/></a:solidFill></c:spPr>
+      ${catBlk}<c:val><c:numRef><c:f>${XE(o.bars.ref)}</c:f>${numCache(o.bars.vals)}</c:numRef></c:val>
+    </c:ser><c:gapWidth val="60"/><c:axId val="111"/><c:axId val="222"/></c:barChart>`;
+  const lines=`<c:lineChart><c:grouping val="standard"/><c:varyColors val="0"/>${o.lines.map((L,i)=>`
+    <c:ser><c:idx val="${i+1}"/><c:order val="${i+1}"/>
+      <c:tx><c:strRef><c:f>${XE(L.nameRef)}</c:f>${strCache([L.name])}</c:strRef></c:tx>
+      <c:spPr><a:ln w="22000"><a:solidFill><a:srgbClr val="${L.color}"/></a:solidFill></a:ln></c:spPr>
+      <c:marker><c:symbol val="circle"/><c:size val="5"/><c:spPr><a:solidFill><a:srgbClr val="${L.color}"/></a:solidFill></c:spPr></c:marker>
+      ${catBlk}<c:val><c:numRef><c:f>${XE(L.ref)}</c:f>${numCache(L.vals)}</c:numRef></c:val><c:smooth val="0"/>
+    </c:ser>`).join('')}<c:marker val="1"/><c:axId val="333"/><c:axId val="444"/></c:lineChart>`;
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<c:chart><c:title><c:tx><c:rich><a:bodyPr/><a:p><a:r><a:t>${XE(o.title||'')}</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title><c:autoTitleDeleted val="0"/>
+<c:plotArea><c:layout/>${bar}${lines}
+<c:catAx><c:axId val="111"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="b"/><c:crossAx val="222"/><c:txPr><a:bodyPr rot="-2700000"/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="800"/></a:pPr><a:endParaRPr lang="ko-KR"/></a:p></c:txPr></c:catAx>
+<c:valAx><c:axId val="222"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="l"/><c:majorGridlines/><c:numFmt formatCode="#,##0" sourceLinked="0"/><c:crossAx val="111"/></c:valAx>
+<c:catAx><c:axId val="333"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="1"/><c:axPos val="b"/><c:crossAx val="444"/></c:catAx>
+<c:valAx><c:axId val="444"/><c:scaling><c:orientation val="minMax"/><c:max val="1"/><c:min val="0"/></c:scaling><c:delete val="0"/><c:axPos val="r"/><c:numFmt formatCode="0%" sourceLinked="0"/><c:crossAx val="333"/><c:crosses val="max"/></c:valAx>
+</c:plotArea><c:legend><c:legendPos val="b"/><c:overlay val="0"/></c:legend><c:plotVisOnly val="1"/></c:chart></c:chartSpace>`;
+}
+function pieChartXml(o){
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<c:chart><c:title><c:tx><c:rich><a:bodyPr/><a:p><a:r><a:t>${XE(o.title)}</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title>
+<c:plotArea><c:layout/><c:pieChart><c:varyColors val="1"/>
+<c:ser><c:idx val="0"/><c:order val="0"/>
+<c:cat><c:strRef><c:f>${XE(o.catRef)}</c:f>${strCache(o.cats)}</c:strRef></c:cat>
+<c:val><c:numRef><c:f>${XE(o.valRef)}</c:f>${numCache(o.vals)}</c:numRef></c:val>
+<c:dLbls><c:showPercent val="1"/><c:showVal val="0"/><c:showCatName val="0"/><c:showSerName val="0"/><c:showLegendKey val="0"/><c:showBubbleSize val="0"/></c:dLbls>
+</c:ser><c:firstSliceAng val="0"/></c:pieChart></c:plotArea><c:legend><c:legendPos val="r"/><c:overlay val="0"/></c:legend><c:plotVisOnly val="1"/></c:chart></c:chartSpace>`;
+}
+function drawingXml(anchors){ // anchors:[{fromCol,fromRow,toCol,toRow,rid,name}]
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+${anchors.map((an,i)=>`<xdr:twoCellAnchor><xdr:from><xdr:col>${an.fromCol}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${an.fromRow}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>
+<xdr:to><xdr:col>${an.toCol}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${an.toRow}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to>
+<xdr:graphicFrame macro=""><xdr:nvGraphicFramePr><xdr:cNvPr id="${i+2}" name="${XE(an.name)}"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr>
+<xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm>
+<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="${an.rid}"/></a:graphicData></a:graphic></xdr:graphicFrame><xdr:clientData/></xdr:twoCellAnchor>`).join('')}
+</xdr:wsDr>`;
+}
+async function injectCharts(buf,plan){
+  const zip=await JSZip.loadAsync(buf);
+  let ct=await zip.file('[Content_Types].xml').async('string');
+  let cn=0;
+  for(const p of plan){                     // p:{sheetFile, charts:[{xml,anchor}]}
+    if(!p.charts.length)continue;
+    const dnum=(await zip.file('xl/drawings')&&0)||0;
+    const dIdx=plan.indexOf(p)+1, dPath=`xl/drawings/chartdrawing${dIdx}.xml`;
+    const anchors=[],rels=[];
+    p.charts.forEach((c,i)=>{
+      cn++;const cPath=`xl/charts/chart${cn}.xml`;
+      zip.file(cPath,c.xml);
+      ct+='';
+      ct=ct.replace('</Types>',`<Override PartName="/${cPath}" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/></Types>`);
+      const rid='rId'+(i+1);
+      rels.push(`<Relationship Id="${rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="../charts/chart${cn}.xml"/>`);
+      anchors.push({...c.anchor,rid,name:'Chart '+cn});
+    });
+    zip.file(dPath,drawingXml(anchors));
+    zip.file(`xl/drawings/_rels/chartdrawing${dIdx}.xml.rels`,`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${rels.join('')}</Relationships>`);
+    ct=ct.replace('</Types>',`<Override PartName="/${dPath}" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/></Types>`);
+    // 시트 rels
+    const rpath=`xl/worksheets/_rels/${p.sheetFile}.rels`;
+    let rx=zip.file(rpath)?await zip.file(rpath).async('string'):'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>';
+    const used=[...rx.matchAll(/Id="rId(\d+)"/g)].map(x=>+x[1]);
+    const nid='rId'+((used.length?Math.max(...used):0)+1);
+    rx=rx.replace('</Relationships>',`<Relationship Id="${nid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/chartdrawing${dIdx}.xml"/></Relationships>`);
+    zip.file(rpath,rx);
+    // 시트 xml에 drawing 참조
+    const spath='xl/worksheets/'+p.sheetFile;
+    let sx=await zip.file(spath).async('string');
+    sx=sx.replace(/<drawing [^>]*\/>/,'');
+    sx=sx.replace('</worksheet>',`<drawing r:id="${nid}"/></worksheet>`);
+    zip.file(spath,sx);
+  }
+  zip.file('[Content_Types].xml',ct);
+  return await zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+}
+
+/* ===== 월간보고서 엑셀 (보고서 양식 그대로) ===== */
+async function svgToPng(svg,scale){
+  const s=new XMLSerializer().serializeToString(svg);
+  const vb=(svg.getAttribute('viewBox')||'0 0 900 200').split(/\s+/).map(Number);
+  const w=vb[2]||900,h=vb[3]||200,k=scale||2;
+  const img=new Image();
+  await new Promise((res,rej)=>{img.onload=res;img.onerror=rej;img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(s)});
+  const cv=document.createElement('canvas');cv.width=w*k;cv.height=h*k;
+  const cx=cv.getContext('2d');cx.fillStyle='#fff';cx.fillRect(0,0,cv.width,cv.height);
+  cx.drawImage(img,0,0,cv.width,cv.height);
+  return {b64:cv.toDataURL('image/png'),w,h};
+}
+async function exportReportX(){
+  if(!window.ExcelJS){toast('엑셀 서식 라이브러리를 못 불러와 원자료로 저장합니다');exportReport();return}
+  const btn=event&&event.target;if(btn){btn.disabled=true;btn.textContent='엑셀 만드는 중…'}
+  try{
+    const cu=$('p_cust').value,st=rptStats(month,cu),o=rptGet(),R=st.R;
+    const[y,m]=month.split('-').map(Number),pm=prevMonth(month);
+    const custs=cu?[cu]:[...new Set(R.map(r=>r.cust))].sort((a,b)=>{const q=c=>R.filter(r=>r.cust===c).reduce((s,r)=>s+(+r.qty||0),0);return q(b)-q(a)});
+    const wb=new ExcelJS.Workbook();wb.creator='태진다이텍';const chartPlan=[];
+    const TH={font:{bold:true,size:10},alignment:{horizontal:'center',vertical:'middle',wrapText:true},
+      fill:{type:'pattern',pattern:'solid',fgColor:{argb:'FFDCE6F1'}},
+      border:{top:{style:'thin'},left:{style:'thin'},bottom:{style:'thin'},right:{style:'thin'}}};
+    const TD={font:{size:10},alignment:{vertical:'middle'},border:{top:{style:'thin'},left:{style:'thin'},bottom:{style:'thin'},right:{style:'thin'}}};
+    const SUM={font:{bold:true,size:10},fill:{type:'pattern',pattern:'solid',fgColor:{argb:'FFF2F2F2'}},
+      border:{top:{style:'thin'},left:{style:'thin'},bottom:{style:'thin'},right:{style:'thin'}}};
+    const style=(row,st2,from,to)=>{for(let c=from;c<=to;c++)Object.assign(row.getCell(c),st2)};
+
+    /* 표지 */
+    const cv=wb.addWorksheet('표지',{pageSetup:{orientation:'landscape',paperSize:9,fitToPage:true,fitToWidth:1,fitToHeight:1,
+      margins:{left:0.5,right:0.5,top:0.6,bottom:0.6,header:0.3,footer:0.3},horizontalCentered:true}});
+    for(let i=1;i<=14;i++)cv.getColumn(i).width=9;
+    // 결재란 (우측 상단)
+    const SB={top:{style:'thin'},left:{style:'thin'},bottom:{style:'thin'},right:{style:'thin'}};
+    cv.mergeCells(2,9,3,9);const sg=cv.getCell(2,9);sg.value='결\n재';sg.font={bold:true,size:11};
+    sg.alignment={horizontal:'center',vertical:'middle',wrapText:true};sg.border=SB;
+    ['작성','생산팀장','공장장','대표이사'].forEach((n,i)=>{
+      const c1=cv.getCell(2,10+i);c1.value=n;c1.font={bold:true,size:10};
+      c1.alignment={horizontal:'center',vertical:'middle'};c1.border=SB;
+      c1.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF2F2F2'}};
+      const c2=cv.getCell(3,10+i);c2.border=SB;});
+    cv.getRow(2).height=20;cv.getRow(3).height=52;
+    // 제목
+    cv.mergeCells(8,2,9,12);const tt=cv.getCell(8,2);
+    tt.value=`${y}년 ${m}월 생산실적 및 프레스 가동율 현황`;
+    tt.font={bold:true,size:26};tt.alignment={horizontal:'center',vertical:'middle'};
+    cv.getRow(8).height=34;cv.getRow(9).height=10;
+    // 고객사
+    custs.forEach((c,i)=>{cv.mergeCells(12+i,4,12+i,10);const cc2=cv.getCell(12+i,4);
+      cc2.value='고객사   '+c;cc2.font={size:14};cc2.alignment={horizontal:'center'};cv.getRow(12+i).height=22;});
+    const lr=14+custs.length;
+    cv.mergeCells(lr,8,lr,12);const md=cv.getCell(lr,8);
+    md.value='작성일자 : '+today()+(localStorage.getItem('tj_me')?'      작성 : '+localStorage.getItem('tj_me'):'');
+    md.alignment={horizontal:'right'};md.font={size:11};
+    cv.pageSetup.printArea=`A1:N${lr+1}`;
+
+    /* 고객사별 */
+    for(const c of custs){
+      const CR=R.filter(r=>r.cust===c),cst=rptStats(month,c),cT=cst.total,cPv=rptStats(pm,c).total;
+      const ws=wb.addWorksheet(c.slice(0,28),{
+        pageSetup:{orientation:'landscape',paperSize:9,fitToPage:true,fitToWidth:1,fitToHeight:0,
+          margins:{left:0.3,right:0.3,top:0.5,bottom:0.5,header:0.2,footer:0.2}},
+        headerFooter:{oddHeader:'&L&"맑은 고딕,Bold"&12'+c+' 생산실적 현황&R'+y+'년 '+m+'월',oddFooter:'&C&P / &N'},
+        views:[{state:'frozen',ySplit:3}]});
+      const g={};CR.forEach(r=>{const k=r.mc+'|'+r.pn;const x=g[k]=g[k]||{mc:r.mc,pn:r.pn,name:r.name,proc:r.proc||'P/R',w:{},spm:[],work:0,stop:0,run:0,cap:0,qty:0,ng:0};
+        const cc=calc(r);['w1','w2','w3','w4'].forEach(wk=>{if(r[wk])x.w[r[wk]]=(x.w[r[wk]]||0)+1});
+        if(+r.spm)x.spm.push(+r.spm);x.work+=+r.work||0;x.stop+=+r.stop||0;x.run+=cc.run;x.cap+=cc.cap;x.qty+=+r.qty||0;x.ng+=(+r.ng||0)+(+r.ngp||0)});
+      const rows=Object.values(g).sort((a,b)=>b.qty-a.qty);
+      const S2=rows.reduce((a,x)=>({work:a.work+x.work,stop:a.stop+x.stop,run:a.run+x.run,cap:a.cap+x.cap,qty:a.qty+x.qty,ng:a.ng+x.ng}),{work:0,stop:0,run:0,cap:0,qty:0,ng:0});
+      const H=v=>+(v/60).toFixed(1),PC=v=>isFinite(v)?Math.round(v*100)/100:'';
+      ws.mergeCells(1,1,1,19);const t1=ws.getCell(1,1);
+      t1.value=`${y}년 ${m}월 M/H당 · 생산실적 현황 (제품별)   —   고객사 ${c}`;t1.font={bold:true,size:14};ws.getRow(1).height=24;
+      const head=['NO','설비명','공정명','고객사','품명','품번','작업자1','작업자2','작업자3','작업자4','SPM(평균)','근무시간','정지시간','가동시간','예상수량(ea)','생산수량(ea)','가동률(%)','효율(%)','불량수량(ea)'];
+      const hr=ws.addRow([]);ws.addRow(head);style(ws.getRow(3),TH,1,19);ws.getRow(3).height=28;
+      const sr=ws.addRow(['합계','','','','','','','','','',
+        +(rows.reduce((a,x)=>a+(x.spm.length?x.spm.reduce((s,v)=>s+v,0)/x.spm.length:0),0)/(rows.length||1)).toFixed(1),
+        H(S2.work),H(S2.stop),H(S2.run),S2.cap,S2.qty,PC(S2.run/S2.work),PC(S2.qty/S2.cap),S2.ng]);
+      style(sr,SUM,1,19);ws.mergeCells(sr.number,1,sr.number,10);
+      rows.forEach((x,i)=>{const w=Object.entries(x.w).sort((a,b)=>b[1]-a[1]).map(e=>e[0]);
+        const spm=x.spm.length?x.spm.reduce((s,v)=>s+v,0)/x.spm.length:0;
+        const r2=ws.addRow([i+1,x.mc,x.proc,c,x.name,x.pn,w[0]||'',w[1]||'',w[2]||'',w[3]||'',
+          +spm.toFixed(1),H(x.work),H(x.stop),H(x.run),x.cap,x.qty,PC(x.run/x.work),PC(x.qty/x.cap),x.ng||'']);
+        style(r2,TD,1,19);});
+      [6,14,8,10,26,20,12,12,12,12,10,10,10,10,13,13,9,9,11].forEach((w,i)=>ws.getColumn(i+1).width=w);
+      [15,16,19].forEach(c2=>ws.getColumn(c2).numFmt='#,##0');
+      [17,18].forEach(c2=>ws.getColumn(c2).numFmt='0%');
+      // 요약
+      ws.addRow([]);
+      const h2=ws.addRow(['고객사 : '+c]);h2.font={bold:true,size:14};ws.mergeCells(h2.number,1,h2.number,5);h2.height=22;
+      const pr=ws.addRow(['기간','','',`${cst.days.length?cst.days[0].d:''} ~ ${cst.days.length?cst.days[cst.days.length-1].d:''}`,'','목표효율',(+(o['tgt_'+c]||75))/100]);
+      ws.mergeCells(pr.number,1,pr.number,3);ws.mergeCells(pr.number,4,pr.number,5);
+      pr.getCell(7).numFmt='0%';pr.font={size:10};
+      const mrg=r=>{ws.mergeCells(r.number,1,r.number,3);
+        for(let cc=4;cc<=8;cc++)r.getCell(cc).alignment={horizontal:'center',vertical:'middle'};
+        r.getCell(1).alignment={horizontal:'left',vertical:'middle'};};
+      const wh=ws.addRow(['구분','','','가동일수(일)','평균가동율(%)','평균가동시간(분)','평균효율(%)','생산수량(ea)']);
+      style(wh,TH,1,8);mrg(wh);wh.height=24;
+      cst.weeks.forEach(w=>{const r3=ws.addRow([`${w.i}주차 (${m}/${w.a}~${m}/${w.b})`,'','',w.days||'',w.days?+(w.oper*100).toFixed(1):'',w.days?Math.round(w.runPerDay):'',w.days?+(w.eff*100).toFixed(1):'',w.days?w.qty:'']);
+        style(r3,TD,1,8);mrg(r3)});
+      const rT=ws.addRow(['당월 실적','','',cT.days,+(cT.oper*100).toFixed(1),Math.round(cT.runPerDay),+(cT.eff*100).toFixed(1),cT.qty]);style(rT,SUM,1,8);mrg(rT);
+      const rP=ws.addRow([`전월 비교 (${+pm.slice(5)}월)`,'','',cPv.days||'-',cPv.n?+(cPv.oper*100).toFixed(1):'-',cPv.n?Math.round(cPv.runPerDay):'-',cPv.n?+(cPv.eff*100).toFixed(1):'-',cPv.n?cPv.qty:'-']);style(rP,TD,1,8);mrg(rP);
+      const rS=ws.addRow(['작업자 인원','','',o['staff_'+c]||'','야간근무',o['night_'+c]||'','','']);style(rS,TD,1,8);mrg(rS);
+      const rN=ws.addRow(['총 불량수량','','',cT.ng+(cT.ngp||0),'총 가동시간(분)',cT.run,'총 정지시간(분)',cT.stop]);style(rN,TD,1,8);mrg(rN);
+      ws.getColumn(8).numFmt='#,##0';
+      ws.addRow([]);
+      const ph=ws.addRow(['문제점','','','','대책 및 개선내용','','','']);style(ph,TH,1,12);
+      ws.mergeCells(ph.number,1,ph.number,4);ws.mergeCells(ph.number,5,ph.number,12);ph.height=22;
+      [1,2,3,4].forEach(k=>{const r4=ws.addRow([o['pb'+k+'_'+c]||'','','','',o['pa'+k+'_'+c]||'','','','']);
+        style(r4,TD,1,12);ws.mergeCells(r4.number,1,r4.number,4);ws.mergeCells(r4.number,5,r4.number,12);
+        r4.getCell(1).alignment={vertical:'middle',wrapText:true};r4.getCell(5).alignment={vertical:'middle',wrapText:true};r4.height=28;});
+      ws.addRow([]);const chartRow=ws.rowCount;      // 차트는 표 아래 전체 폭
+      ws.getRow(chartRow).addPageBreak();
+      ws.pageSetup.printArea=`A1:S${ws.rowCount+22}`;
+      // 차트용 데이터 블록 (U~X열, 인쇄 제외)
+      const DC=21, r0=ws.rowCount+3;
+      ws.getCell(r0,DC).value='일자';ws.getCell(r0,DC+1).value='생산수량';
+      ws.getCell(r0,DC+2).value='가동율';ws.getCell(r0,DC+3).value='효율';
+      cst.days.forEach((d,i)=>{const rr=r0+1+i;
+        ws.getCell(rr,DC).value=d.d.slice(5).replace('-','/');
+        ws.getCell(rr,DC+1).value=d.qty;
+        ws.getCell(rr,DC+2).value=isFinite(d.oper)?+d.oper.toFixed(4):0;
+        ws.getCell(rr,DC+3).value=isFinite(d.eff)?+d.eff.toFixed(4):0;});
+      [DC+2,DC+3].forEach(cc=>ws.getColumn(cc).numFmt='0.0%');
+      for(let cc=DC;cc<=DC+3;cc++){ws.getColumn(cc).width=11;ws.getColumn(cc).hidden=true}
+      const n=cst.days.length, sn=ws.name;
+      if(n){
+        chartPlan.push({sheetName:sn,charts:[{
+          xml:comboChartXml({title:`${c} 일자별 생산수량 · 가동율 · 효율`,
+            cats:cst.days.map(d=>d.d.slice(5).replace('-','/')),catRef:refStr(sn,DC,r0+1,r0+n),
+            bars:{name:'생산수량',nameRef:`'${sn.replace(/'/g,"''")}'!$${colName(DC+1)}$${r0}`,ref:refStr(sn,DC+1,r0+1,r0+n),vals:cst.days.map(d=>d.qty)},
+            lines:[{name:'가동율',nameRef:`'${sn.replace(/'/g,"''")}'!$${colName(DC+2)}$${r0}`,ref:refStr(sn,DC+2,r0+1,r0+n),vals:cst.days.map(d=>+(d.oper||0).toFixed(4)),color:'D9822B'},
+                   {name:'효율',nameRef:`'${sn.replace(/'/g,"''")}'!$${colName(DC+3)}$${r0}`,ref:refStr(sn,DC+3,r0+1,r0+n),vals:cst.days.map(d=>+(d.eff||0).toFixed(4)),color:'2F8F5B'}]}),
+          anchor:{fromCol:0,fromRow:chartRow,toCol:19,toRow:chartRow+20}}]});
+      }
+    }
+    /* 정지 원인 분포도 */
+    const CAT=[[/금형|셋팅/,'금형점검 및 수리'],[/소재|자재/,'소재교환'],[/측정|검사/,'측정대기'],[/치수|조정/,'치수조정'],
+      [/설비|고장|이상/,'설비이상'],[/부품|연마|교체/,'부품교체·연마'],[/3정|청소|정리|박스/,'3정5행·청소'],
+      [/조회|교육|회의/,'조회·교육'],[/휴식|식사|중식/,'휴식·식사'],[/대기/,'대기']];
+    const catOf=s=>{for(const[re,nm]of CAT)if(re.test(s))return nm;return '기타'};
+    const gsx={};
+    R.forEach(r=>{const x=gsx[r.mc]=gsx[r.mc]||{pn:{},w:{},stop:0};
+      x.stop+=+r.stop||0;
+      if(r.pn)x.pn[r.pn]=(x.pn[r.pn]||0)+(+r.qty||1);
+      const t2=(r.sr||'').trim();if(!t2)return;
+      t2.split(/\s*\/\s*|,/).filter(Boolean).forEach(s=>{const mm=s.match(/(\d+)\s*분/);const v=mm?+mm[1]:0;
+        const nm=catOf(s.replace(/\d+\s*분/,''));x.w[nm]=(x.w[nm]||0)+(v||1)})});
+    Object.values(gsx).forEach(x=>{if(!Object.keys(x.w).length&&x.stop>0)x.w['사유 미기재']=x.stop});
+    const mlist=Object.entries(gsx).filter(([,x])=>Object.keys(x.w).length).sort((a,b)=>b[1].stop-a[1].stop);
+    if(mlist.length){
+      const ws2=wb.addWorksheet('설비 정지 원인',{pageSetup:{orientation:'landscape',paperSize:9,fitToPage:false,scale:62,
+        margins:{left:0.3,right:0.3,top:0.5,bottom:0.5,header:0.2,footer:0.2}},
+        headerFooter:{oddHeader:'&L&"맑은 고딕,Bold"&12설비 정지 원인별 분포도&R'+y+'년 '+m+'월',oddFooter:'&C&P / &N'}});
+      ws2.getCell('A1').value='설비 정지 원인별 분포도';ws2.getCell('A1').font={bold:true,size:14};
+      ws2.getColumn(1).width=20;ws2.getColumn(2).width=12;for(let cc=3;cc<=20;cc++)ws2.getColumn(cc).width=9;
+      const charts=[];let dr=3;
+      mlist.forEach(([mc,x],i)=>{
+        const top=Object.entries(x.pn).sort((a,b)=>b[1]-a[1])[0];
+        const pairs=Object.entries(x.w).sort((a,b)=>b[1]-a[1]).slice(0,8);
+        const hdr=ws2.getCell(dr,1);hdr.value=mc+(top?'  '+top[0]:'');hdr.font={bold:true,size:11};
+        pairs.forEach((p,k)=>{ws2.getCell(dr+1+k,1).value=p[0];ws2.getCell(dr+1+k,2).value=p[1]});
+        charts.push({xml:pieChartXml({title:mc+(top?'  '+top[0]:''),
+          cats:pairs.map(p=>p[0]),catRef:refStr('설비 정지 원인',1,dr+1,dr+pairs.length),
+          vals:pairs.map(p=>p[1]),valRef:refStr('설비 정지 원인',2,dr+1,dr+pairs.length)}),
+          anchor:{fromCol:2+(i%2)*9,fromRow:1+Math.floor(i/2)*15,toCol:11+(i%2)*9,toRow:15+Math.floor(i/2)*15}});
+        dr+=pairs.length+3;
+      });
+      ws2.getColumn(1).hidden=true;ws2.getColumn(2).hidden=true;
+      ws2.pageSetup.printArea=`C1:S${2+Math.ceil(mlist.length/2)*15}`;
+      for(let i=4;i<mlist.length;i+=4){const br=1+Math.floor(i/2)*15;ws2.getRow(br).addPageBreak()}
+      chartPlan.push({sheetName:'설비 정지 원인',charts});
+    }
+    const buf=await wb.xlsx.writeBuffer();
+    let out=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    if(window.JSZip&&chartPlan.length){
+      const names=wb.worksheets.map(w=>w.name);
+      const plan=chartPlan.map(p=>({sheetFile:'sheet'+(names.indexOf(p.sheetName)+1)+'.xml',charts:p.charts}));
+      try{out=await injectCharts(buf,plan)}catch(e){console.error('chart',e);toast('차트 삽입에 실패해 표만 저장합니다')}
+    }
+    dl(out,'월간보고서_'+month+(cu?'_'+cu:'')+'.xlsx');
+    toast('보고서 서식 엑셀을 저장했습니다');
+  }catch(e){console.error(e);toast('엑셀 저장 실패 — [원자료 엑셀]을 이용하세요')}
+  finally{if(btn){btn.disabled=false;btn.textContent='엑셀 내려받기'}}
 }
 
 /* ===== 기준정보 ===== */
