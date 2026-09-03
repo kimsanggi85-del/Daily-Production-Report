@@ -192,7 +192,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
   <a data-pg="master"><i>⚙</i>기준정보</a>
   <a data-pg="data"><i>⇅</i>데이터 관리</a>
   <a data-pg="help"><i>?</i>사용안내</a>
-  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v7.6</div>
+  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v7.7</div>
 </nav>
 <main>
   <div class="top">
@@ -357,10 +357,14 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
         <button class="p" onclick="saveMaster()">기준정보 저장</button>
         <button onclick="backupMaster()">기준정보 백업(JSON)</button>
         <button onclick="pull(1)">서버에서 다시 불러오기</button>
+        <button onclick="setPin()">관리 PIN 설정</button>
+        <button onclick="localStorage.setItem('tj_me','');meName();renderMaster()">내 이름 변경</button>
         <span class="grow"></span>
         <span class="muted" id="mstMsg">고친 내용은 자동 저장되지만, 확실히 해두려면 저장을 눌러 서버에 바로 올리세요</span>
       </div>
     </div>
+    <div class="panel"><h3>변경 이력 <span class="muted" style="font-weight:400;font-size:12px">삭제·저장 기록 (최근 120건)</span></h3>
+      <div class="tw" style="max-height:36vh"><table id="tLog"></table></div></div>
     <datalist id="dlC"></datalist>
   </section>
 
@@ -555,6 +559,8 @@ function mergeIn(srv){
   srv.recs.forEach(r=>{if(S.del[r.id])return;const l=map.get(r.id);if(!l||(r.ua||'')>=(l.ua||''))map.set(r.id,r)});
   S.recs=[...map.values()].filter(r=>!S.del[r.id]);
   if(srv.mig){S.mig=Object.assign(S.mig||{},srv.mig)}
+  if(srv.log){const k=new Set((S.log||[]).map(x=>x.t+'|'+x.by+'|'+x.act));
+    S.log=[...(S.log||[]),...srv.log.filter(x=>!k.has(x.t+'|'+x.by+'|'+x.act))].sort((a,b)=>b.t.localeCompare(a.t)).slice(0,300)}
   if(srv.rpt){S.rpt=S.rpt||{};Object.entries(srv.rpt).forEach(([k,v])=>{if(!S.rpt[k]||(v.ua||'')>=(S.rpt[k].ua||''))S.rpt[k]=v})}
   if(srv.master){const m=S.master;const sm=srv.master;
     ['mcs','custs','workers','reasons'].forEach(k=>{(sm[k]||[]).forEach(v=>{if(!m[k].includes(v))m[k].push(v)})});
@@ -584,7 +590,7 @@ function schedulePush(){clearTimeout(pushT);pushT=setTimeout(()=>push(),800);}
 async function push(manual){
   setSync('busy','서버에 올리는 중');
   try{
-    const body=[{key:KV_KEY,value:{recs:S.recs,del:S.del,master:S.master,rpt:S.rpt||{},mig:S.mig||{},ua:S.ua},updated_at:now()}];
+    const body=[{key:KV_KEY,value:{recs:S.recs,del:S.del,master:S.master,rpt:S.rpt||{},mig:S.mig||{},log:S.log||[],ua:S.ua},updated_at:now()}];
     const r=await fetch(SB_URL+'/rest/v1/kv_store?on_conflict=key',{method:'POST',headers:{...hdr,'Prefer':'resolution=merge-duplicates'},body:JSON.stringify(body)});
     if(!r.ok)throw new Error(r.status);
     setSync('ok','서버 연결됨');if(manual)toast('서버에 올렸습니다');
@@ -721,7 +727,7 @@ function editRec(id){const r=S.recs.find(x=>x.id===id);if(!r)return;editId=id;
   $('entryTitle').textContent='일보 수정 · '+r.date+' '+r.mc+' · '+r.pn;
   writeForm(r);$('btnSave').textContent='수정 저장 (Ctrl+Enter)';$('btnEdit').disabled=false;$('btnDel').disabled=false;
   renderHist();window.scrollTo({top:0,behavior:'smooth'});}
-function delRec(id){const r=S.recs.find(x=>x.id===id);if(!r)return;if(!confirm(r.date+' '+r.mc+' '+r.pn+' 일보를 삭제할까요?'))return;S.recs=S.recs.filter(x=>x.id!==id);S.del[id]=now();if(editId===id)resetForm(true);commit();toast('삭제했습니다');}
+function delRec(id){const r=S.recs.find(x=>x.id===id);if(!r)return;if(!confirm(r.date+' '+r.mc+' '+r.pn+' 일보를 삭제할까요?'))return;meName();S.recs=S.recs.filter(x=>x.id!==id);S.del[id]=now();logAdd('일보 삭제',r.date+' '+r.mc+' '+r.pn+' / 실적 '+r.qty);if(editId===id)resetForm(true);commit();toast('삭제했습니다');}
 function copyPrev(){const mc=$('f_mc').value,d=$('f_date').value;if(!mc){$('fmsg').textContent='설비를 먼저 선택하세요';return}
   const prev=S.recs.filter(r=>r.mc===mc&&r.date<d).sort((a,b)=>b.date.localeCompare(a.date))[0];
   if(!prev){$('fmsg').textContent='이 설비의 이전 일보가 없습니다';return}
@@ -1378,7 +1384,8 @@ async function savePdf(){
 
 /* ===== 기준정보 ===== */
 async function saveMaster(){
-  const m=S.master;
+  const m=S.master;meName();
+  logAdd('기준정보 저장',`품목 ${m.items.length}종 · 설비 ${m.mcs.length}대 · SPM ${(m.spmdb||[]).length}건`);
   saveLocal();
   $('mstMsg').textContent='서버에 올리는 중…';
   await push(1);
@@ -1390,6 +1397,40 @@ function backupMaster(){
   dl(new Blob([JSON.stringify(b,null,1)],{type:'application/json'}),'기준정보_백업_'+today()+'.json');
   toast('기준정보를 파일로 내려받았습니다');
 }
+/* ===== 관리 PIN · 변경 이력 ===== */
+function hash4(s){let h=0;for(const c of String(s))h=(h*31+c.charCodeAt(0))>>>0;return h.toString(36)}
+function meName(){
+  let v=localStorage.getItem('tj_me')||'';
+  if(!v){v=(prompt('이름을 입력하세요 (변경 이력에 남습니다)')||'').trim();if(v)localStorage.setItem('tj_me',v)}
+  return v||'(이름없음)';
+}
+function setPin(){
+  const cur=S.master.pin;
+  if(cur){const a=prompt('현재 PIN을 입력하세요');if(a===null)return;if(hash4(a)!==cur){toast('PIN이 맞지 않습니다');return}}
+  const n=prompt(cur?'새 PIN(숫자 4자리 이상)':'관리 PIN을 새로 만듭니다 (숫자 4자리 이상)');
+  if(!n)return;
+  if(String(n).trim().length<4){toast('4자리 이상 입력하세요');return}
+  S.master.pin=hash4(String(n).trim());logAdd('PIN 변경','');commit();toast('PIN을 설정했습니다');
+}
+function askPin(what){
+  if(!S.master.pin){toast('먼저 관리 PIN을 만들어 주세요');setPin();return false}
+  const a=prompt(what+'\n관리 PIN을 입력하세요');
+  if(a===null)return false;
+  if(hash4(String(a).trim())!==S.master.pin){toast('PIN이 맞지 않습니다');logAdd('PIN 오류',what);commit();return false}
+  return true;
+}
+function logAdd(act,detail){
+  S.log=S.log||[];
+  S.log.unshift({t:now(),by:localStorage.getItem('tj_me')||'(이름없음)',act,d:String(detail||'').slice(0,120)});
+  if(S.log.length>300)S.log.length=300;
+}
+function renderLog(){
+  const L=S.log||[];
+  if(!$('tLog'))return;
+  $('tLog').innerHTML='<tr><th>일시</th><th>사용자</th><th>작업</th><th>내용</th></tr>'
+   +(L.length?L.slice(0,120).map(x=>`<tr><td class=muted style="white-space:nowrap">${new Date(x.t).toLocaleString('ko-KR')}</td><td>${esc(x.by)}</td><td>${esc(x.act)}</td><td class=muted>${esc(x.d)}</td></tr>`).join('')
+     :'<tr><td colspan=4 class=empty>변경 이력이 없습니다</td></tr>');
+}
 function mdel(t,v){S.master.mdel=S.master.mdel||{};S.master.mdel[t+'|'+v]=now();}
 function renderMaster(){
   const m=S.master;
@@ -1397,7 +1438,7 @@ function renderMaster(){
   $('lMc').innerHTML=m.mcs.slice().sort((a,b)=>a.localeCompare(b,'ko',{numeric:true})).map(v=>`<span class=chip>${esc(v)} <a onclick="delM('mcs','${esc(v)}')" style="cursor:pointer;color:var(--red)">×</a></span>`).join('');
   $('lW').innerHTML=m.workers.map(v=>`<span class=chip>${esc(v)} <a onclick="delM('workers','${esc(v)}')" style="cursor:pointer;color:var(--red)">×</a></span>`).join('');
   if($('itemCnt'))$('itemCnt').textContent=`${m.items.length}종 · 설비 ${m.mcs.length}대 · 작업자 ${m.workers.length}명`;
-  renderSpm();
+  renderSpm();renderLog();
   const codes=[...new Set(Object.keys(S.master.mesMc||{}))].sort();
   const mcs=m.mcs.slice().sort((a,b)=>a.localeCompare(b,'ko',{numeric:true}));
   $('tMesMc').innerHTML='<tr><th>MES 설비코드</th><th>우리 설비</th></tr>'+codes.map(c=>`<tr><td>${esc(c)}</td><td><select onchange="setMesMc('${esc(c)}',this.value)" style="padding:3px 6px"><option value=""></option>${mcs.map(v=>`<option value="${esc(v)}"${v===S.master.mesMc[c]?' selected':''}>${esc(v)}</option>`).join('')}</select></td></tr>`).join('');
@@ -1427,7 +1468,14 @@ function upItemPn(old,v){
   Object.keys(S.master.mesPn||{}).forEach(k=>{if(S.master.mesPn[k]===old)S.master.mesPn[k]=v});
   commit();toast(`품번을 바꿨습니다 (일보 ${n}건 반영)`);
 }
-function delItem(pn){if(!confirm(pn+' 품번을 삭제할까요?'))return;S.master.items=S.master.items.filter(i=>i.pn!==pn);mdel('item',pn);commit();}
+function delItem(pn){
+  const n=S.recs.filter(r=>r.pn===pn).length;
+  meName();
+  if(n){if(!askPin(`'${pn}' 품번에는 일보 ${n}건이 있습니다. 그래도 품목 마스터에서 지울까요? (일보는 남습니다)`))return}
+  else if(!confirm(pn+' 품번을 삭제할까요?'))return;
+  S.master.items=S.master.items.filter(i=>i.pn!==pn);mdel('item',pn);
+  logAdd('품목 삭제',pn+(n?` (일보 ${n}건 있음)`:''));commit();toast('삭제했습니다');
+}
 function addTo(k,id){const v=$(id).value.trim();if(!v)return;if(S.master[k].includes(v)){toast('이미 있습니다');return}S.master[k].push(v);delete (S.master.mdel||{})[k+'|'+v];$(id).value='';commit();}
 function renderSpm(){
   const db=S.master.spmdb||[];const q=($('sp_q').value||'').trim().toLowerCase();
@@ -1446,10 +1494,18 @@ function addSpm(){const mc=$('sp_mc').value.trim(),pn=$('sp_pn').value.trim(),v=
   if(ex)ex.spm=v; else S.master.spmdb.push({mc,pn,spm:v});
   $('sp_pn').value='';$('sp_v').value='';commit();toast(ex?'수정했습니다':'추가했습니다');}
 function upSpm(i,v){const x=S.master.spmdb[i];if(x){x.spm=+v||0;commit()}}
-function delSpm(i){const x=S.master.spmdb[i];if(!x)return;if(!confirm((x.mc||'공통')+' / '+x.pn+' SPM 표준을 삭제할까요?'))return;S.master.spmdb.splice(i,1);commit();}
+function delSpm(i){const x=S.master.spmdb[i];if(!x)return;if(!confirm((x.mc||'공통')+' / '+x.pn+' SPM 표준을 삭제할까요?'))return;meName();S.master.spmdb.splice(i,1);logAdd('SPM 표준 삭제',(x.mc||'공통')+' / '+x.pn+' = '+x.spm);commit();}
 function setMesMc(code,v){S.master.mesMc=S.master.mesMc||{};if(v)S.master.mesMc[code]=v;else delete S.master.mesMc[code];commit()}
 function addMc(){addTo('mcs','mm_mc')}function addW(){addTo('workers','mw')}function addR(){addTo('reasons','mr')}
-function delM(k,v){if(k==='mcs'&&S.recs.some(r=>r.mc===v)){toast('일보가 있는 설비는 삭제할 수 없습니다');return}if(!confirm(v+' 삭제?'))return;S.master[k]=S.master[k].filter(x=>x!==v);mdel(k,v);commit();}
+function delM(k,v){
+  const NM={mcs:'설비',workers:'작업자',custs:'고객사',reasons:'정지사유'}[k]||k;
+  const n=k==='mcs'?S.recs.filter(r=>r.mc===v).length:k==='workers'?S.recs.filter(r=>workers(r).includes(v)).length:0;
+  meName();
+  if(n){if(!askPin(`'${v}' 에는 일보 ${n}건이 있습니다. 그래도 지울까요?`))return}
+  else if(!confirm(v+' 삭제?'))return;
+  S.master[k]=S.master[k].filter(x=>x!==v);mdel(k,v);
+  logAdd(NM+' 삭제',v+(n?` (일보 ${n}건 있음)`:''));commit();toast('삭제했습니다');
+}
 
 /* ===== 데이터 ===== */
 function renderData(){$('me').value=localStorage.getItem('tj_me')||'';}
