@@ -228,7 +228,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
   <a data-pg="master"><i>⚙</i>기준정보</a>
   <a data-pg="data"><i>⇅</i>데이터 관리</a>
   <a data-pg="help"><i>?</i>사용안내</a>
-  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v11.4</div>
+  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v11.6</div>
 </nav>
 <main>
   <div class="top">
@@ -889,11 +889,17 @@ async function openMes(){
     badSplit[x.pn]={real,proc};
   });
   // 현장에서 확정한 실제 양품수량(생산마감)이 있으면 MES 값보다 우선
-  const cmap={};clo.forEach(x=>{if(x.actual_qty!=null)cmap[(x.machine_code||'')+'|'+x.item_code]=x});
+  const cmap={},cByPn={},cCnt={};
+  clo.forEach(x=>{if(x.actual_qty==null)return;
+    cmap[(x.machine_code||'')+'|'+x.item_code]=x;
+    cCnt[x.item_code]=(cCnt[x.item_code]||0)+1;cByPn[x.item_code]=x;});
+  // 점검앱의 설비코드 표기가 MES와 달라도 품번으로 이어 붙인다 (그 품번 마감이 하나뿐일 때만)
+  const czOf=(party,pn)=>cmap[(party||'')+'|'+pn]||(cCnt[pn]===1?cByPn[pn]:null);
   const prod=led.filter(x=>x.kind==='생산입고'&&(+x.qty||0)!==0);
   const pk=new Set(prod.map(x=>(x.party||'')+'|'+x.pn));
-  Object.values(cmap).forEach(x=>{const k=(x.machine_code||'')+'|'+x.item_code;
-    if(!pk.has(k)){prod.push({pn:x.item_code,kind:'생산입고',qty:+x.mes_qty||0,party:x.machine_code,lot:'',note:''});pk.add(k)}});
+  Object.values(cmap).forEach(x=>{
+    if(prod.some(p=>p.pn===x.item_code&&((p.party||'')===(x.machine_code||'')||cCnt[x.item_code]===1)))return;
+    prod.push({pn:x.item_code,kind:'생산입고',qty:+x.mes_qty||0,party:x.machine_code,lot:'',note:''});});
   // 불량폐기는 품번 기준이라 같은 품번 생산입고에 수량 비율로 나눔
   const bad={};led.filter(x=>x.kind==='불량폐기').forEach(x=>bad[x.pn]=(bad[x.pn]||0)+(+x.qty||0));
   const sumByPn={};prod.forEach(x=>sumByPn[x.pn]=(sumByPn[x.pn]||0)+(+x.qty||0));
@@ -924,7 +930,7 @@ async function openMes(){
     const share=sumByPn[x.pn]?(+x.qty)/sumByPn[x.pn]:1;
     const sp=badSplit[x.pn]||{real:bad[x.pn]||0,proc:0};
     const ng=Math.round(sp.real*share), ngp=Math.round(sp.proc*share);
-    const cz=cmap[(x.party||'')+'|'+x.pn];
+    const cz=czOf(x.party,x.pn);
     return{i,code,pnCode:x.pn,name:nameMap[x.pn]||'',lot:x.lot||'',mc,pn:pn||'@'+x.pn,
       name2:it?it.name:(nameMap[x.pn]||''),cust:it?it.cust:'',run,work,brk,
       stop:(dtMin[code]!=null?dtMin[code]:(noRun?(last?last.stop:0):Math.max(0,work-run))),noRun,
@@ -967,7 +973,7 @@ function drawMes(d){
     <td><input type=number value="${r.ngp||''}" onchange="mesSet(${r.i},'ngp',this.value)" style="width:80px;padding:3px 5px" placeholder="0"></td>
     <td><input value="${esc(r.sr)}" onchange="mesSet(${r.i},'sr',this.value)" placeholder="정지사유" style="min-width:210px;padding:3px 5px"></td>
     <td><input value="${esc(r.note)}" onchange="mesSet(${r.i},'note',this.value)" placeholder="특기사항" style="min-width:170px;padding:3px 5px"></td>
-    <td style="font-size:11px">${r.closed?`<b style="color:var(--green)">현장 마감</b>${r.mesQty&&r.mesQty!==r.qty?` <span class=muted>MES ${fmt(r.mesQty)}→${fmt(r.qty)}</span>`:''}${r.czReason?` <span class=muted>${esc(r.czReason)}</span>`:''}<br>`:''}${(()=>{const exp=spm*Math.max(0,r.run);const low=exp>0&&r.qty<exp*0.6&&!r.closed;return low?`<b style="color:var(--red)">실적 확인 (예상 ${fmt(exp)})</b> `:''})()}${r.dup?'<span class=muted>이미 저장됨</span>':(!r.mc?'<b style="color:var(--red)">설비 지정 필요</b>':(r.pending?'<b style="color:var(--amber)">생산마감 미완료</b>':(r.noRun?'<b style="color:var(--amber)">MES 가동시간 없음 · 정지 확인</b>':(r.pn.startsWith('@')?'<span class=muted>신규 품번 등록됨</span>':''))))}</td></tr>`;
+    <td style="font-size:11px">${r.closed?`<b style="color:${r.qty===0&&r.mesQty>0?'var(--red)':'var(--green)'}">현장 마감${r.qty===0&&r.mesQty>0?' · 실제양품 0 확인':''}</b>${r.mesQty&&r.mesQty!==r.qty?` <span class=muted>MES ${fmt(r.mesQty)}→${fmt(r.qty)}</span>`:''}${r.czReason?` <span class=muted>${esc(r.czReason)}</span>`:''}<br>`:''}${(()=>{const exp=spm*Math.max(0,r.run);const low=exp>0&&r.qty<exp*0.6&&!r.closed;return low?`<b style="color:var(--red)">실적 확인 (예상 ${fmt(exp)})</b> `:''})()}${r.dup?'<span class=muted>이미 저장됨</span>':(!r.mc?'<b style="color:var(--red)">설비 지정 필요</b>':(r.pending?'<b style="color:var(--amber)">생산마감 미완료</b>':(r.noRun?'<b style="color:var(--amber)">MES 가동시간 없음 · 정지 확인</b>':(r.pn.startsWith('@')?'<span class=muted>신규 품번 등록됨</span>':''))))}</td></tr>`;
   }).join('');
   const n=MESROWS.filter(r=>r.use).length;
   const nMc=new Set(MESROWS.map(r=>r.code)).size;
