@@ -192,7 +192,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
   <a data-pg="master"><i>⚙</i>기준정보</a>
   <a data-pg="data"><i>⇅</i>데이터 관리</a>
   <a data-pg="help"><i>?</i>사용안내</a>
-  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v7.7</div>
+  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v7.8</div>
 </nav>
 <main>
   <div class="top">
@@ -357,6 +357,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
         <button class="p" onclick="saveMaster()">기준정보 저장</button>
         <button onclick="backupMaster()">기준정보 백업(JSON)</button>
         <button onclick="pull(1)">서버에서 다시 불러오기</button>
+        <button onclick="adminOn()" id="btnAdmin">관리자 인증</button>
         <button onclick="setPin()">관리 PIN 설정</button>
         <button onclick="localStorage.setItem('tj_me','');meName();renderMaster()">내 이름 변경</button>
         <span class="grow"></span>
@@ -727,7 +728,7 @@ function editRec(id){const r=S.recs.find(x=>x.id===id);if(!r)return;editId=id;
   $('entryTitle').textContent='일보 수정 · '+r.date+' '+r.mc+' · '+r.pn;
   writeForm(r);$('btnSave').textContent='수정 저장 (Ctrl+Enter)';$('btnEdit').disabled=false;$('btnDel').disabled=false;
   renderHist();window.scrollTo({top:0,behavior:'smooth'});}
-function delRec(id){const r=S.recs.find(x=>x.id===id);if(!r)return;if(!confirm(r.date+' '+r.mc+' '+r.pn+' 일보를 삭제할까요?'))return;meName();S.recs=S.recs.filter(x=>x.id!==id);S.del[id]=now();logAdd('일보 삭제',r.date+' '+r.mc+' '+r.pn+' / 실적 '+r.qty);if(editId===id)resetForm(true);commit();toast('삭제했습니다');}
+function delRec(id){const r=S.recs.find(x=>x.id===id);if(!r)return;if(!askPin(`일보 삭제 · ${r.date} ${r.mc} ${r.pn} (실적 ${fmt(r.qty)})`))return;if(!confirm(r.date+' '+r.mc+' '+r.pn+' 일보를 삭제합니다. 계속할까요?'))return;S.recs=S.recs.filter(x=>x.id!==id);S.del[id]=now();logAdd('일보 삭제',r.date+' '+r.mc+' '+r.pn+' / 실적 '+r.qty);if(editId===id)resetForm(true);commit();toast('삭제했습니다');}
 function copyPrev(){const mc=$('f_mc').value,d=$('f_date').value;if(!mc){$('fmsg').textContent='설비를 먼저 선택하세요';return}
   const prev=S.recs.filter(r=>r.mc===mc&&r.date<d).sort((a,b)=>b.date.localeCompare(a.date))[0];
   if(!prev){$('fmsg').textContent='이 설비의 이전 일보가 없습니다';return}
@@ -1412,13 +1413,22 @@ function setPin(){
   if(String(n).trim().length<4){toast('4자리 이상 입력하세요');return}
   S.master.pin=hash4(String(n).trim());logAdd('PIN 변경','');commit();toast('PIN을 설정했습니다');
 }
+let adminUntil=0;                       // 관리자 인증 유지 시간 (10분)
+const ADMIN_MIN=10;
+function isAdmin(){return Date.now()<adminUntil}
+function adminOff(){adminUntil=0;renderMaster();toast('관리자 잠금')}
 function askPin(what){
   if(!S.master.pin){toast('먼저 관리 PIN을 만들어 주세요');setPin();return false}
-  const a=prompt(what+'\n관리 PIN을 입력하세요');
+  meName();
+  if(isAdmin())return true;
+  const a=prompt((what?what+'\n\n':'')+'관리자 PIN을 입력하세요 (인증 후 '+ADMIN_MIN+'분간 유지)');
   if(a===null)return false;
-  if(hash4(String(a).trim())!==S.master.pin){toast('PIN이 맞지 않습니다');logAdd('PIN 오류',what);commit();return false}
+  if(hash4(String(a).trim())!==S.master.pin){toast('PIN이 맞지 않습니다 · 삭제할 수 없습니다');logAdd('PIN 오류',what||'');commit();return false}
+  adminUntil=Date.now()+ADMIN_MIN*60000;
+  logAdd('관리자 인증','');commit();
   return true;
 }
+function adminOn(){if(askPin(''))renderMaster();}
 function logAdd(act,detail){
   S.log=S.log||[];
   S.log.unshift({t:now(),by:localStorage.getItem('tj_me')||'(이름없음)',act,d:String(detail||'').slice(0,120)});
@@ -1434,11 +1444,13 @@ function renderLog(){
 function mdel(t,v){S.master.mdel=S.master.mdel||{};S.master.mdel[t+'|'+v]=now();}
 function renderMaster(){
   const m=S.master;
-  $('tItems').innerHTML='<tr><th>고객사</th><th>품번</th><th>품명</th><th class=num>SPM</th><th class=num>일보수</th><th></th></tr>'+m.items.slice().sort((a,b)=>a.cust.localeCompare(b.cust,'ko')||a.pn.localeCompare(b.pn,'ko',{numeric:true})).map(i=>{const n=S.recs.filter(r=>r.pn===i.pn).length;return `<tr><td><input value="${esc(i.cust)}" list="dlC" onchange="upItemCust('${esc(i.pn)}',this.value)" placeholder="고객사" style="min-width:110px;padding:3px 6px"></td><td><input value="${esc(i.pn)}" onchange="upItemPn('${esc(i.pn)}',this.value)" style="min-width:120px;padding:3px 6px"></td><td><input value="${esc(i.name)}" onchange="upItem('${esc(i.pn)}','name',this.value)" style="padding:3px 6px"></td><td><input type=number value="${i.spm||''}" onchange="upItem('${esc(i.pn)}','spm',+this.value)" style="width:70px;padding:3px 6px"></td><td class=num>${n}</td><td><button class="s d" onclick="delItem('${esc(i.pn)}')" ${n?'disabled title="일보가 있는 품번은 삭제할 수 없습니다"':''}>삭제</button></td></tr>`}).join('');
+  $('tItems').innerHTML='<tr><th>고객사</th><th>품번</th><th>품명</th><th class=num>SPM</th><th class=num>일보수</th><th></th></tr>'+m.items.slice().sort((a,b)=>a.cust.localeCompare(b.cust,'ko')||a.pn.localeCompare(b.pn,'ko',{numeric:true})).map(i=>{const n=S.recs.filter(r=>r.pn===i.pn).length;return `<tr><td><input value="${esc(i.cust)}" list="dlC" onchange="upItemCust('${esc(i.pn)}',this.value)" placeholder="고객사" style="min-width:110px;padding:3px 6px"></td><td><input value="${esc(i.pn)}" onchange="upItemPn('${esc(i.pn)}',this.value)" style="min-width:120px;padding:3px 6px"></td><td><input value="${esc(i.name)}" onchange="upItem('${esc(i.pn)}','name',this.value)" style="padding:3px 6px"></td><td><input type=number value="${i.spm||''}" onchange="upItem('${esc(i.pn)}','spm',+this.value)" style="width:70px;padding:3px 6px"></td><td class=num>${n}</td><td><button class="s d" onclick="delItem('${esc(i.pn)}')" title="관리자 PIN 필요">삭제</button></td></tr>`}).join('');
   $('lMc').innerHTML=m.mcs.slice().sort((a,b)=>a.localeCompare(b,'ko',{numeric:true})).map(v=>`<span class=chip>${esc(v)} <a onclick="delM('mcs','${esc(v)}')" style="cursor:pointer;color:var(--red)">×</a></span>`).join('');
   $('lW').innerHTML=m.workers.map(v=>`<span class=chip>${esc(v)} <a onclick="delM('workers','${esc(v)}')" style="cursor:pointer;color:var(--red)">×</a></span>`).join('');
   if($('itemCnt'))$('itemCnt').textContent=`${m.items.length}종 · 설비 ${m.mcs.length}대 · 작업자 ${m.workers.length}명`;
   renderSpm();renderLog();
+  const ba=$('btnAdmin');
+  if(ba){const on=isAdmin();ba.textContent=on?'관리자 인증됨 · 잠그기':'관리자 인증';ba.className=on?'p':'';ba.setAttribute('onclick',on?'adminOff()':'adminOn()')}
   const codes=[...new Set(Object.keys(S.master.mesMc||{}))].sort();
   const mcs=m.mcs.slice().sort((a,b)=>a.localeCompare(b,'ko',{numeric:true}));
   $('tMesMc').innerHTML='<tr><th>MES 설비코드</th><th>우리 설비</th></tr>'+codes.map(c=>`<tr><td>${esc(c)}</td><td><select onchange="setMesMc('${esc(c)}',this.value)" style="padding:3px 6px"><option value=""></option>${mcs.map(v=>`<option value="${esc(v)}"${v===S.master.mesMc[c]?' selected':''}>${esc(v)}</option>`).join('')}</select></td></tr>`).join('');
@@ -1470,9 +1482,8 @@ function upItemPn(old,v){
 }
 function delItem(pn){
   const n=S.recs.filter(r=>r.pn===pn).length;
-  meName();
-  if(n){if(!askPin(`'${pn}' 품번에는 일보 ${n}건이 있습니다. 그래도 품목 마스터에서 지울까요? (일보는 남습니다)`))return}
-  else if(!confirm(pn+' 품번을 삭제할까요?'))return;
+  if(!askPin(`품목 '${pn}' 삭제`+(n?` · 일보 ${n}건이 있습니다 (일보는 남습니다)`:'')))return;
+  if(!confirm(pn+' 품번을 삭제합니다. 계속할까요?'))return;
   S.master.items=S.master.items.filter(i=>i.pn!==pn);mdel('item',pn);
   logAdd('품목 삭제',pn+(n?` (일보 ${n}건 있음)`:''));commit();toast('삭제했습니다');
 }
@@ -1494,15 +1505,14 @@ function addSpm(){const mc=$('sp_mc').value.trim(),pn=$('sp_pn').value.trim(),v=
   if(ex)ex.spm=v; else S.master.spmdb.push({mc,pn,spm:v});
   $('sp_pn').value='';$('sp_v').value='';commit();toast(ex?'수정했습니다':'추가했습니다');}
 function upSpm(i,v){const x=S.master.spmdb[i];if(x){x.spm=+v||0;commit()}}
-function delSpm(i){const x=S.master.spmdb[i];if(!x)return;if(!confirm((x.mc||'공통')+' / '+x.pn+' SPM 표준을 삭제할까요?'))return;meName();S.master.spmdb.splice(i,1);logAdd('SPM 표준 삭제',(x.mc||'공통')+' / '+x.pn+' = '+x.spm);commit();}
+function delSpm(i){const x=S.master.spmdb[i];if(!x)return;if(!askPin('SPM 표준 삭제 · '+(x.mc||'공통')+' / '+x.pn))return;if(!confirm((x.mc||'공통')+' / '+x.pn+' SPM 표준을 삭제합니다. 계속할까요?'))return;S.master.spmdb.splice(i,1);logAdd('SPM 표준 삭제',(x.mc||'공통')+' / '+x.pn+' = '+x.spm);commit();}
 function setMesMc(code,v){S.master.mesMc=S.master.mesMc||{};if(v)S.master.mesMc[code]=v;else delete S.master.mesMc[code];commit()}
 function addMc(){addTo('mcs','mm_mc')}function addW(){addTo('workers','mw')}function addR(){addTo('reasons','mr')}
 function delM(k,v){
   const NM={mcs:'설비',workers:'작업자',custs:'고객사',reasons:'정지사유'}[k]||k;
   const n=k==='mcs'?S.recs.filter(r=>r.mc===v).length:k==='workers'?S.recs.filter(r=>workers(r).includes(v)).length:0;
-  meName();
-  if(n){if(!askPin(`'${v}' 에는 일보 ${n}건이 있습니다. 그래도 지울까요?`))return}
-  else if(!confirm(v+' 삭제?'))return;
+  if(!askPin(NM+" '"+v+"' 삭제"+(n?` · 일보 ${n}건 있음`:'')))return;
+  if(!confirm(v+' 삭제합니다. 계속할까요?'))return;
   S.master[k]=S.master[k].filter(x=>x!==v);mdel(k,v);
   logAdd(NM+' 삭제',v+(n?` (일보 ${n}건 있음)`:''));commit();toast('삭제했습니다');
 }
@@ -1511,7 +1521,7 @@ function delM(k,v){
 function renderData(){$('me').value=localStorage.getItem('tj_me')||'';}
 function setMe(){localStorage.setItem('tj_me',$('me').value.trim());toast('저장했습니다');}
 function backup(){dl(new Blob([JSON.stringify({ver:1,exported:now(),...S},null,1)],{type:'application/json'}),'생산일보_백업_'+today()+'.json');}
-$('fRes').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{try{const j=JSON.parse(rd.result);if(!j.recs)throw 0;if(!confirm('백업 '+(j.exported||'').slice(0,10)+' · 일보 '+j.recs.length+'건을 현재 자료와 합칠까요? (같은 항목은 최신 것 유지)'))return;mergeIn(j);commit();toast('복원했습니다')}catch(x){toast('백업 파일이 아닙니다')}};rd.readAsText(f);e.target.value='';});
+$('fRes').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{try{const j=JSON.parse(rd.result);if(!j.recs)throw 0;if(!askPin('백업 복원'))return;if(!confirm('백업 '+(j.exported||'').slice(0,10)+' · 일보 '+j.recs.length+'건을 현재 자료와 합칠까요? (같은 항목은 최신 것 유지)'))return;mergeIn(j);commit();toast('복원했습니다')}catch(x){toast('백업 파일이 아닙니다')}};rd.readAsText(f);e.target.value='';});
 function wipe(){if(!confirm('모든 일보를 삭제합니다. 백업하셨습니까?'))return;if(prompt('확인을 위해 "삭제" 를 입력하세요')!=='삭제')return;S.recs.forEach(r=>S.del[r.id]=now());S.recs=[];commit();toast('모두 삭제했습니다');}
 function dl(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
 function xl(sheets,name){
