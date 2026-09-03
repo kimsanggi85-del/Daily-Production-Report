@@ -228,7 +228,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
   <a data-pg="master"><i>⚙</i>기준정보</a>
   <a data-pg="data"><i>⇅</i>데이터 관리</a>
   <a data-pg="help"><i>?</i>사용안내</a>
-  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v11.2</div>
+  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v11.4</div>
 </nav>
 <main>
   <div class="top">
@@ -830,17 +830,20 @@ async function openMes(){
   if(d<MES_FROM){toast(MES_FROM.slice(0,7)+'월부터 MES 연동을 씁니다. 그 이전은 기존 자료를 그대로 두세요');return}
   $('modal').innerHTML='<h2>MES 실적 불러오기</h2><p class="muted">'+d+' 자료를 읽는 중…</p>';
   $('mask').classList.add('on');
-  let led=[],use=[],dt=[];
+  let led=[],use=[],dt=[],clo=[];
   try{
     const q1=SB_URL+'/rest/v1/stock_ledger?select=pn,kind,qty,party,lot,note&led_date=eq.'+d+'&kind=in.(%EC%83%9D%EC%82%B0%EC%9E%85%EA%B3%A0,%EB%B6%88%EB%9F%89%ED%8F%90%EA%B8%B0)&limit=500';
     const q2=SB_URL+'/rest/v1/raw_use?select=machine_code,item_code,item_name,start_time,end_time&use_date=eq.'+d+'&limit=1000';
     const q3=DT_URL+'/rest/v1/daily_downtime?select=machine_code,stop_events,planned_events,stop_min,planned_min,run_min&ymd=eq.'+d+'&limit=100';
+    const q4=DT_URL+'/rest/v1/production_close?select=machine_code,item_code,item_name,mes_qty,actual_qty,diff_qty,reason,memo,worker&ymd=eq.'+d+'&limit=300';
     const dh={'apikey':DT_KEY,'Authorization':'Bearer '+DT_KEY};
-    const [r1,r2,r3]=await Promise.all([fetch(q1,{headers:hdr}),fetch(q2,{headers:hdr}),fetch(q3,{headers:dh}).catch(()=>null)]);
+    const [r1,r2,r3,r4]=await Promise.all([fetch(q1,{headers:hdr}),fetch(q2,{headers:hdr}),
+      fetch(q3,{headers:dh}).catch(()=>null),fetch(q4,{headers:dh}).catch(()=>null)]);
     if(!r1.ok)throw new Error(r1.status);
     led=await r1.json();
     use=r2.ok?await r2.json():[];
     dt=(r3&&r3.ok)?await r3.json():[];
+    clo=(r4&&r4.ok)?await r4.json():[];
   }catch(e){$('modal').innerHTML='<h2>MES 실적 불러오기</h2><p>MES 자료를 읽지 못했습니다. 인터넷 연결을 확인하세요.</p><div class="fl"><button onclick="closeMask()">닫기</button></div>';return}
   // 설비별 가동시간(분) — 소재사용 기록에서 계산
   const runMap={},nameMap={},ranKeys=new Set();
@@ -885,7 +888,12 @@ async function openMes(){
     if(real+proc===0)real=+x.qty||0;
     badSplit[x.pn]={real,proc};
   });
+  // 현장에서 확정한 실제 양품수량(생산마감)이 있으면 MES 값보다 우선
+  const cmap={};clo.forEach(x=>{if(x.actual_qty!=null)cmap[(x.machine_code||'')+'|'+x.item_code]=x});
   const prod=led.filter(x=>x.kind==='생산입고'&&(+x.qty||0)!==0);
+  const pk=new Set(prod.map(x=>(x.party||'')+'|'+x.pn));
+  Object.values(cmap).forEach(x=>{const k=(x.machine_code||'')+'|'+x.item_code;
+    if(!pk.has(k)){prod.push({pn:x.item_code,kind:'생산입고',qty:+x.mes_qty||0,party:x.machine_code,lot:'',note:''});pk.add(k)}});
   // 불량폐기는 품번 기준이라 같은 품번 생산입고에 수량 비율로 나눔
   const bad={};led.filter(x=>x.kind==='불량폐기').forEach(x=>bad[x.pn]=(bad[x.pn]||0)+(+x.qty||0));
   const sumByPn={};prod.forEach(x=>sumByPn[x.pn]=(sumByPn[x.pn]||0)+(+x.qty||0));
@@ -916,10 +924,14 @@ async function openMes(){
     const share=sumByPn[x.pn]?(+x.qty)/sumByPn[x.pn]:1;
     const sp=badSplit[x.pn]||{real:bad[x.pn]||0,proc:0};
     const ng=Math.round(sp.real*share), ngp=Math.round(sp.proc*share);
+    const cz=cmap[(x.party||'')+'|'+x.pn];
     return{i,code,pnCode:x.pn,name:nameMap[x.pn]||'',lot:x.lot||'',mc,pn:pn||'@'+x.pn,
       name2:it?it.name:(nameMap[x.pn]||''),cust:it?it.cust:'',run,work,brk,
-      stop:(dtMin[code]!=null?dtMin[code]:(noRun?(last?last.stop:0):Math.max(0,work-run))),noRun,qty:+x.qty||0,ng,ngp,ab:bad[x.pn]||0,
-      w1:last?last.w1:'',sr:dtTxt[code]||stopTxt[code]||'',dtMin:dtMin[code],note:badNote[x.pn]||'',pending:!!x.pending,use:!dup&&!!mc&&!x.pending,dup:!!dup};
+      stop:(dtMin[code]!=null?dtMin[code]:(noRun?(last?last.stop:0):Math.max(0,work-run))),noRun,
+      qty:cz?(+cz.actual_qty||0):(+x.qty||0),ng,ngp,ab:bad[x.pn]||0,
+      w1:(cz&&cz.worker)||(last?last.w1:''),sr:dtTxt[code]||stopTxt[code]||'',dtMin:dtMin[code],
+      note:[badNote[x.pn]||'',cz&&cz.memo?String(cz.memo):''].filter(Boolean).join(' / '),
+      closed:!!cz,mesQty:+x.qty||0,czReason:cz?(cz.reason||''):'',pending:!!x.pending,use:!dup&&!!mc&&!x.pending,dup:!!dup};
   });
   drawMes(d);
 }
@@ -955,15 +967,16 @@ function drawMes(d){
     <td><input type=number value="${r.ngp||''}" onchange="mesSet(${r.i},'ngp',this.value)" style="width:80px;padding:3px 5px" placeholder="0"></td>
     <td><input value="${esc(r.sr)}" onchange="mesSet(${r.i},'sr',this.value)" placeholder="정지사유" style="min-width:210px;padding:3px 5px"></td>
     <td><input value="${esc(r.note)}" onchange="mesSet(${r.i},'note',this.value)" placeholder="특기사항" style="min-width:170px;padding:3px 5px"></td>
-    <td style="font-size:11px">${(()=>{const exp=spm*Math.max(0,r.run);const low=exp>0&&r.qty<exp*0.6;return low?`<b style="color:var(--red)">실적 확인 (예상 ${fmt(exp)})</b> `:''})()}${r.dup?'<span class=muted>이미 저장됨</span>':(!r.mc?'<b style="color:var(--red)">설비 지정 필요</b>':(r.pending?'<b style="color:var(--amber)">생산마감 미완료</b>':(r.noRun?'<b style="color:var(--amber)">MES 가동시간 없음 · 정지 확인</b>':(r.pn.startsWith('@')?'<span class=muted>신규 품번 등록됨</span>':''))))}</td></tr>`;
+    <td style="font-size:11px">${r.closed?`<b style="color:var(--green)">현장 마감</b>${r.mesQty&&r.mesQty!==r.qty?` <span class=muted>MES ${fmt(r.mesQty)}→${fmt(r.qty)}</span>`:''}${r.czReason?` <span class=muted>${esc(r.czReason)}</span>`:''}<br>`:''}${(()=>{const exp=spm*Math.max(0,r.run);const low=exp>0&&r.qty<exp*0.6&&!r.closed;return low?`<b style="color:var(--red)">실적 확인 (예상 ${fmt(exp)})</b> `:''})()}${r.dup?'<span class=muted>이미 저장됨</span>':(!r.mc?'<b style="color:var(--red)">설비 지정 필요</b>':(r.pending?'<b style="color:var(--amber)">생산마감 미완료</b>':(r.noRun?'<b style="color:var(--amber)">MES 가동시간 없음 · 정지 확인</b>':(r.pn.startsWith('@')?'<span class=muted>신규 품번 등록됨</span>':''))))}</td></tr>`;
   }).join('');
   const n=MESROWS.filter(r=>r.use).length;
   const nMc=new Set(MESROWS.map(r=>r.code)).size;
-  const nPend=MESROWS.filter(r=>r.pending).length, nNoMc=MESROWS.filter(r=>!r.mc).length, nDup=MESROWS.filter(r=>r.dup).length, nNoRun=MESROWS.filter(r=>r.noRun).length,
+  const nClosed=MESROWS.filter(r=>r.closed).length,
+    nPend=MESROWS.filter(r=>r.pending).length, nNoMc=MESROWS.filter(r=>!r.mc).length, nDup=MESROWS.filter(r=>r.dup).length, nNoRun=MESROWS.filter(r=>r.noRun).length,
     nNoSpm=MESROWS.filter(r=>!(r.spmFix||spmFor(r.mc,r.pn)||(r.run>=45?Math.round(r.qty/r.run):0))).length;
-  const warn=[nNoMc?`설비 미지정 ${nNoMc}줄`:'',nPend?`생산마감 미완료 ${nPend}줄`:'',nNoRun?`가동시간 없음 ${nNoRun}줄`:'',nNoSpm?`SPM 입력 필요 ${nNoSpm}줄`:'',nDup?`이미 저장 ${nDup}줄`:''].filter(Boolean).join(' · ');
+  const warn=[nClosed?`현장 마감 반영 ${nClosed}줄`:'',nNoMc?`설비 미지정 ${nNoMc}줄`:'',nPend?`생산마감 미완료 ${nPend}줄`:'',nNoRun?`가동시간 없음 ${nNoRun}줄`:'',nNoSpm?`SPM 입력 필요 ${nNoSpm}줄`:'',nDup?`이미 저장 ${nDup}줄`:''].filter(Boolean).join(' · ');
   $('modal').innerHTML=`<div class="fl" style="margin-bottom:10px"><h2 style="flex:1">MES 실적 불러오기 · ${d}</h2><button onclick="closeMask()">닫기</button></div>
-  <p class="muted" style="margin-top:0">MES 일 생산수량(생산마감 집계)을 실적으로, 불량폐기를 불량으로 채웠습니다. 근무시간·작업자·정지사유를 확인·수정한 뒤 저장하세요. 정지시간은 근무−MES가동으로 자동 계산되며 직접 고칠 수 있습니다. 정지사유·정지시간은 <b>MES 가동설비 모니터링</b>의 비가동 집계에서 그대로 가져옵니다(없으면 가동이 끊긴 시간대로 대체). 특기사항에는 MES 불량폐기 사유가 <b>코드 대신 불량유형 이름</b>으로 들어옵니다.</p>
+  <p class="muted" style="margin-top:0">현장에서 확정한 <b>실제 양품수량(생산마감)</b>이 있으면 그 값을, 없으면 MES 일 생산수량을 실적으로 채웁니다. 근무시간·작업자·정지사유를 확인·수정한 뒤 저장하세요. 정지시간은 근무−MES가동으로 자동 계산되며 직접 고칠 수 있습니다. 정지사유·정지시간은 <b>MES 가동설비 모니터링</b>의 비가동 집계에서 그대로 가져옵니다(없으면 가동이 끊긴 시간대로 대체). 특기사항에는 MES 불량폐기 사유가 <b>코드 대신 불량유형 이름</b>으로 들어옵니다.</p>
   <div class="fl" style="margin-bottom:8px"><span class="tag">설비 ${nMc}대 · ${MESROWS.length}줄</span>${warn?`<span class="tag a">${warn}</span>`:''}</div>
   <div class="tw" style="max-height:60vh"><table><tr><th></th><th>MES</th><th>설비</th><th>품번</th><th>작업자</th><th class=num>SPM</th><th>근무(분)</th><th class=num>MES가동</th><th>정지(분)</th><th>실적(일생산)</th><th class=num>MES불량</th><th>작업불량</th><th>시타발·검사</th><th>정지사유</th><th>특기사항(불량사유)</th><th></th></tr>
   ${MESROWS.length?rows:'<tr><td colspan=16 class=empty>이 날짜의 MES 자료가 없습니다</td></tr>'}</table></div>
@@ -993,7 +1006,7 @@ function saveMes(){
     if(r.w1&&!S.master.workers.includes(r.w1))S.master.workers.push(r.w1);
     S.recs.push({id:uid(),date:d,mc:r.mc,proc:'P/R',cust:it?it.cust:'',pn:r.pn,name:it?it.name:r.name2,
       w1:r.w1,w2:'',w3:'',w4:'',spm:spm,work:r.work,stop:r.stop,brk:r.brk,qty:r.qty,ng:r.ng,ngp:r.ngp||0,
-      sr:r.sr,note:r.note,reg:1,mes:r.qty,mesRun:r.run,src:'MES',ua:now(),by:localStorage.getItem('tj_me')||''});
+      sr:r.sr,note:r.note,reg:1,mes:(r.mesQty!=null?r.mesQty:r.qty),mesRun:r.run,src:r.closed?'마감':'MES',ua:now(),by:localStorage.getItem('tj_me')||''});
     n++;
   });
   closeMask();commit();toast(n+'건을 일보에 저장했습니다'+(skipped?` · SPM이 없어 ${skipped}건은 제외했습니다`:''));
