@@ -228,7 +228,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
   <a data-pg="master"><i>⚙</i>기준정보</a>
   <a data-pg="data"><i>⇅</i>데이터 관리</a>
   <a data-pg="help"><i>?</i>사용안내</a>
-  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v11.1</div>
+  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v11.2</div>
 </nav>
 <main>
   <div class="top">
@@ -1177,7 +1177,7 @@ function renderReport(){
     const sum=rows.reduce((a,x)=>({work:a.work+x.work,stop:a.stop+x.stop,run:a.run+x.run,cap:a.cap+x.cap,qty:a.qty+x.qty,ng:a.ng+x.ng}),{work:0,stop:0,run:0,cap:0,qty:0,ng:0});
     const avgSpm=rows.length?rows.reduce((a,x)=>a+(x.spm.length?x.spm.reduce((s,v)=>s+v,0)/x.spm.length:0),0)/rows.length:0;
     const wname=x=>Object.entries(x.w).sort((a,b)=>b[1]-a[1]).map(e=>e[0]);
-    html+=`<div class="rpt-sec pgnew"><h3>${NB(9)} 고객사별 실적 : ${esc(c)} &nbsp;<span class="muted">${y}년 ${m}월 · 기간 ${(dates[0]||'').replace(/-/g,'')}~${(dates[dates.length-1]||'').replace(/-/g,'')} · 목표효율 <input type=number value="${+(o['tgt_'+c]||75)}" onchange="rptSet('tgt_${c}',this.value)" style="width:56px;padding:1px 4px">%</span></h3>
+    html+=`<div class="rpt-sec pgnew"><h3>${NB(9)} 고객사별 실적 : ${esc(c)} &nbsp;<span class="muted">${y}년 ${m}월 · 기간 ${(dates[0]||'').replace(/-/g,'')}~${(dates[dates.length-1]||'').replace(/-/g,'')} · <span style="white-space:nowrap">목표효율 <input type=number value="${+(o['tgt_'+c]||75)}" onchange="rptSet('tgt_${c}',this.value)" style="display:inline-block;width:46px;padding:0 3px;font-size:12px;line-height:1.4;vertical-align:baseline;margin:0 1px">%</span></span></h3>
     <div class="tw" style="max-height:none"><table class="mh"><tr>
       <th>NO</th><th>설비명</th><th>공정명</th><th>고객사</th><th>품명</th><th>품번</th>
       <th>작업자1</th><th>작업자2</th><th>작업자3</th><th>작업자4</th>
