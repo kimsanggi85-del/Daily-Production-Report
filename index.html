@@ -118,6 +118,8 @@ table.mh th,table.mh td{font-size:11px;padding:3px 5px;white-space:nowrap}
 table.mh tr.sum td{background:#EEF2F7;font-weight:700}
 @media print{
   .rpt-sec{border:0;padding:0;margin:0 0 4mm}
+  .rpt-sec.pgnew{break-before:page;page-break-before:always}
+  #rptBody>.rpt-sec:first-child{break-before:auto;page-break-before:auto}
   #rptBody .sig,#rptBody .rpt-hd{break-after:avoid;page-break-after:avoid}
 }
 .act{position:sticky;bottom:0;z-index:3;box-shadow:0 -4px 12px rgba(20,30,45,.07);padding:10px 14px}
@@ -205,7 +207,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
   <a data-pg="master"><i>⚙</i>기준정보</a>
   <a data-pg="data"><i>⇅</i>데이터 관리</a>
   <a data-pg="help"><i>?</i>사용안내</a>
-  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v8.8</div>
+  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v8.9</div>
 </nav>
 <main>
   <div class="top">
@@ -329,7 +331,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
         <select id="p_cust"><option value="">고객사 전체</option></select>
         <span class="muted">평균 가동율·효율은 기존 엑셀 보고서와 같은 방식(일자별 평균의 평균), 평균가동시간은 1일 총 가동시간(분)</span>
         <span class="grow"></span>
-        <button class="p" onclick="savePdf()" id="btnPdf">PDF 내려받기</button><button onclick="exportReportX()">엑셀 내려받기</button><button class="s" onclick="exportReport()" title="표 형태의 원자료 시트만">원자료 엑셀</button><button onclick="window.print()">인쇄</button>
+        <button class="p" onclick="savePdf()" id="btnPdf">PDF 내려받기</button><button onclick="window.print()">인쇄</button>
       </div>
     </div>
     <div class="panel" id="rptBody"></div>
@@ -1121,7 +1123,7 @@ function renderReport(){
     const q=c=>R.filter(r=>r.cust===c).reduce((s,r)=>s+(+r.qty||0),0);return q(b)-q(a)});
 
   /* ── 표지 ── */
-  let html=`<div class="rpt-sec cover">
+  let html=`<div class="rpt-sec cover pgnew">
     <table class="sign"><tr><th rowspan=2 class="sv">결<br>재</th><th>작성</th><th>생산팀장</th><th>공장장</th><th>대표이사</th></tr>
     <tr><td></td><td></td><td></td><td></td></tr></table>
     <h1>${y}년 ${m}월 생산실적 및 프레스 가동율 현황</h1>
@@ -1142,7 +1144,7 @@ function renderReport(){
     const sum=rows.reduce((a,x)=>({work:a.work+x.work,stop:a.stop+x.stop,run:a.run+x.run,cap:a.cap+x.cap,qty:a.qty+x.qty,ng:a.ng+x.ng}),{work:0,stop:0,run:0,cap:0,qty:0,ng:0});
     const avgSpm=rows.length?rows.reduce((a,x)=>a+(x.spm.length?x.spm.reduce((s,v)=>s+v,0)/x.spm.length:0),0)/rows.length:0;
     const wname=x=>Object.entries(x.w).sort((a,b)=>b[1]-a[1]).map(e=>e[0]);
-    html+=`<div class="rpt-sec"><h3>${y}년 ${m}월 M/H당 · 생산실적 현황 (제품별) &nbsp;<span class="muted">고객사 ${esc(c)}</span></h3>
+    html+=`<div class="rpt-sec pgnew"><h3>${y}년 ${m}월 M/H당 · 생산실적 현황 (제품별) &nbsp;<span class="muted">고객사 ${esc(c)}</span></h3>
     <div class="tw" style="max-height:none"><table class="mh"><tr>
       <th>NO</th><th>설비명</th><th>공정명</th><th>고객사</th><th>품명</th><th>품번</th>
       <th>작업자1</th><th>작업자2</th><th>작업자3</th><th>작업자4</th>
@@ -1159,7 +1161,7 @@ function renderReport(){
     /* 고객사 요약 */
     const days=cst.days;
     const target=+(o['tgt_'+c]||75);
-    html+=`<div class="rpt-sec"><h2 class="cust-hd">고객사 : ${esc(c)}</h2>
+    html+=`<div class="rpt-sec pgnew"><h2 class="cust-hd">고객사 : ${esc(c)}</h2>
       <div class="muted" style="font-size:12px;margin:-4px 0 8px">기간 : ${(dates[0]||'').replace(/-/g,'')} ~ ${(dates[dates.length-1]||'').replace(/-/g,'')} &nbsp;·&nbsp; 목표효율 <input type=number value="${target}" onchange="rptSet('tgt_${c}',this.value)" style="width:64px;padding:2px 4px">%</div>
       ${svgCombo(days.map(d=>d.d.slice(5).replace('-','/')),days.map(d=>d.qty),[{v:days.map(d=>d.oper),c:C.l1},{v:days.map(d=>d.eff),c:C.l2}],{W:900,H:190,rot:1,target:target/100})}
       <div class="legend"><span><i style="background:${C.bar}"></i>생산수량</span><span><i style="background:${C.l1}"></i>가동율</span><span><i style="background:${C.l2}"></i>효율</span><span><i style="background:#C8433A"></i>목표효율 ${target}%</span></div>
@@ -1195,9 +1197,10 @@ function renderReport(){
   Object.values(gs).forEach(x=>{if(!Object.keys(x.w).length&&x.stop>0)x.w['사유 미기재']=x.stop});
   const mcs=Object.entries(gs).filter(([,x])=>Object.keys(x.w).length)
     .sort((a,b)=>b[1].stop-a[1].stop);
-  if(mcs.length){
-    html+=`<div class="rpt-sec"><h3>설비 정지 원인별 분포도</h3><div class="grid g2">${
-      mcs.map(([mc,x])=>{const top=Object.entries(x.pn).sort((a,b)=>b[1]-a[1])[0];
+  for(let i=0;i<mcs.length;i+=4){
+    const part=mcs.slice(i,i+4);
+    html+=`<div class="rpt-sec pgnew"><h3>설비 정지 원인별 분포도${mcs.length>4?` <span class="muted" style="font-weight:400;font-size:12px">(${i+1}~${i+part.length} / ${mcs.length}대)</span>`:''}</h3><div class="grid g2">${
+      part.map(([mc,x])=>{const top=Object.entries(x.pn).sort((a,b)=>b[1]-a[1])[0];
         return `<div style="text-align:center"><div style="font-weight:700;margin-bottom:4px">${esc(mc)}${top?' &nbsp;'+esc(top[0]):''}</div>${svgPie(Object.entries(x.w).sort((a,b)=>b[1]-a[1]).slice(0,8))}</div>`}).join('')}</div></div>`;
   }
   $('rptBody').innerHTML=html;
@@ -1357,7 +1360,8 @@ async function savePdf(){
       const mmPerPx=W/cv.width;
       let sy=0;
       while(sy<cv.height){
-        if(!first&&y>=PH-M-4){pdf.addPage();y=M}
+        const isNew=sy===0&&secs[i].classList.contains('pgnew');
+        if(!first&&(isNew||y>=PH-M-4)){pdf.addPage();y=M}   // 표지·고객사별 표·요약·정지원인은 항상 새 장에서 시작
         first=false;
         const availMm=PH-M-y;
         const availPx=Math.floor(availMm/mmPerPx);
