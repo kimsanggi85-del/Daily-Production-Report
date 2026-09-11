@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v17.2 · 태진다이텍</title>
+<title>생산일보 통합관리 v17.3 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -207,7 +207,7 @@ tr.sel td{background:var(--steel2)!important;box-shadow:inset 3px 0 0 var(--stee
   #topMes button.s{padding:5px 8px;font-size:12px}
 
   /* 생산이력 패널을 MES 불러오기 블럭보다 위로 */
-  #pg-entry{display:flex;flex-direction:column}
+  #pg-entry.on{display:flex;flex-direction:column}
   #pg-entry #histPanel{order:-1}
   #histPanel{padding:12px 8px}
   #histPanel .tw{max-height:60vh}
@@ -376,7 +376,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
       <a class="scr" data-pg="help"><i>?</i>사용안내<em>HELP</em></a>
     </div>
   </div></div>
-  <div class="pt-st"><span id="sync2">저장 상태 확인 중</span><span id="cnt2"></span><span class="ver">v17.2</span></div>
+  <div class="pt-st"><span id="sync2">저장 상태 확인 중</span><span id="cnt2"></span><span class="ver">v17.3</span></div>
 </div>
 <div id="mHd">
   <button type="button" class="ham" onclick="tglNav()" aria-label="메뉴"><i></i><i></i><i></i></button>
@@ -394,7 +394,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
   <a data-pg="master"><i>⚙</i>기준정보</a>
   <a data-pg="data"><i>⇅</i>데이터 관리</a>
   <a data-pg="help"><i>?</i>사용안내</a>
-  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v17.2</div>
+  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v17.3</div>
 </nav>
 <main>
   <div class="top">
