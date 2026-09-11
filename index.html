@@ -175,7 +175,11 @@ tr.overrow td{background:#FEF6F5}
 .sign{position:absolute;top:22px;right:30px;width:270px;border-collapse:collapse}
 .sign th,.sign td{border:1px solid #333;text-align:center;font-size:12px;padding:4px}
 .sign td{height:46px}
-.sign .sv{width:24px;writing-mode:vertical-rl;letter-spacing:6px}
+.sign .sv{width:26px;line-height:1.7;letter-spacing:0}
+.cov-top{display:flex;align-items:center;gap:24px;margin:4px 0 6px}
+.cov-top h1{flex:1;margin:0!important;text-align:left!important;white-space:nowrap}
+.cov-top .cover-sign{flex:none;margin:0!important;width:270px}
+.cov-top .cover-sign td{height:44px}
 .cust-hd{font-size:19px;font-weight:800;margin:0 0 2px}
 .rpt table{font-size:14px}
 .rpt table th,.rpt table td{padding:1px 8px}
@@ -184,7 +188,14 @@ tr.overrow td{background:#FEF6F5}
 .rpt h3 .muted{font-weight:500;font-size:12.5px;white-space:nowrap}
 .rpt textarea{font-size:13px}
 table.mh th,table.mh td{font-size:12px;padding:2px 6px;white-space:nowrap}
+/* PDF 캡처 중 (슬라이드형) */
+#rptBody.pdfcap>.rpt-sec{border:0;border-radius:0;margin:0!important;padding:10px 14px;box-sizing:border-box;max-width:none;background:#fff}
+#rptBody.pdfcap .noprint{display:none!important}
+#rptBody.pdfcap .cover{min-height:0}
+#rptBody.pdfcap .pdfpad td,#rptBody.pdfcap .pdfpad th{padding-top:calc(var(--pp,0px) + 2px)!important;padding-bottom:calc(var(--pp,0px) + 2px)!important}
 table.mh tr.sum td{background:#EEF2F7;font-weight:700}
+#rptBody td:first-child:not(:has(textarea)),#rptBody th:first-child{white-space:nowrap}
+#rptBody .tag{white-space:nowrap}
 @media print{
   .rpt-sec{border:0;padding:0;margin:0 0 4mm}
   .rpt-sec.pgnew{break-before:page;page-break-before:always}
@@ -366,7 +377,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
   <div class="navitem" data-g="rpt"><button type="button">보고서 ▾</button><div class="mega">
     <div class="mega-col">
       <a class="scr" data-pg="report"><i>▣</i>월간 보고서<em>REPORT</em></a>
-      <a class="act pri" data-pg="report" data-fn="window.print()"><i>🖨</i>인쇄 · PDF</a>
+      <a class="act pri" data-pg="report" data-fn="savePdf()"><i>🖨</i>PDF 저장</a>
     </div>
   </div></div>
   <div class="navitem" data-g="cfg"><button type="button">기준정보 ▾</button><div class="mega">
@@ -1754,9 +1765,9 @@ function renderReport(){
 
   /* ── 표지 ── */
   const cover=`<div class="rpt-sec cover pgnew">
-    <h1>${y}년 ${m}월 생산실적 및 프레스 가동율 현황</h1>
+    <div class="cov-top"><h1>${y}년 ${m}월 생산실적 및 프레스 가동율 현황</h1>
     <table class="sign cover-sign"><tr><th rowspan=2 class="sv">결<br>재</th><th>작성</th><th>검토</th><th>승인</th></tr>
-    <tr><td></td><td></td><td></td></tr></table>
+    <tr><td></td><td></td><td></td></tr></table></div>
     <div class="made">작성일자 : ${today()}</div>
   </div>`;
   let html = rptView==='all' ? '' : cover;
@@ -1848,20 +1859,20 @@ function buildToc(y,m){
     (hs.length?hs:[e.querySelector('h1,h2,h3')].filter(Boolean)).forEach(h=>{
       const cl=h.cloneNode(true);[...cl.querySelectorAll('.muted,input')].forEach(x=>x.remove());
       let t2=(cl.textContent||'').replace(/\s+/g,' ').trim();
-      rows.push({t:t2.slice(0,60),p:i+2});
+      rows.push({t:t2.slice(0,60),p:i+2,si:i});
     });
   });
   const html=`<div class="rpt-sec pgnew toc cover">
-    <h1>${y}년 ${m}월 생산실적 및 프레스 가동율 현황</h1>
+    <div class="cov-top"><h1>${y}년 ${m}월 생산실적 및 프레스 가동율 현황</h1>
+    <table class="sign cover-sign"><tr><th rowspan=2 class="sv">결<br>재</th><th>작성</th><th>검토</th><th>승인</th></tr>
+    <tr><td></td><td></td><td></td></tr></table></div>
     <h3 style="margin-top:8px">목 차</h3>
     <div class="grid g2" style="gap:14px">${[0,1].map(col=>{
       const half=Math.ceil(rows.length/2), part=col?rows.slice(half):rows.slice(0,half);
       return `<table style="font-size:12px"><tr><th>내용</th><th class=num style="width:60px">쪽</th></tr>
-      ${part.map(r=>`<tr><td style="padding:1px 8px">${esc(r.t)}</td><td class=num style="padding:1px 8px">${r.p}</td></tr>`).join('')}</table>`}).join('')}</div>
-    <table class="sign cover-sign" style="margin-top:8px"><tr><th rowspan=2 class="sv">결<br>재</th><th>작성</th><th>검토</th><th>승인</th></tr>
-    <tr><td></td><td></td><td></td></tr></table>
+      ${part.map(r=>`<tr><td style="padding:1px 8px">${esc(r.t)}</td><td class=num data-si="${r.si}" style="padding:1px 8px">${r.p}</td></tr>`).join('')}</table>`}).join('')}</div>
     <div class="made">작성일자 : ${today()}</div>
-    <div class="muted" style="font-size:11px;margin-top:4px">표지·목차 1쪽 · 본문 ${secs.length}쪽 (총 ${secs.length+1}쪽)</div>
+    <div class="muted" style="font-size:11px;margin-top:4px">표지·목차 1쪽 · 본문 ${secs.length}쪽 · <span class="toc-cnt">총 ${secs.length+1}쪽</span></div>
   </div>`;
   const tmp=document.createElement('div');tmp.innerHTML=html;
   body.insertBefore(tmp.firstElementChild,secs[0]);
@@ -2067,12 +2078,16 @@ function execHtml(){
 function svgPie(pairs,opt={}){
   const W=opt.W||330,H=opt.H||230,cx=112,cy=96,rx=88,ry=50,hole=.52,dep=18;
   const tot=pairs.reduce((a,x)=>a+x[1],0)||1;
-  const COL=['#4E7A9E','#D9822B','#E0B84C','#C8433A','#2F8F5B','#8A6BBE','#5B8CA8','#B0793F'];
+  const COL=['#2E5E8C','#E07B24','#E6B821','#2E9E5B','#C8323A','#8E5CC2','#1FA7B8','#D65DA0','#8C6A3F','#7A8B99'];
+  const FIX={'금형점검 및 수리':'#2E5E8C','소재교환':'#E07B24','측정대기':'#E6B821','치수조정':'#2E9E5B','설비이상':'#C8323A',
+    '부품교체·연마':'#8E5CC2','3정5행·청소':'#1FA7B8','조회·교육':'#D65DA0','휴식·식사':'#8C6A3F','대기':'#7A8B99','기타':'#B3BAC2','사유 미기재':'#4A535E'};
+  const used=new Set(pairs.map(p=>FIX[p[0]]).filter(Boolean));const spare=COL.filter(c=>!used.has(c));let si=0;
+  const colOf=n=>FIX[n]||spare[(si++)%Math.max(1,spare.length)]||'#7A8B99';
   const dark=c=>{const n=parseInt(c.slice(1),16);const r=(n>>16)*.62|0,g=((n>>8)&255)*.62|0,b=(n&255)*.62|0;
     return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('')};
   const P=(a,f)=>[cx+rx*f*Math.cos(a),cy+ry*f*Math.sin(a)];
   let a0=-Math.PI/2, segs=[];
-  pairs.forEach((p,i)=>{const a1=a0+p[1]/tot*Math.PI*2;segs.push({a0,a1,c:COL[i%8],v:p[1],n:p[0]});a0=a1});
+  pairs.forEach((p,i)=>{const a1=a0+p[1]/tot*Math.PI*2;segs.push({a0,a1,c:colOf(p[0]),v:p[1],n:p[0]});a0=a1});
   let s='';
   // 한 가지 사유만 있으면 도넛 전체를 그린다 (원호가 겹쳐 안 보이는 문제 방지)
   if(segs.length===1||segs[0].a1-segs[0].a0>=Math.PI*2-1e-6){
@@ -2100,64 +2115,137 @@ function svgPie(pairs,opt={}){
     const big=(g.a1-g.a0)>Math.PI?1:0;
     s+=`<path d="M${x0.toFixed(1)} ${y0.toFixed(1)} A${rx} ${ry} 0 ${big} 1 ${x1.toFixed(1)} ${y1.toFixed(1)} L${i1.toFixed(1)} ${j1.toFixed(1)} A${(rx*hole).toFixed(1)} ${(ry*hole).toFixed(1)} 0 ${big} 0 ${i0.toFixed(1)} ${j0.toFixed(1)} Z" fill="${g.c}" stroke="#fff" stroke-width="1"/>`;
     const am=(g.a0+g.a1)/2,[lx,ly]=P(am,(1+hole)/2),pc=Math.round(g.v/tot*100);
-    if(pc>=7)s+=`<text x=${lx.toFixed(1)} y=${(ly+4).toFixed(1)} font-size=12 fill="#fff" text-anchor=middle font-weight=700>${pc}%</text>`;
+    if(pc>=7){const n=parseInt(g.c.slice(1),16),lum=((n>>16)*299+((n>>8)&255)*587+(n&255)*114)/1000;
+      s+=`<text x=${lx.toFixed(1)} y=${(ly+4).toFixed(1)} font-size=12 fill="${lum>165?'#1A2230':'#fff'}" text-anchor=middle font-weight=700>${pc}%</text>`}
   });
   s+=segs.map((g,i)=>`<g><rect x=228 y=${22+i*20} width=11 height=11 rx=2 fill="${g.c}"/><text x=245 y=${32+i*20} font-size=11 fill="#3A4551">${esc(g.n).slice(0,12)}</text></g>`).join('');
   return `<svg class="svgc" viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px">${s}</svg>`;
 }
 
-/* 월간보고서 PDF (A4 가로) */
+/* 월간보고서 PDF (A4 가로) — PPT처럼 한 장을 꽉 채움
+   각 항목(한 장)의 가로폭을 바꿔 가며 A4 가로 비율에 딱 맞는 폭을 찾은 뒤 그 폭으로 찍어서 종이 전체에 붙인다.
+   너무 긴 표는 줄 경계에서 잘라 여러 장으로 나누되, 각 장이 꽉 차도록 폭을 다시 맞춘다. */
+const PDF_M=6, PDF_W=297-PDF_M*2, PDF_H=210-PDF_M*2, PDF_R=PDF_H/PDF_W;
+const PDF_MINW=720, PDF_MAXW=1600;     // 찍는 폭(px) 범위 — 좁을수록 글자가 크게 나옴
+function pdfFit(el,ratio){
+  const hAt=w=>{el.style.width=w+'px';return el.scrollHeight};
+  // 가로로 넘치는 표(줄바꿈 없는 표)가 잘리지 않는 최소 폭
+  const needW=()=>{const L=el.getBoundingClientRect().left;let m=el.scrollWidth;
+    el.querySelectorAll('table,svg').forEach(t=>{m=Math.max(m,t.getBoundingClientRect().right-L+16)});return Math.ceil(m)};
+  let w0=PDF_MINW;for(let k=0;k<4;k++){el.style.width=w0+'px';const nw=needW();if(nw<=w0)break;w0=nw+2}
+  const wMax=Math.max(PDF_MAXW,w0);
+  if(hAt(w0)/w0<=ratio)return{w:w0,h:hAt(w0),short:true};
+  if(hAt(wMax)/wMax>ratio)return{w:wMax,h:hAt(wMax),tall:true};
+  let lo=w0,hi=wMax;
+  while(hi-lo>2){const mid=Math.round((lo+hi)/2);if(hAt(mid)/mid>ratio)lo=mid;else hi=mid}
+  // 줄바꿈 때문에 높이가 뚝 떨어지는 구간이면, 조금 넘치는 쪽(lo)과 조금 모자라는 쪽(hi) 중 더 꽉 차는 쪽
+  const hl=hAt(lo),hh=hAt(hi),fillLo=ratio/(hl/lo),fillHi=(hh/hi)/ratio;
+  if(fillLo>fillHi+0.02)return{w:lo,h:hAt(lo)};
+  return{w:hi,h:hAt(hi)};
+}
+// 모자라는 높이는 표 줄간격을 넓혀 채우고, 그래도 남으면 항목 사이를 벌림 (표지는 가운데)
+function pdfStretch(el,w,target){
+  el.classList.add('pdfpad');
+  const hAt=v=>{el.style.setProperty('--pp',v+'px');return el.scrollHeight};
+  if(el.querySelector('td,th')&&hAt(0)<target){
+    let lo=0,hi=10;
+    if(hAt(hi)<=target)lo=hi;
+    else{while(hi-lo>0.25){const m=(lo+hi)/2;if(hAt(m)<=target)lo=m;else hi=m}}
+    hAt(lo);
+  }else hAt(0);
+  el.style.minHeight=target+'px';el.style.display='flex';el.style.flexDirection='column';
+  el.style.justifyContent=el.classList.contains('cover')?'center':'space-between';
+  return el.scrollHeight;
+}
+function pdfPlan(el){
+  el.style.minHeight='';el.style.display='';el.style.flexDirection='';el.style.justifyContent='';
+  el.classList.remove('pdfpad');el.style.removeProperty('--pp');
+  const f=pdfFit(el,PDF_R);
+  if(!f.tall){
+    const target=Math.round(f.w*PDF_R);
+    el.style.width=f.w+'px';
+    const h=f.h<target-2?pdfStretch(el,f.w,target):f.h;
+    return{w:f.w,h,cuts:[0,h]};
+  }
+  // 한 장에 안 들어가는 긴 표 → n장으로 나눔
+  let n=Math.ceil(f.h/(f.w*PDF_R));
+  for(;;){
+    const g=pdfFit(el,PDF_R*n*0.96);
+    el.style.width=g.w+'px';
+    const pagePx=Math.floor(g.w*PDF_R), top0=el.getBoundingClientRect().top;
+    const cand=[...el.querySelectorAll('tr,h3,h4,.grid,.legend')].map(x=>{const r=x.getBoundingClientRect();return x.tagName==='TR'?r.bottom-top0:r.top-top0-2}).filter(v=>v>0).sort((a,b)=>a-b);
+    const cuts=[0];let t=0;
+    while(g.h-t>pagePx){
+      const lim=t+pagePx;let c=0;
+      for(const v of cand){if(v>t+pagePx*0.4&&v<=lim)c=v}
+      t=Math.round(c||lim);cuts.push(t);
+    }
+    cuts.push(g.h);
+    if(cuts.length-1<=n||n>=12)return{w:g.w,h:g.h,cuts};
+    n=cuts.length-1;   // 줄 경계 때문에 한 장 더 필요 → 다시 맞춤
+  }
+}
 async function savePdf(){
   const J=window.jspdf&&window.jspdf.jsPDF;
   if(!J||!window.html2canvas){toast('PDF 라이브러리를 불러오지 못했습니다 (인터넷 연결 확인) — [인쇄]에서 PDF로 저장하세요');return}
   const btn=$('btnPdf'),lab=btn.textContent;btn.disabled=true;
   const body=$('rptBody');
-  // 입력칸은 그림으로 안 찍히므로 잠시 글자로 바꿔 둠
-  const swapped=[],styled=[];
-  // 가로 스크롤 표는 잘리므로 잠시 전체를 펼침
+  const swapped=[],styled=[],tocSave=[];
   body.querySelectorAll('.tw').forEach(el=>{styled.push([el,el.getAttribute('style')||'']);el.style.overflow='visible';el.style.maxHeight='none'});
   styled.push([body,body.getAttribute('style')||'']);body.style.overflow='visible';
-    body.querySelectorAll('textarea,input').forEach(el=>{
+  body.classList.add('pdfcap');
+  // 입력칸은 그림으로 안 찍히므로 잠시 글자로 바꿔 둠
+  body.querySelectorAll('textarea,input').forEach(el=>{
+    if(el.closest('.noprint'))return;
     const d=document.createElement('div');
     d.textContent=el.value||'';
-    d.style.cssText='font-size:12px;white-space:pre-wrap;min-height:16px;padding:2px 4px;color:#1A2230';
+    d.style.cssText=el.tagName==='INPUT'?'display:inline-block;font-size:12px;padding:0 3px;color:#1A2230':'font-size:12.5px;white-space:pre-wrap;min-height:18px;padding:2px 4px;color:#1A2230';
     el.parentNode.insertBefore(d,el);el.style.display='none';swapped.push([el,d]);
   });
   try{
     const secs=[...body.children].filter(e=>e.offsetHeight>0);
+    secs.forEach(el=>styled.push([el,el.getAttribute('style')||'']));
+    // 1) 장마다 폭·나눔 계획
+    btn.textContent='PDF 배치 계산 중…';await new Promise(r=>setTimeout(r,0));
+    const plans=secs.map(el=>pdfPlan(el));
+    // 2) 목차 쪽번호를 실제 PDF 쪽에 맞춤
+    const start=[];let pg=1;plans.forEach((p,i)=>{start[i]=pg;pg+=p.cuts.length-1});
+    body.querySelectorAll('.toc td[data-si]').forEach(td=>{const k=secs.indexOf(body.children[+td.dataset.si+1]);
+      if(k>=0){tocSave.push([td,td.textContent]);td.textContent=start[k]}});
+    const cnt=body.querySelector('.toc .toc-cnt');if(cnt){tocSave.push([cnt,cnt.textContent]);cnt.textContent=`총 ${pg-1}쪽`}
+    // 3) 찍어서 붙이기
     const pdf=new J({orientation:'landscape',unit:'mm',format:'a4'});
-    const PW=297,PH=210,M=5,W=PW-M*2,H=PH-M*2;
-    let y=M,first=true;
-    // 종이를 남기지 않도록 위에서부터 빈틈없이 채우고, 남은 자리를 넘으면 그 자리에서 잘라 다음 장으로 이어 붙인다
+    let first=true;
     for(let i=0;i<secs.length;i++){
       btn.textContent=`PDF 만드는 중 ${i+1}/${secs.length}`;
-      const cv=await html2canvas(secs[i],{scale:1.6,backgroundColor:'#ffffff',logging:false,scrollX:0,scrollY:0,width:secs[i].scrollWidth,height:secs[i].scrollHeight});
-      const mmPerPx=W/cv.width;
-      let sy=0;
-      while(sy<cv.height){
-        const isNew=sy===0&&secs[i].classList.contains('pgnew');
-        if(!first&&(isNew||y>=PH-M-4)){pdf.addPage();y=M}   // 표지·고객사별 표·요약·정지원인은 항상 새 장에서 시작
-        first=false;
-        const availMm=PH-M-y;
-        const availPx=Math.floor(availMm/mmPerPx);
-        const ph=Math.min(availPx,cv.height-sy);
-        if(ph<=2){pdf.addPage();y=M;continue}
+      const el=secs[i],P=plans[i];
+      el.style.width=P.w+'px';
+      const h=el.scrollHeight;
+      const sc=Math.min(2.4,3000/P.w);
+      const cv=await html2canvas(el,{scale:sc,backgroundColor:'#ffffff',logging:false,scrollX:0,scrollY:0,width:P.w,height:h});
+      const k=cv.width/P.w;
+      const cuts=P.cuts.slice();cuts[cuts.length-1]=h;
+      for(let j=0;j<cuts.length-1;j++){
+        const y0=Math.round(cuts[j]*k),y1=Math.min(cv.height,Math.round(cuts[j+1]*k)),ph=y1-y0;
+        if(ph<=2)continue;
+        if(!first)pdf.addPage();first=false;
         const c2=document.createElement('canvas');c2.width=cv.width;c2.height=ph;
         const cx=c2.getContext('2d');cx.fillStyle='#fff';cx.fillRect(0,0,cv.width,ph);
-        cx.drawImage(cv,0,sy,cv.width,ph,0,0,cv.width,ph);
-        pdf.addImage(c2.toDataURL('image/jpeg',0.88),'JPEG',M,y,W,ph*mmPerPx);
+        cx.drawImage(cv,0,y0,cv.width,ph,0,0,cv.width,ph);
+        // 종이에 꽉 차게 (비율 유지) — 나눈 장은 위에서부터, 한 장짜리는 가운데
+        const s2=Math.min(PDF_W/cv.width,PDF_H/ph),dw=cv.width*s2,dh=ph*s2;
+        const multi=cuts.length>2;
+        pdf.addImage(c2.toDataURL('image/jpeg',0.9),'JPEG',PDF_M+(PDF_W-dw)/2,multi?PDF_M:PDF_M+(PDF_H-dh)/2,dw,dh);
         c2.width=c2.height=0;
-        y+=ph*mmPerPx;sy+=ph;
         await new Promise(r=>setTimeout(r,0));
-        if(sy<cv.height){pdf.addPage();y=M}
       }
       cv.width=cv.height=0;
-      y+=2; // 항목 사이 최소 간격
     }
     pdf.save('월간보고서_'+month+($('p_cust').value?'_'+$('p_cust').value:'')+'.pdf');
     toast('PDF를 저장했습니다');
   }catch(e){console.error(e);toast('PDF 저장에 실패했습니다 — [인쇄]에서 PDF로 저장하세요')}
-  finally{swapped.forEach(([el,d])=>{d.remove();el.style.display=''});styled.forEach(([el,s])=>el.setAttribute('style',s));btn.disabled=false;btn.textContent=lab}
+  finally{swapped.forEach(([el,d])=>{d.remove();el.style.display=''});tocSave.forEach(([el,t])=>el.textContent=t);
+    styled.forEach(([el,s])=>s?el.setAttribute('style',s):el.removeAttribute('style'));body.classList.remove('pdfcap');body.querySelectorAll('.pdfpad').forEach(e=>e.classList.remove('pdfpad'));btn.disabled=false;btn.textContent=lab}
 }
 
 
