@@ -405,7 +405,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
   <a data-pg="master"><i>⚙</i>기준정보</a>
   <a data-pg="data"><i>⇅</i>데이터 관리</a>
   <a data-pg="help"><i>?</i>사용안내</a>
-  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v17.4</div>
+  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v17.5</div>
 </nav>
 <main>
   <div class="top">
@@ -1161,7 +1161,7 @@ function mapPn(code,mc,d,allowLast){
   if(allowLast&&mc){const last=S.recs.filter(r=>r.mc===mc&&(!d||r.date<d)).sort((a,b)=>b.date.localeCompare(a.date))[0];if(last)return last.pn}
   return '';
 }
-let MESROWS=[],MESDIAG={},MESCLO=[];
+let MESROWS=[],MESDIAG={},MESCLO=[],MESDATE='';
 /* 최근 14일 중 일보가 없는 날 (일요일 제외) */
 function missingDays(){
   const out=[];
@@ -1181,6 +1181,7 @@ function mesDay(d,step){
 async function openMes(dateArg,quiet){
   const d=dateArg||$('f_date').value||today();
   if(d<MES_FROM){if(!quiet)toast(MES_FROM.slice(0,7)+'월부터 MES 연동을 씁니다. 그 이전은 기존 자료를 그대로 두세요');return}
+  MESDATE=d;
   if(!quiet){$('modal').innerHTML='<h2>누락일보콜</h2><p class="muted">'+d+' 자료를 읽는 중…</p>';
     $('mask').classList.add('on');}
   let led=[],use=[],dt=[],clo=[];
@@ -1459,7 +1460,9 @@ function drawMes(d){
   <div class="fl" style="margin-top:12px"><button class="p" onclick="saveMes()" ${n?'':'disabled'}>선택 ${n}건 일보로 저장</button><span class="grow"></span><span class="muted">설비·품번을 여기서 고르면 다음부터 자동으로 연결됩니다</span></div>`;
 }
 function saveMes(quiet,dateArg){
-  const d=dateArg||$('f_date').value;let n=0,skipped=0;
+  const d=dateArg||($('mes_d')&&$('mes_d').value)||MESDATE||$('f_date').value;
+  if(!d){toast('생산일자를 확인하세요');return 0}
+  let n=0,skipped=0;
   MESROWS.filter(r=>r.use&&r.mc&&r.pn).forEach(r=>{
     S.master.mesMc=S.master.mesMc||{};S.master.mesPn=S.master.mesPn||{};
     S.master.mesMc[r.code]=r.mc;
@@ -1502,7 +1505,8 @@ function saveMes(quiet,dateArg){
     n++;
   });
   if(quiet){commit();return n}
-  closeMask();commit();toast(n+'건을 일보에 저장했습니다'+(skipped?` · SPM이 없어 ${skipped}건은 제외했습니다`:''));
+  if($('f_date')&&d)$('f_date').value=d;
+  closeMask();commit();toast(d.slice(5)+' · '+n+'건을 일보에 저장했습니다'+(skipped?` · SPM이 없어 ${skipped}건은 제외했습니다`:''));
   return n;
 }
 
