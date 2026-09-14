@@ -2851,15 +2851,11 @@ $('fImp').addEventListener('change',async e=>{
   e.target.value='';if(added)commit();
 });
 
-/* ===== 시작 ===== */
-load();
-const _dm=dataMonths();if(_dm.length&&!S.recs.some(inMonth))month=_dm[0][0];
-$('f_date').value=today();
-fillSelectors();
-go('entry');
-pull().then(()=>setTimeout(async()=>{await autoEntry();autoSync()},3000));
-setInterval(()=>{if(!document.hidden){pull().then(()=>setTimeout(()=>autoSync(),2000))}},5*60*1000);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)setTimeout(()=>autoSync(),1500)});
+
+})();
+</script>
+</body>
+</html>
 </script>
 </body>
 </html>
