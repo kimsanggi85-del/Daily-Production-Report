@@ -409,7 +409,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
   <a data-pg="master"><i>⚙</i>기준정보</a>
   <a data-pg="data"><i>⇅</i>데이터 관리</a>
   <a data-pg="help"><i>?</i>사용안내</a>
-  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v17.6</div>
+  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v17.7</div>
 </nav>
 <main>
   <div class="top">
@@ -453,8 +453,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
 
     <!-- 3. 생산이력(DB) -->
     <div class="panel" id="histPanel">
-      <button id="btnDelSel" class="s d" style="float:right" onclick="delSelected()" disabled>선택 삭제</button>
-      <button id="btnDelSel" class="s d" style="float:right" onclick="delSelected()" disabled>선택 삭제</button>
+      <button id="btnDelSel" class="s d" style="float:right" onclick="delSelected()" disabled>선택 삭제</button><button id="btnDateFree" class="s" style="float:right;margin-right:6px" onclick="toggleDateFree()" title="켜면 날짜와 상관없이 누른 열만으로 정렬합니다">날짜 묶음 : 켬</button>
       <h3 style="margin-bottom:8px">생산이력 <span class="muted" style="font-weight:400;font-size:12px">(줄을 클릭하면 수정 창이 열립니다)</span></h3>
       <div id="h_over" class="overbar noprint" style="display:none"></div>
       <div class="tw" style="max-height:46vh"><table id="tHist"></table></div>
@@ -1614,6 +1613,8 @@ function delSelected(){
   logAdd('일보 일괄 삭제',`${L.length}건 · ${days.join(', ').slice(0,60)}`);
   HSEL.clear();commit();renderAll();toast(`${L.length}건을 삭제했습니다`);
 }
+let dateFree=false;
+function toggleDateFree(){dateFree=!dateFree;renderHist();toast(dateFree?'날짜 묶음 해제 — 누른 열만으로 정렬합니다':'날짜 묶음 — 같은 날짜 안에서 정렬합니다')}
 function renderHist(){
   const m=S.master;
   opts($('h_cust'),m.custs,$('h_cust').value,'고객사 전체');
@@ -1627,17 +1628,25 @@ function renderHist(){
   $('h_range').value=vals.includes(cur)?cur:(dm.length?'m:'+dm[0][0]:'all');
   const rg=$('h_range').value;$('h_from').style.display=$('h_to').style.display=rg==='r'?'':'none';
   const L=histList().map(r=>({...r,...calc(r)}));
+  const cmp=(a,b,k,dir)=>{
+    let x=k==='mes'?((+a.qty||0)-(+a.mes||0)):a[k],
+        y=k==='mes'?((+b.qty||0)-(+b.mes||0)):b[k];
+    if(typeof x==='string'||typeof y==='string')
+      return String(x??'').localeCompare(String(y??''),'ko',{numeric:true})*dir;
+    return ((x||0)-(y||0))*dir;
+  };
+  // 생산일자를 먼저 묶는다 — 다른 열을 눌러도 날짜가 섞이지 않게
   L.sort((a,b)=>{
-    let x=sortKey==='mes'?((+a.qty||0)-(+a.mes||0)):a[sortKey],
-        y=sortKey==='mes'?((+b.qty||0)-(+b.mes||0)):b[sortKey];
-    if(typeof x==='string')return x.localeCompare(y,'ko',{numeric:true})*sortDir;
-    return ((x||0)-(y||0))*sortDir});
+    if(sortKey!=='date'&&!dateFree){const d=cmp(a,b,'date',-1);if(d)return d}
+    return cmp(a,b,sortKey,sortDir);
+  });
   let q=0,ng=0,work=0,run=0,cap=0;L.forEach(r=>{q+=+r.qty||0;ng+=+r.ng||0;work+=+r.work||0;run+=r.run;cap+=r.cap});
   const over=L.filter(r=>r.eff>1);
   if($('h_over')){$('h_over').innerHTML=over.length
     ?`⚠ 효율 100% 초과 ${over.length}건 <span>— ${over.slice(0,4).map(r=>`${r.date.slice(5)} ${esc(r.mc)} ${pct(r.eff)}`).join(' · ')}${over.length>4?` 외 ${over.length-4}건`:''} · SPM 표준 또는 가동시간을 확인하세요</span>`:'';
     $('h_over').style.display=over.length?'':'none';}
   histSelMsg();
+  {const bf=$('btnDateFree');if(bf)bf.textContent='날짜 묶음 : '+(dateFree?'끔':'켬');}
   $('h_sum').textContent=`${L.length}건 · 생산 ${fmt(q)} EA · 가동율 ${pct(run/work)} · 효율 ${pct(q/cap)} · 불량 ${fmt(ng)}`;
   const cols=[['date','생산일자',0,'c-date'],['mc','설비',0,'c-mc'],['cust','고객사',0,'c-cust'],['pn','품번',0,'c-pn'],['name','품명',0,'c-name'],['w1','작업자',0,'c-w'],['spm','SPM',1,'c-spm'],['work','근무',1,'c-work'],['stop','정지',1,'c-stop'],['brk','휴식',1,'c-brk'],['run','가동',1,'c-run'],['cap','가능',1,'c-cap'],['qty','실적',1,'c-qty'],['mes','조정수량',1,'c-mes'],['oper','가동율',1,'c-oper'],['eff','효율',1,'c-eff'],['ng','불량',1,'c-ng'],['sr','정지사유',0,'c-sr'],['note','특기사항',0,'c-note']];
   const h='<tr><th class="c-chk"><input type="checkbox" id="chkAll" onclick="event.stopPropagation();histAll(this.checked)" title="모두 선택"></th>'+cols.map(c=>`<th class="sort ${c[2]?'num':''} ${c[3]} ${sortKey===c[0]?(sortDir>0?'asc':'desc'):''}" onclick="sortBy('${c[0]}')">${c[1]}</th>`).join('')+'<th class="c-del"></th></tr>';
