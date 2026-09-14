@@ -405,7 +405,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
   <a data-pg="master"><i>⚙</i>기준정보</a>
   <a data-pg="data"><i>⇅</i>데이터 관리</a>
   <a data-pg="help"><i>?</i>사용안내</a>
-  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v17.3</div>
+  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v17.4</div>
 </nav>
 <main>
   <div class="top">
@@ -1162,6 +1162,22 @@ function mapPn(code,mc,d,allowLast){
   return '';
 }
 let MESROWS=[],MESDIAG={},MESCLO=[];
+/* 최근 14일 중 일보가 없는 날 (일요일 제외) */
+function missingDays(){
+  const out=[];
+  for(let k=1;k<=14;k++){
+    const t=new Date();t.setDate(t.getDate()-k);
+    const s=[t.getFullYear(),String(t.getMonth()+1).padStart(2,'0'),String(t.getDate()).padStart(2,'0')].join('-');
+    if(s<MES_FROM)break;
+    if(t.getDay()===0)continue;
+    if(!S.recs.some(r=>r.date===s))out.push(s);
+  }
+  return out;
+}
+function mesDay(d,step){
+  const t=new Date(d+'T00:00:00');t.setDate(t.getDate()+step);
+  openMes([t.getFullYear(),String(t.getMonth()+1).padStart(2,'0'),String(t.getDate()).padStart(2,'0')].join('-'));
+}
 async function openMes(dateArg,quiet){
   const d=dateArg||$('f_date').value||today();
   if(d<MES_FROM){if(!quiet)toast(MES_FROM.slice(0,7)+'월부터 MES 연동을 씁니다. 그 이전은 기존 자료를 그대로 두세요');return}
@@ -1426,8 +1442,16 @@ function drawMes(d){
   const ledTag=(dg.dpSrc==='원장'
       ? `<span class="tag a">모니터링 실적 0건 → MES 원장 ${dg.ledN||0}건 사용</span>`
       : `<span class="tag${dg.dp?'':' r'}">모니터링 실적 ${dg.dp||0}건${dg.dpFilter?' · '+dg.dpFilter:''}${(!dg.dp&&dg.dpAll)?` (표 전체 ${dg.dpAll}건)`:''}</span>`)+(nMon?`<span class="tag g">모니터링 마감 ${nMon}줄</span>`:'');
+  const miss=missingDays().filter(x=>x!==d);
   const warn=[nClosed?`현장 마감 반영 ${nClosed}줄`:'',nWait?`실제양품 미입력 ${nWait}줄`:'',nNoMc?`설비 미지정 ${nNoMc}줄`:'',nPend?`생산마감 미완료 ${nPend}줄`:'',nNoRun?`가동시간 없음 ${nNoRun}줄`:'',nNoSpm?`SPM 입력 필요 ${nNoSpm}줄`:'',nUpd?`덮어쓰기 ${nUpd}줄`:'',nDup?`이미 저장 ${nDup}줄`:''].filter(Boolean).join(' · ');
-  $('modal').innerHTML=`<div class="fl" style="margin-bottom:10px"><h2 style="flex:1">누락일보콜 · ${d}</h2><button class="s" onclick="showClo('${d}')">마감 자료 보기</button><button onclick="closeMask()">닫기</button></div>
+  $('modal').innerHTML=`<div class="fl" style="margin-bottom:10px">
+    <h2 style="margin:0">누락일보콜</h2>
+    <button class="s" onclick="mesDay('${d}',-1)" title="전날">◀</button>
+    <input type="date" id="mes_d" value="${d}" onchange="openMes(this.value)" style="width:150px">
+    <button class="s" onclick="mesDay('${d}',1)" title="다음날">▶</button>
+    <span style="flex:1"></span>
+    <button class="s" onclick="showClo('${d}')">마감 자료 보기</button><button onclick="closeMask()">닫기</button></div>
+  ${miss.length?`<div class="fl" style="gap:6px;margin:0 0 8px;flex-wrap:wrap"><span class="muted" style="font-size:12px">일보 없는 날 :</span>${miss.slice(0,8).map(x=>`<button class="s" onclick="openMes('${x}')">${x.slice(5)}</button>`).join('')}</div>`:''}
   <p class="muted" style="margin-top:0">MES 모니터링 서버에서 설비별 생산수량을 읽고, 현장에서 확정한 <b>실제 양품수량(생산마감)</b>이 있으면 그 값을 실적으로 씁니다. 근무시간·작업자·정지사유를 확인·수정한 뒤 저장하세요. 정지시간은 근무−MES가동으로 자동 계산되며 직접 고칠 수 있습니다. 정지사유·정지시간은 <b>MES 가동설비 모니터링</b>의 비가동 집계에서 그대로 가져옵니다(없으면 가동이 끊긴 시간대로 대체). 특기사항에는 MES 불량폐기 사유가 <b>코드 대신 불량유형 이름</b>으로 들어옵니다.</p>
   <div class="fl" style="margin-bottom:8px"><span class="tag">설비 ${nMc}대 · ${MESROWS.length}줄</span>${cloTag}${ledTag}${warn?`<span class="tag a">${warn}</span>`:''}</div>
   <div class="tw" style="max-height:60vh"><table><tr><th></th><th>MES</th><th>설비</th><th>품번</th><th>작업자</th><th class=num>SPM</th><th>근무(분)</th><th class=num>MES가동</th><th>정지(분)</th><th>실적(일생산)</th><th class=num>MES불량</th><th>작업불량</th><th>시타발·검사</th><th>정지사유</th><th>특기사항(불량사유)</th><th></th></tr>
