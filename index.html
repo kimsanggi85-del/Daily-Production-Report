@@ -124,6 +124,10 @@ tr.sum td{background:#EEF2F7;font-weight:700;border-top:2px solid var(--line)}
 #r_eff.over,#r_oper.over{background:var(--red);color:#fff;font-weight:800;padding:1px 7px;border-radius:6px}
 .effwarn{margin:8px 0 2px;padding:10px 12px;border-radius:8px;background:#FBEEEC;border:1px solid #E9B4AE;color:#9C2F27;font-size:13px;line-height:1.55}
 tr.overrow td{background:#FEF6F5}
+#tHist .c-chk{width:34px;text-align:center}
+#tHist .c-chk input{width:16px;height:16px;cursor:pointer}
+#tHist .c-chk{width:34px;text-align:center}
+#tHist .c-chk input{width:16px;height:16px;cursor:pointer}
 .overbar{margin:0 0 10px;padding:10px 14px;border-radius:8px;background:var(--red);color:#fff;font-size:14px;font-weight:700}
 .overbar span{font-weight:400;opacity:.92}
 .bar{height:8px;background:var(--line2);border-radius:4px;overflow:hidden;min-width:60px}
@@ -405,7 +409,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
   <a data-pg="master"><i>⚙</i>기준정보</a>
   <a data-pg="data"><i>⇅</i>데이터 관리</a>
   <a data-pg="help"><i>?</i>사용안내</a>
-  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v17.5</div>
+  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v17.6</div>
 </nav>
 <main>
   <div class="top">
@@ -449,6 +453,8 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
 
     <!-- 3. 생산이력(DB) -->
     <div class="panel" id="histPanel">
+      <button id="btnDelSel" class="s d" style="float:right" onclick="delSelected()" disabled>선택 삭제</button>
+      <button id="btnDelSel" class="s d" style="float:right" onclick="delSelected()" disabled>선택 삭제</button>
       <h3 style="margin-bottom:8px">생산이력 <span class="muted" style="font-weight:400;font-size:12px">(줄을 클릭하면 수정 창이 열립니다)</span></h3>
       <div id="h_over" class="overbar noprint" style="display:none"></div>
       <div class="tw" style="max-height:46vh"><table id="tHist"></table></div>
@@ -1544,7 +1550,7 @@ function renderHist(){
     $('h_over').style.display=over.length?'':'none';}
   $('h_sum').textContent=`${L.length}건 · 생산 ${fmt(q)} EA · 가동율 ${pct(run/work)} · 효율 ${pct(q/cap)} · 불량 ${fmt(ng)}`;
   const cols=[['date','생산일자',0,'c-date'],['mc','설비',0,'c-mc'],['cust','고객사',0,'c-cust'],['pn','품번',0,'c-pn'],['name','품명',0,'c-name'],['w1','작업자',0,'c-w'],['spm','SPM',1,'c-spm'],['work','근무',1,'c-work'],['stop','정지',1,'c-stop'],['brk','휴식',1,'c-brk'],['run','가동',1,'c-run'],['cap','가능',1,'c-cap'],['qty','실적',1,'c-qty'],['mes','조정수량',1,'c-mes'],['oper','가동율',1,'c-oper'],['eff','효율',1,'c-eff'],['ng','불량',1,'c-ng'],['sr','정지사유',0,'c-sr'],['note','특기사항',0,'c-note']];
-  const h='<tr>'+cols.map(c=>`<th class="sort ${c[2]?'num':''} ${c[3]} ${sortKey===c[0]?(sortDir>0?'asc':'desc'):''}" onclick="sortBy('${c[0]}')">${c[1]}</th>`).join('')+'<th class="c-del"></th></tr>';
+  const h='<tr><th class="c-chk"><input type="checkbox" id="chkAll" onclick="event.stopPropagation();histAll(this.checked)" title="모두 선택"></th>'+cols.map(c=>`<th class="sort ${c[2]?'num':''} ${c[3]} ${sortKey===c[0]?(sortDir>0?'asc':'desc'):''}" onclick="sortBy('${c[0]}')">${c[1]}</th>`).join('')+'<th class="c-del"></th></tr>';
   $('tHist').innerHTML=h+(L.length?L.map(r=>`<tr class="${r.id===editId?'sel':''} ${r.eff>1?'overrow':''}" onclick="editRec('${r.id}')"><td class="c-date"><span class="dfull">${r.date}</span><span class="dmob">${r.date.slice(5).replace('-','/')}</span></td><td class="c-mc">${esc(r.mc)}</td><td class="c-cust"><span class="tag">${esc(r.cust)}</span></td><td class="c-pn">${esc(r.pn)}</td><td class="muted c-name">${esc(r.name)}</td><td class="c-w">${esc(workers(r).join(','))}</td><td class="num c-spm">${r.spm}</td><td class="num c-work">${r.work}</td><td class="num c-stop">${r.stop}</td><td class="num c-brk">${r.brk||''}</td><td class="num c-run">${r.run}</td><td class="num c-cap">${fmt(r.cap)}</td><td class="num c-qty"><b>${fmt(r.qty)}</b></td><td class="num c-mes">${(()=>{if(!r.mes)return'';const d=+r.qty-+r.mes;
       if(!d)return'<span class=muted>일치</span>';
       return `<b style="color:${d>0?'var(--green)':'var(--red)'}">${d>0?'+':'−'}${fmt(Math.abs(d))}</b><br><span class=muted style="font-size:11px">MES ${fmt(r.mes)}</span>`})()}</td><td class="num c-oper"><span class="tag ${cls(r.oper)}">${pct(r.oper)}</span></td><td class="num c-eff">${r.single?'<span class=muted>단발</span>':`<span class="tag ${cls(r.eff)}">${pct(r.eff)}</span>`}</td><td class="num c-ng">${r.ng||''}</td><td class="muted c-sr">${esc(r.sr)}</td><td class="muted c-note">${esc(r.note)}</td><td class="c-del"><button class="s d" onclick="event.stopPropagation();delRec('${r.id}')">삭제</button></td></tr>`).join('')+`<tr class=sum><td class="c-date">합계</td><td class="c-mc">${L.length}건</td><td class="c-cust"></td><td class="c-pn"></td><td class="c-name"></td><td class="c-w"></td><td class="num c-spm"></td><td class="num c-work">${fmt(work)}</td><td class="num c-stop">${fmt(work-run)}</td><td class="num c-brk"></td><td class="num c-run">${fmt(run)}</td><td class="num c-cap">${fmt(cap)}</td><td class="num c-qty">${fmt(q)}</td><td class="num c-mes"></td><td class="num c-oper">${pct(run/work)}</td><td class="num c-eff">${pct(q/cap)}</td><td class="num c-ng">${fmt(ng)}</td><td class="c-sr"></td><td class="c-note"></td><td class="c-del"></td></tr>`:'<tr><td colspan=20 class=empty>조건에 맞는 일보가 없습니다</td></tr>');
@@ -1594,6 +1600,20 @@ function adjSave(){
   logAdd('생산수량 조정',d+' · '+n+'건 · '+ch.slice(0,5).join(' / ')+(ch.length>5?' 외':''));
   ADJ={};commit();pushCloseDay(d);toast(n+'건 조정 저장 · 모니터링 서버 반영 중');
 }
+const HSEL=new Set();
+function histPick(id,on){on?HSEL.add(id):HSEL.delete(id);histSelMsg()}
+function histAll(on){document.querySelectorAll('#tHist .hchk').forEach(c=>{c.checked=on;on?HSEL.add(c.value):HSEL.delete(c.value)});histSelMsg()}
+function histSelMsg(){const b=$('btnDelSel');if(!b)return;b.textContent=HSEL.size?`선택 ${HSEL.size}건 삭제`:'선택 삭제';b.disabled=!HSEL.size}
+function delSelected(){
+  if(!HSEL.size){toast('삭제할 줄을 먼저 선택하세요');return}
+  const L=S.recs.filter(r=>HSEL.has(r.id));
+  const days=[...new Set(L.map(r=>r.date))].sort();
+  if(!confirm(`선택한 일보 ${L.length}건을 삭제합니다.\n\n${days.join(', ').slice(0,90)}\n실적 합계 ${fmt(L.reduce((a,r)=>a+(+r.qty||0),0))} EA\n\n되돌릴 수 없습니다. 계속할까요?`))return;
+  L.forEach(r=>{S.del[r.id]=now()});
+  S.recs=S.recs.filter(r=>!HSEL.has(r.id));
+  logAdd('일보 일괄 삭제',`${L.length}건 · ${days.join(', ').slice(0,60)}`);
+  HSEL.clear();commit();renderAll();toast(`${L.length}건을 삭제했습니다`);
+}
 function renderHist(){
   const m=S.master;
   opts($('h_cust'),m.custs,$('h_cust').value,'고객사 전체');
@@ -1617,10 +1637,11 @@ function renderHist(){
   if($('h_over')){$('h_over').innerHTML=over.length
     ?`⚠ 효율 100% 초과 ${over.length}건 <span>— ${over.slice(0,4).map(r=>`${r.date.slice(5)} ${esc(r.mc)} ${pct(r.eff)}`).join(' · ')}${over.length>4?` 외 ${over.length-4}건`:''} · SPM 표준 또는 가동시간을 확인하세요</span>`:'';
     $('h_over').style.display=over.length?'':'none';}
+  histSelMsg();
   $('h_sum').textContent=`${L.length}건 · 생산 ${fmt(q)} EA · 가동율 ${pct(run/work)} · 효율 ${pct(q/cap)} · 불량 ${fmt(ng)}`;
   const cols=[['date','생산일자',0,'c-date'],['mc','설비',0,'c-mc'],['cust','고객사',0,'c-cust'],['pn','품번',0,'c-pn'],['name','품명',0,'c-name'],['w1','작업자',0,'c-w'],['spm','SPM',1,'c-spm'],['work','근무',1,'c-work'],['stop','정지',1,'c-stop'],['brk','휴식',1,'c-brk'],['run','가동',1,'c-run'],['cap','가능',1,'c-cap'],['qty','실적',1,'c-qty'],['mes','조정수량',1,'c-mes'],['oper','가동율',1,'c-oper'],['eff','효율',1,'c-eff'],['ng','불량',1,'c-ng'],['sr','정지사유',0,'c-sr'],['note','특기사항',0,'c-note']];
-  const h='<tr>'+cols.map(c=>`<th class="sort ${c[2]?'num':''} ${c[3]} ${sortKey===c[0]?(sortDir>0?'asc':'desc'):''}" onclick="sortBy('${c[0]}')">${c[1]}</th>`).join('')+'<th class="c-del"></th></tr>';
-  $('tHist').innerHTML=h+(L.length?L.map(r=>`<tr class="${r.id===editId?'sel':''} ${r.eff>1?'overrow':''}" onclick="editRec('${r.id}')"><td class="c-date"><span class="dfull">${r.date}</span><span class="dmob">${r.date.slice(5).replace('-','/')}</span></td><td class="c-mc">${esc(r.mc)}</td><td class="c-cust"><span class="tag">${esc(r.cust)}</span></td><td class="c-pn">${esc(r.pn)}</td><td class="muted c-name">${esc(r.name)}</td><td class="c-w">${esc(workers(r).join(','))}</td><td class="num c-spm">${r.spm}</td><td class="num c-work">${r.work}</td><td class="num c-stop">${r.stop}</td><td class="num c-brk">${r.brk||''}</td><td class="num c-run">${r.run}</td><td class="num c-cap">${fmt(r.cap)}</td><td class="num c-qty"><b>${fmt(r.qty)}</b></td><td class="num c-mes">${(()=>{if(!r.mes)return'';const d=+r.qty-+r.mes;
+  const h='<tr><th class="c-chk"><input type="checkbox" id="chkAll" onclick="event.stopPropagation();histAll(this.checked)" title="모두 선택"></th>'+cols.map(c=>`<th class="sort ${c[2]?'num':''} ${c[3]} ${sortKey===c[0]?(sortDir>0?'asc':'desc'):''}" onclick="sortBy('${c[0]}')">${c[1]}</th>`).join('')+'<th class="c-del"></th></tr>';
+  $('tHist').innerHTML=h+(L.length?L.map(r=>`<tr class="${r.id===editId?'sel':''} ${r.eff>1?'overrow':''}" onclick="editRec('${r.id}')"><td class="c-chk"><input type="checkbox" class="hchk" value="${r.id}" ${HSEL.has(r.id)?'checked':''} onclick="event.stopPropagation();histPick('${r.id}',this.checked)"></td><td class="c-date"><span class="dfull">${r.date}</span><span class="dmob">${r.date.slice(5).replace('-','/')}</span></td><td class="c-mc">${esc(r.mc)}</td><td class="c-cust"><span class="tag">${esc(r.cust)}</span></td><td class="c-pn">${esc(r.pn)}</td><td class="muted c-name">${esc(r.name)}</td><td class="c-w">${esc(workers(r).join(','))}</td><td class="num c-spm">${r.spm}</td><td class="num c-work">${r.work}</td><td class="num c-stop">${r.stop}</td><td class="num c-brk">${r.brk||''}</td><td class="num c-run">${r.run}</td><td class="num c-cap">${fmt(r.cap)}</td><td class="num c-qty"><b>${fmt(r.qty)}</b></td><td class="num c-mes">${(()=>{if(!r.mes)return'';const d=+r.qty-+r.mes;
       if(!d)return'<span class=muted>일치</span>';
       return `<b style="color:${d>0?'var(--green)':'var(--red)'}">${d>0?'+':'−'}${fmt(Math.abs(d))}</b><br><span class=muted style="font-size:11px">MES ${fmt(r.mes)}${r.adj?' · '+esc(r.adj):''}</span>`})()}</td><td class="num c-oper"><span class="tag ${cls(r.oper)}">${pct(r.oper)}</span></td><td class="num c-eff">${r.single?'<span class=muted>단발</span>':`<span class="tag ${cls(r.eff)}">${pct(r.eff)}</span>`}</td><td class="num c-ng">${r.ng||''}</td><td class="muted c-sr">${esc(r.sr)}</td><td class="muted c-note">${esc(r.note)}</td><td class="c-del"><button class="s d" onclick="event.stopPropagation();delRec('${r.id}')">삭제</button></td></tr>`).join('')+`<tr class=sum><td class="c-date">합계</td><td class="c-mc">${L.length}건</td><td class="c-cust"></td><td class="c-pn"></td><td class="c-name"></td><td class="c-w"></td><td class="num c-spm"></td><td class="num c-work">${fmt(work)}</td><td class="num c-stop">${fmt(work-run)}</td><td class="num c-brk"></td><td class="num c-run">${fmt(run)}</td><td class="num c-cap">${fmt(cap)}</td><td class="num c-qty">${fmt(q)}</td><td class="num c-mes"></td><td class="num c-oper">${pct(run/work)}</td><td class="num c-eff">${pct(q/cap)}</td><td class="num c-ng">${fmt(ng)}</td><td class="c-sr"></td><td class="c-note"></td><td class="c-del"></td></tr>`:'<tr><td colspan=20 class=empty>조건에 맞는 일보가 없습니다</td></tr>');
 }
