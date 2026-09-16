@@ -409,7 +409,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
   <a data-pg="master"><i>⚙</i>기준정보</a>
   <a data-pg="data"><i>⇅</i>데이터 관리</a>
   <a data-pg="help"><i>?</i>사용안내</a>
-  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v17.7</div>
+  <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br>v17.9</div>
 </nav>
 <main>
   <div class="top">
@@ -1394,7 +1394,7 @@ async function openMes(dateArg,quiet){
       name2:it?it.name:(nameMap[x.pn]||''),cust:it?it.cust:'',run:Math.max(0,work-brk0-(stopM!=null?stopM:(runEst?Math.max(0,net0-runEst):0))),work,brk,runSrc,
       stop:(stopM!=null?stopM:(noRun?(last?last.stop:0):Math.max(0,work-brk0-(runEst||run)))),noRun,runEst,overRun,
       qty:cz?(+cz.actual_qty||0):(+x.qty||0),ng,ngp,ab:bad[x.pn]||0,
-      w1:(cz&&cz.worker)||(last?last.w1:''),sr:dtTxt[code]||stopTxt[code]||'',dtMin:dtMin[code],
+      w1:(cz&&cz.worker)||(last?last.w1:'')||'',closer:(cz&&cz.worker)||'',prevW:last?last.w1:'',   // 마감한 사람 = 실제 배치자sr:dtTxt[code]||stopTxt[code]||'',dtMin:dtMin[code],
       note:[badNote[x.pn]||'',cz&&cz.memo?String(cz.memo):''].filter(Boolean).join(' / '),
       ledClosed:!!(cz&&cz.fromLedger),closed:!!cz,waitClose:!cz&&(+x.qty||0)>0,mesQty:(cz&&cz.mes_qty!=null)?(+cz.mes_qty||0):(+x.qty||0),czReason:cz?(cz.reason||''):'',pending:!!x.pending,use:(upd||!dup)&&!!mc&&!x.pending,dup:!!dup,dupId:dup?dup.id:'',upd};
   });
@@ -1433,7 +1433,7 @@ function drawMes(d){
     <td><input type=number value="${r.ngp||''}" onchange="mesSet(${r.i},'ngp',this.value)" style="width:80px;padding:3px 5px" placeholder="0"></td>
     <td><input value="${esc(r.sr)}" onchange="mesSet(${r.i},'sr',this.value)" placeholder="정지사유" style="min-width:210px;padding:3px 5px"></td>
     <td><input value="${esc(r.note)}" onchange="mesSet(${r.i},'note',this.value)" placeholder="특기사항" style="min-width:170px;padding:3px 5px"></td>
-    <td style="font-size:11px">${r.closed?`<b style="color:${r.qty===0&&r.mesQty>0?'var(--red)':'var(--green)'}">현장 마감${r.qty===0&&r.mesQty>0?' · 실제양품 0 확인':''}</b>${r.mesQty&&r.mesQty!==r.qty?` <span class=muted>MES ${fmt(r.mesQty)}→${fmt(r.qty)}</span>`:''}${r.czReason?` <span class=muted>${esc(r.czReason)}</span>`:''}<br>`:''}${(()=>{const exp=spm*Math.max(0,r.run);const low=exp>0&&r.qty<exp*0.6&&!r.closed;return low?`<b style="color:var(--red)">실적 확인 (예상 ${fmt(exp)})</b> `:''})()}${r.waitClose?'<b style="color:var(--amber)">실제양품 미입력 · MES 값 사용</b><br>':''}${r.upd?`<b style="color:var(--amber)">수량 변경 → 덮어쓰기</b> <span class=muted>${fmt((S.recs.find(z=>z.id===r.dupId)||{}).qty||0)}→${fmt(r.qty)}</span>`:r.dup?'<span class=muted>이미 저장됨</span>':(!r.mc?'<b style="color:var(--red)">설비 지정 필요</b>':(r.pending?'<b style="color:var(--amber)">생산마감 미완료</b>':(r.noRun?'<b style="color:var(--amber)">MES 가동시간 없음 · 정지 확인</b>':(r.runEst?'<span class=muted>가동 = 실적÷SPM 추정</span>':(r.overRun?`<b style="color:var(--amber)">모니터링 가동 ${fmt(r.overRun)}분 — 하루 근무 초과, 실적÷SPM으로 계산</b>`:(r.runSrc==='모니터링'?'<span class=muted>가동·정지 = 모니터링 측정</span>':(r.pn.startsWith('@')?'<span class=muted>신규 품번 등록됨</span>':'')))))))}</td></tr>`;
+    <td style="font-size:11px">${r.closed?`<b style="color:${r.qty===0&&r.mesQty>0?'var(--red)':'var(--green)'}">현장 마감${r.qty===0&&r.mesQty>0?' · 실제양품 0 확인':''}</b>${r.mesQty&&r.mesQty!==r.qty?` <span class=muted>MES ${fmt(r.mesQty)}→${fmt(r.qty)}</span>`:''}${r.closer&&r.prevW&&r.closer!==r.prevW?` <span class=muted>· 작업자 ${esc(r.prevW)}→${esc(r.closer)}</span>`:''}${r.czReason?` <span class=muted>${esc(r.czReason)}</span>`:''}<br>`:''}${(()=>{const exp=spm*Math.max(0,r.run);const low=exp>0&&r.qty<exp*0.6&&!r.closed;return low?`<b style="color:var(--red)">실적 확인 (예상 ${fmt(exp)})</b> `:''})()}${r.waitClose?'<b style="color:var(--amber)">실제양품 미입력 · MES 값 사용</b><br>':''}${r.upd?`<b style="color:var(--amber)">수량 변경 → 덮어쓰기</b> <span class=muted>${fmt((S.recs.find(z=>z.id===r.dupId)||{}).qty||0)}→${fmt(r.qty)}</span>`:r.dup?'<span class=muted>이미 저장됨</span>':(!r.mc?'<b style="color:var(--red)">설비 지정 필요</b>':(r.pending?'<b style="color:var(--amber)">생산마감 미완료</b>':(r.noRun?'<b style="color:var(--amber)">MES 가동시간 없음 · 정지 확인</b>':(r.runEst?'<span class=muted>가동 = 실적÷SPM 추정</span>':(r.overRun?`<b style="color:var(--amber)">모니터링 가동 ${fmt(r.overRun)}분 — 하루 근무 초과, 실적÷SPM으로 계산</b>`:(r.runSrc==='모니터링'?'<span class=muted>가동·정지 = 모니터링 측정</span>':(r.pn.startsWith('@')?'<span class=muted>신규 품번 등록됨</span>':'')))))))}</td></tr>`;
   }).join('');
   const n=MESROWS.filter(r=>r.use).length;
   const nMc=new Set(MESROWS.map(r=>r.code)).size;
