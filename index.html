@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v18.5 · 태진다이텍</title>
+<title>생산일보 통합관리 v18.7 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -711,7 +711,7 @@ const SEED_MASTER={"mcs":["01 쌍용200","02 심팩200","03 심팩150","04 심�
 const DEF_MESMC={'003':'34 심팩250','004':'03 심팩150','005':'28 국일250','007':'01 쌍용200','008':'02 심팩200','009':'04 심팩150','010':'05 심팩110','011':'06 심팩110','013':'30 국일160','014':'31 심팩150','015':'32 심팩200','017':'35 심팩250','018':'37 국일200','019':'38 국일250','020':'39 국일250','021':'40 심팩200','022':'41 국일200','024':'46 심팩300','025':'47 심팩300','001':'36 심팩300','002':'45 심팩300','026':'48 심팩300','027':'49 심팩300','006':'43 화일800','043':'43 화일800'};
 // MES 품번 → 앱 품번 (표기가 다른 것만)
 const DEF_MESPN={'54610-D3501-(BK)':'54610-D3501','1958-365-2(2호)':'1958-365-2','AT3037-GC-00':'AT3037-GC-01','IW/OW-BDA-1159B':'IW/OW BDA 1159B'};
-const APP_VER='18.5';        // 서버에 기록해 두고, 옛 파일이 열리면 한 번 새로고침시킨다
+const APP_VER='18.7';        // 서버에 기록해 두고, 옛 파일이 열리면 한 번 새로고침시킨다
 const SPM_COMMON_ONLY=true;   // 공통값(설비 미지정)만 기준으로 쓴다
 const MES_FROM='2026-09-01'; // 8월까지 실적은 손대지 않음
 /* 근무 기준 — 08:00~19:00, 수요일 08:00~17:00
@@ -2179,6 +2179,7 @@ function weekClose(){
     String(r.note||'').split('/').forEach(s=>{const m=s.match(/(.+?)\s*:\s*([0-9]+)/);if(!m)return;
       const k=m[1].trim();if(/시타발|초중종|검사품/.test(k))return;ngT[k]=(ngT[k]||0)+(+m[2]||0)});
   });
+  const wk2=mc=>{const w=mainWorker(L,mc);return w?`(${w})`:''};
   const stSum=Object.values(st).reduce((a,b)=>a+b,0)||1;
   const stTop=Object.entries(st).sort((a,b)=>b[1]-a[1]).slice(0,5);
   const ngTop=Object.entries(ngT).sort((a,b)=>b[1]-a[1]).slice(0,4);
@@ -2191,9 +2192,10 @@ function weekClose(){
   // 개선활동 항목
   const act=[];
   if(stTop[0])act.push(`① 정지 1순위 : ${stTop[0][0]} ${fmt(stTop[0][1])}분 (${(stTop[0][1]/stSum*100).toFixed(0)}%) — 발생 설비·시간대 확인, 다음 주 20% 단축 목표`);
-  if(byStop[0])act.push(`② 정지율 최다 : ${byStop[0][0]} ${(byStop[0][1].stop/byStop[0][1].net*100).toFixed(0)}% (${fmt(byStop[0][1].stop)}분) — 금형·소재 준비 방식 점검`);
-  if(byNg[0])act.push(`③ 불량 최다 : ${byNg[0][0]} ${Math.round(byNg[0][1].ng/byNg[0][1].q*1e6).toLocaleString()} PPM${ngTop[0]?` (${ngTop.slice(0,2).map(x=>x[0]+' '+fmt(x[1])).join(', ')})`:''} — 원인 분석·재발방지`);
-  if(byEff[0])act.push(`④ 효율 최저 : ${byEff[0][0]} ${(byEff[0][1].q/byEff[0][1].cap*100).toFixed(1)}% — 가동 조건·SPM 표준 적정성 확인`);
+  const wk=mc=>{const w=mainWorker(L,mc);return w?`(${w})`:''};
+  if(byStop[0])act.push(`② 정지율 최다 : ${byStop[0][0]}${wk(byStop[0][0])} ${(byStop[0][1].stop/byStop[0][1].net*100).toFixed(0)}% (${fmt(byStop[0][1].stop)}분) — 금형·소재 준비 방식 점검`);
+  if(byNg[0])act.push(`③ 불량 최다 : ${byNg[0][0]}${wk(byNg[0][0])} ${Math.round(byNg[0][1].ng/byNg[0][1].q*1e6).toLocaleString()} PPM${ngTop[0]?` (${ngTop.slice(0,2).map(x=>x[0]+' '+fmt(x[1])).join(', ')})`:''} — 원인 분석·재발방지`);
+  if(byEff[0])act.push(`④ 효율 최저 : ${byEff[0][0]}${wk(byEff[0][0])} ${(byEff[0][1].q/byEff[0][1].cap*100).toFixed(1)}% — 가동 조건·SPM 표준 적정성 확인`);
   if(over.length)act.push(`⑤ 효율 100% 초과 ${over.length}건 — SPM 표준 또는 가동시간 오류, 해당 일보 확인`);
   if(noSr.length)act.push(`⑥ 정지 100분 이상인데 사유 미기재 ${noSr.length}건 — 현장 확인 후 보완`);
   act.push(`⑦ 현장 마감(실제양품) 당일 입력 · 익일 오전 일보 확정 — 주간 준수율 점검`);
@@ -2208,16 +2210,45 @@ function weekClose(){
 ${stTop.map(([k,v])=>`  · ${k} ${fmt(v)}분 (${(v/stSum*100).toFixed(0)}%)`).join('\n')||'  · 자료 없음'}
 
 ■ 설비 점검 대상
-  정지율 : ${byStop.map(([k,o])=>`${k} ${(o.stop/o.net*100).toFixed(0)}%`).join(' · ')||'-'}
-  효율   : ${byEff.map(([k,o])=>`${k} ${(o.q/o.cap*100).toFixed(0)}%`).join(' · ')||'-'}
-  불량   : ${byNg.map(([k,o])=>`${k} ${Math.round(o.ng/o.q*1e6).toLocaleString()}PPM`).join(' · ')||'-'}
+  정지율 : ${byStop.map(([k,o])=>`${k}${wk2(k)} ${(o.stop/o.net*100).toFixed(0)}%`).join(' · ')||'-'}
+  효율   : ${byEff.map(([k,o])=>`${k}${wk2(k)} ${(o.q/o.cap*100).toFixed(0)}%`).join(' · ')||'-'}
+  불량   : ${byNg.map(([k,o])=>`${k}${wk2(k)} ${Math.round(o.ng/o.q*1e6).toLocaleString()}PPM`).join(' · ')||'-'}
 
 ■ 개선 활동
 ${act.map(x=>'  '+x).join('\n')}`;
+  WEEKTXT=txt;
+  $('modal').innerHTML=`<div class="fl" style="margin-bottom:10px">
+      <h2 style="flex:1">주간 마감 · ${from} ~ ${to}</h2>
+      <button class="p s" onclick="weekCopy()">내용 복사</button>
+      <button class="s" onclick="weekPrint()">인쇄</button>
+      <button onclick="closeMask()">닫기</button></div>
+    <pre id="weekBox" style="white-space:pre-wrap;font:13px/1.75 'Malgun Gothic',sans-serif;background:#F7F9FB;border:1px solid var(--line2);border-radius:8px;padding:14px;max-height:62vh;overflow:auto;margin:0">${esc(txt)}</pre>`;
+  $('mask').classList.add('on');
+}
+
+/* 설비의 주 작업자 (그 기간 가장 많이 잡힌 사람) */
+function mainWorker(L,mc){
+  const c={};
+  L.filter(r=>r.mc===mc).forEach(r=>workers(r).forEach(w=>{if(w)c[w]=(c[w]||0)+1}));
+  const e=Object.entries(c).sort((a,b)=>b[1]-a[1]);
+  return e.length?e[0][0]:'';
+}
+
+let WEEKTXT='';
+function weekCopy(){
+  const ok=()=>toast('복사했습니다 — 톡·메일에 붙여 넣으세요');
+  try{navigator.clipboard.writeText(WEEKTXT).then(ok,()=>{fallbackCopy(WEEKTXT);ok()})}
+  catch(e){fallbackCopy(WEEKTXT);ok()}
+}
+function fallbackCopy(s){
+  const ta=document.createElement('textarea');ta.value=s;ta.style.position='fixed';ta.style.opacity='0';
+  document.body.appendChild(ta);ta.select();try{document.execCommand('copy')}catch(e){}document.body.removeChild(ta);
+}
+function weekPrint(){
   const w=window.open('','_blank','width=860,height=720');
-  if(w){w.document.write(`<title>주간 마감 ${from}~${to}</title><style>body{font:13px/1.7 'Malgun Gothic',sans-serif;padding:18px;white-space:pre-wrap}</style>`+esc(txt));w.document.close()}
-  try{navigator.clipboard.writeText(txt).then(()=>toast('주간 마감 내용을 새 창에 열고 복사했습니다'),()=>toast('주간 마감 내용을 새 창에 열었습니다'))}
-  catch(e){toast('주간 마감 내용을 새 창에 열었습니다')}
+  if(!w){toast('팝업이 차단되었습니다 — [내용 복사]를 쓰세요');return}
+  w.document.write(`<title>주간 마감</title><style>body{font:13px/1.75 'Malgun Gothic',sans-serif;padding:18px;white-space:pre-wrap}</style>`+esc(WEEKTXT));
+  w.document.close();setTimeout(()=>w.print(),300);
 }
 
 /* 개선 활동 자동 작성 — 그 달 자료에서 상위 문제를 뽑아 채운다 */
@@ -2248,14 +2279,15 @@ function rptSuggest(){
   const effLow=E.filter(([,o])=>o.cap>0&&o.n>=3).sort((a,b)=>a[1].q/a[1].cap-b[1].q/b[1].cap)[0];
   const ngTopMc=E.filter(([,o])=>o.q>0).sort((a,b)=>b[1].ng/b[1].q-a[1].ng/a[1].q)[0];
   const rows=[];
+  const who=mc=>{const w=mainWorker(L,mc);return '생산팀'+(w?' '+w:'')};
   if(stTop[0])rows.push([`정지 1순위 : ${stTop[0][0]}`,
     `${month.slice(5)}월 정지의 ${(stTop[0][1]/stSum*100).toFixed(0)}% (${fmt(stTop[0][1])}분). 발생 공정·시간대 분석 후 단축 방안 수립`,'생산팀 / 익월 15일']);
   if(stopTop)rows.push([`${stopTop[0]} 정지율 ${(stopTop[1].stop/stopTop[1].net*100).toFixed(0)}%`,
-    `정지 ${fmt(stopTop[1].stop)}분 — 상위 정지사유 확인 후 금형·소재 준비 방식 개선`,'생산팀 / 익월 15일']);
+    `정지 ${fmt(stopTop[1].stop)}분 — 상위 정지사유 확인 후 금형·소재 준비 방식 개선`,`${who(stopTop[0])} / 익월 15일`]);
   if(ngTop[0]&&ngTopMc)rows.push([`${ngTopMc[0]} 불량 ${Math.round(ngTopMc[1].ng/ngTopMc[1].q*1e6).toLocaleString()} PPM`,
-    `주요 유형 ${ngTop.map(x=>x[0]+' '+fmt(x[1])+'개').join(', ')} — 원인 분석 및 재발방지 대책 수립`,'품질관리팀 / 익월 10일']);
+    `주요 유형 ${ngTop.map(x=>x[0]+' '+fmt(x[1])+'개').join(', ')} — 원인 분석 및 재발방지 대책 수립`,`${who(ngTopMc[0])} / 익월 10일`]);
   if(effLow)rows.push([`${effLow[0]} 효율 ${(effLow[1].q/effLow[1].cap*100).toFixed(1)}%`,
-    `가동 조건·SPM 표준 적정성 확인, 필요 시 표준 재설정`,'품질관리팀 / 익월 20일']);
+    `가동 조건·SPM 표준 적정성 확인, 필요 시 표준 재설정`,`${who(effLow[0])} / 익월 20일`]);
   rows.push(['일보 작성 정착','현장 마감(실제양품) 당일 입력, 익일 오전 일보 확정','생산팀 / 상시']);
   // 비어 있는 칸만 채운다
   const o=rptGet();let n=0;
