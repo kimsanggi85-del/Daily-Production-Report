@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v18.7 · 태진다이텍</title>
+<title>생산일보 통합관리 v18.8 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -126,7 +126,17 @@ tr.sum td{background:#EEF2F7;font-weight:700;border-top:2px solid var(--line)}
 tr.overrow td{background:#FEF6F5}
 #tHist .c-chk{width:34px;text-align:center}
 #tHist .c-chk input{width:16px;height:16px;cursor:pointer}
+.lbl-short{display:none}
+@media(max-width:900px){.lbl-long{display:none}.lbl-short{display:inline}}
 #tHist .c-chk{width:34px;text-align:center}
+  /* 상단 버튼줄 : 모바일에서 한 줄 유지 (넘치면 옆으로 밀기) */
+  #topMes{flex-wrap:nowrap!important;overflow-x:auto;-webkit-overflow-scrolling:touch;
+    gap:4px!important;padding-bottom:2px;scrollbar-width:none;max-width:100%}
+  #topMes::-webkit-scrollbar{display:none}
+  #topMes button{flex:0 0 auto;white-space:nowrap;padding:6px 9px;font-size:12px}
+  .top{flex-wrap:nowrap;gap:6px;align-items:center}
+  .top .mon{flex:0 0 auto}
+  .top .mon b{font-size:12px}
 #tHist .c-chk input{width:16px;height:16px;cursor:pointer}
 .overbar{margin:0 0 10px;padding:10px 14px;border-radius:8px;background:var(--red);color:#fff;font-size:14px;font-weight:700}
 .overbar span{font-weight:400;opacity:.92}
@@ -415,7 +425,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
   <div class="top">
     <h2 id="title">생산일보 입력 · 이력</h2>
     <div class="fl" id="topMes" style="display:none;flex:1;gap:6px">
-      <button class="p" onclick="openMes()" title="선택한 날짜의 MES 자료를 읽어 아직 만들지 않은 일보를 만들어 줍니다">누락일보콜</button><button onclick="syncClose()" title="이미 저장된 일보의 실적을 현장 마감 수량(실제양품)으로 한 번에 맞춥니다">실제수량갱신</button><button class="s" onclick="weekClose()" title="지난 한 주 실적을 정리하고 개선활동 항목을 뽑아 줍니다">주간 마감</button><button class="s" onclick="mesDiag()">연결 점검</button>
+      <button class="p" onclick="openMes()" title="선택한 날짜의 MES 자료를 읽어 아직 만들지 않은 일보를 만들어 줍니다"><span class="lbl-long">누락일보콜</span><span class="lbl-short">일보콜</span></button><button onclick="syncClose()" title="이미 저장된 일보의 실적을 현장 마감 수량(실제양품)으로 한 번에 맞춥니다"><span class="lbl-long">실제수량갱신</span><span class="lbl-short">수량</span></button><button class="s" onclick="weekClose()" title="지난 한 주 실적을 정리하고 개선활동 항목을 뽑아 줍니다"><span class="lbl-long">주간 마감</span><span class="lbl-short">주간</span></button><button class="s" onclick="mesDiag()"><span class="lbl-long">연결 점검</span><span class="lbl-short">점검</span></button>
     </div>
     <div class="mon"><button onclick="mv(-1)">‹</button><b id="monLbl"></b><button onclick="mv(1)">›</button></div>
     <button id="btnToday" onclick="go('entry')" class="p">+ 오늘 일보 입력</button>
@@ -711,7 +721,7 @@ const SEED_MASTER={"mcs":["01 쌍용200","02 심팩200","03 심팩150","04 심�
 const DEF_MESMC={'003':'34 심팩250','004':'03 심팩150','005':'28 국일250','007':'01 쌍용200','008':'02 심팩200','009':'04 심팩150','010':'05 심팩110','011':'06 심팩110','013':'30 국일160','014':'31 심팩150','015':'32 심팩200','017':'35 심팩250','018':'37 국일200','019':'38 국일250','020':'39 국일250','021':'40 심팩200','022':'41 국일200','024':'46 심팩300','025':'47 심팩300','001':'36 심팩300','002':'45 심팩300','026':'48 심팩300','027':'49 심팩300','006':'43 화일800','043':'43 화일800'};
 // MES 품번 → 앱 품번 (표기가 다른 것만)
 const DEF_MESPN={'54610-D3501-(BK)':'54610-D3501','1958-365-2(2호)':'1958-365-2','AT3037-GC-00':'AT3037-GC-01','IW/OW-BDA-1159B':'IW/OW BDA 1159B'};
-const APP_VER='18.7';        // 서버에 기록해 두고, 옛 파일이 열리면 한 번 새로고침시킨다
+const APP_VER='18.8';        // 서버에 기록해 두고, 옛 파일이 열리면 한 번 새로고침시킨다
 const SPM_COMMON_ONLY=true;   // 공통값(설비 미지정)만 기준으로 쓴다
 const MES_FROM='2026-09-01'; // 8월까지 실적은 손대지 않음
 /* 근무 기준 — 08:00~19:00, 수요일 08:00~17:00
