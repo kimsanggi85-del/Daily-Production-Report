@@ -1304,7 +1304,9 @@ async function openMes(dateArg,quiet){
       const q=+(r.shot_qty??r.qty??r.prod_qty??r.actual_qty??r.total_qty??0)||0;
       led.push({pn:r.item_code||r.pn,kind:'생산입고',qty:q,party:r.machine_code||r.party,lot:r.work_order_no||'',note:'',
         name:r.item_name||'',start:r.start_time||'',end:r.end_time||''});
-      if(+r.abnormal_shot>0)led.push({pn:r.item_code||r.pn,kind:'불량폐기',qty:+r.abnormal_shot,party:r.machine_code||r.party,lot:'',note:'불량사유 P10:'+(+r.abnormal_shot)});
+      // 불량 컬럼명이 설비·라인마다 다를 수 있어 쓰이는 이름을 순서대로 본다 (수량과 같은 방식)
+      const ab=+(r.abnormal_shot??r.abnormal_qty??r.ng_shot??r.ng_qty??r.defect_shot??r.defect_qty??r.bad_shot??r.bad_qty??r.reject_qty??0)||0;
+      if(ab>0)led.push({pn:r.item_code||r.pn,kind:'불량폐기',qty:ab,party:r.machine_code||r.party,lot:'',note:'불량사유 P10:'+ab});
     });}
     use=[];   // 소재사용 구간은 더 이상 쓰지 않음 (가동시간은 모니터링 run_min)
     dt=(r3&&r3.ok)?await r3.json():[];
@@ -2621,7 +2623,8 @@ function backupMaster(){
 }
 /* 모니터링 서버 연결 점검 — 어느 표가 어떤 형태로 응답하는지 그대로 보여준다 */
 async function mesDiag(){
-  const d=$('f_date').value||today();
+  const fd0=$('f_date')?$('f_date').value:'';
+  const d=MESDATE||((fd0&&fd0<today())?fd0:mesDefaultDay());
   const dh={'apikey':DT_KEY,'Authorization':'Bearer '+DT_KEY};
   const out=[`[모니터링 연결 점검 · ${d}] 앱 ${(document.querySelector('.foot')||{}).textContent?.match(/v[\d.]+/)?.[0]||''}`,`서버 ${DT_URL}`,''];
   const tests=[
@@ -2637,6 +2640,32 @@ async function mesDiag(){
       out.push(`${r.ok?'✅':'❌'} ${nm} → ${r.status} ${n}`);if(smp)out.push('    '+smp);
     }catch(e){out.push(`❌ ${nm} → 연결 실패 ${e.message}`)}
   }
+  // 설비별 실적·불량 원본 — 불량이 어느 컬럼으로 들어오는지, 어느 설비가 비는지 그대로 보여준다
+  try{
+    const r=await fetch(DT_URL+'/rest/v1/daily_production?select=*&ymd=eq.'+d+'&limit=800',{headers:dh});
+    if(!r.ok)out.push('',`❌ 설비별 원본 → ${r.status}`);
+    else{
+      const j=await r.json();
+      out.push('',`[설비별 실적·불량 원본 · ${j.length}건]`);
+      if(!j.length)out.push('    이 날짜 자료가 없습니다');
+      else{
+        const keys=Object.keys(j[0]);
+        const ngK=keys.filter(k=>/(abnormal|ng|defect|bad|reject|불량)/i.test(k));
+        const qK=keys.filter(k=>/(shot_qty|^qty$|prod_qty|actual_qty|total_qty)/i.test(k));
+        out.push('    전체 컬럼 : '+keys.join(', '));
+        out.push('    불량 컬럼 : '+(ngK.join(', ')||'없음 ← 모니터링 서버에 불량 항목 자체가 없습니다'));
+        out.push('    설비코드 / 앱설비 / 품번 / 실적 / 불량');
+        const mm=S.master.mesMc||{};
+        j.slice().sort((a,b)=>String(a.machine_code||'').localeCompare(String(b.machine_code||''),'ko',{numeric:true}))
+         .forEach(x=>{
+           const q=qK.map(k=>k+'='+(x[k]??'')).join(' ')||'-';
+           const g=ngK.map(k=>k+'='+(x[k]===null?'null':x[k])).join(' ')||'-';
+           const zero=ngK.length&&!ngK.some(k=>+x[k]>0);
+           out.push(`    ${x.machine_code||''} / ${mm[x.machine_code]||'⚠미매핑'} / ${x.item_code||''} / ${q} / ${g}${zero?'  ← 불량 0':''}`);
+         });
+      }
+    }
+  }catch(e){out.push('',`❌ 설비별 원본 조회 실패 ${e.message}`)}
   const txt=out.join('\n');
   const w=window.open('','_blank','width=980,height=680');
   if(w){w.document.write('<title>연결 점검</title><pre style="font:12px/1.5 monospace;padding:14px;white-space:pre-wrap">'+esc(txt)+'</pre>');w.document.close()}
