@@ -1437,7 +1437,8 @@ async function openMes(dateArg,quiet){
       name2:(it&&it.name)||itemInfo(pn||x.pn).name||nameMap[x.pn]||'',cust:(it&&it.cust)||itemInfo(pn||x.pn).cust||'',run:Math.max(0,work-brk0-(stopM!=null?stopM:(runEst?Math.max(0,net0-runEst):0))),work,brk,runSrc,
       stop:(stopM!=null?stopM:(noRun?(last?last.stop:0):Math.max(0,work-brk0-(runEst||run)))),noRun,runEst,overRun,
       qty:cz?(+cz.actual_qty||0):(+x.qty||0),ng,ngp,ab:bad[x.pn]||0,
-      w1:(cz&&cz.worker)||(last?last.w1:'')||'',closer:(cz&&cz.worker)||'',prevW:last?last.w1:'',   // 마감한 사람 = 실제 배치자sr:dtTxt[code]||stopTxt[code]||'',dtMin:dtMin[code],
+      w1:(cz&&cz.worker)||(last?last.w1:'')||'',closer:(cz&&cz.worker)||'',prevW:last?last.w1:'',   // 마감한 사람 = 실제 배치자
+      sr:dtTxt[code]||stopTxt[code]||'',dtMin:dtMin[code],
       note:[badNote[x.pn]||'',cz&&cz.memo?String(cz.memo):''].filter(Boolean).join(' / '),
       ledClosed:!!(cz&&cz.fromLedger),closed:!!cz,waitClose:!cz&&(+x.qty||0)>0,mesQty:(cz&&cz.mes_qty!=null)?(+cz.mes_qty||0):(+x.qty||0),czReason:cz?(cz.reason||''):'',pending:!!x.pending,use:(upd||!dup)&&!!mc&&!x.pending,dup:!!dup,dupId:dup?dup.id:'',upd};
   });
@@ -1553,6 +1554,9 @@ function saveMes(quiet,dateArg){
         src:r.closed?'마감':'MES',work:r.work,stop:r.stop,brk:r.brk,spm,
         cust:dupRec.cust||(it&&it.cust)||r.cust||f.cust||'',
         name:dupRec.name||(it&&it.name)||r.name2||f.name||'',ua:now()});}
+      if(!dupRec.sr&&r.sr)dupRec.sr=r.sr;          // 비어 있던 정지사유 채우기 (이미 적은 건 그대로 둠)
+      if(!dupRec.w1&&r.w1)dupRec.w1=r.w1;
+      if(r.note&&!String(dupRec.note||'').includes(r.note))dupRec.note=[dupRec.note,r.note].filter(Boolean).join(' / ');
       n++;return;
     }
     const inf=itemInfo(r.pn);
