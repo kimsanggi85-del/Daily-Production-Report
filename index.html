@@ -518,6 +518,8 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
         <div><label>시타발·검사폐기(EA)</label><input type="number" id="f_ngp" min="0" placeholder="0"></div>
         <div><label>생등(1프레스작업)</label><select id="f_reg"><option value="1">1 · 등록</option><option value="0">0 · 미등록</option></select></div>
         <div><label>금형코드</label><input id="f_mold" list="dlMold" placeholder="예: 19RDA613A"></div>
+        <div><label>설비고장 건수</label><input type="number" id="f_fcnt" min="0" placeholder="0" title="설비 고장으로 선 횟수 (계획정지 제외)"></div>
+        <div><label>고장정지(분)</label><input type="number" id="f_fmin" min="0" placeholder="0" title="위 고장으로 선 시간 합계 — 정지시간 중 고장분만"></div>
         <div class="c3"><label>정지사유</label><input id="f_sr" placeholder="예: 조회 금형점검 소재교환"><div class="chips" id="chips"></div></div>
         <div class="c3"><label>특기사항 (불량내용 등)</label><input id="f_note" placeholder="예: 시타발43 수리중불량15"></div>
       </div>
@@ -1129,15 +1131,17 @@ function readout(){const r=readForm();const c=calc(r);$('r_run').textContent=fmt
   if(c.single)$('r_cap').textContent='—';
   const w=$('effWarn');if(w){const m=overMsg(r);
     w.innerHTML=m?`<b>⚠ 효율 ${pct(c.eff)} — 100% 초과</b><br>${esc(m)}`:'';w.style.display=m?'':'none';}}
-function readForm(){const _sg=$('f_single')&&$('f_single').checked;return{date:$('f_date').value,mc:$('f_mc').value,proc:$('f_proc').value.trim()||'P/R',cust:$('f_cust').value,pn:$('f_pn').value,name:$('f_name').value.trim(),w1:$('f_w1').value.trim(),w2:$('f_w2').value.trim(),w3:$('f_w3').value.trim(),w4:$('f_w4').value.trim(),spm:_sg?0:(+$('f_spm').value||0),work:+$('f_work').value||0,stop:+$('f_stop').value||0,brk:+$('f_brk').value||0,qty:+$('f_qty').value||0,ng:+$('f_ng').value||0,ngp:+$('f_ngp').value||0,reg:+$('f_reg').value,sr:$('f_sr').value.trim(),note:$('f_note').value.trim(),mold:($('f_mold')?$('f_mold').value.trim():'')}}
-function writeForm(r){$('f_date').value=r.date;$('f_mc').value=r.mc;$('f_proc').value=r.proc||'P/R';$('f_cust').value=r.cust;fillPn(r.pn);$('f_pn').value=r.pn;$('f_name').value=r.name;['w1','w2','w3','w4'].forEach(k=>$('f_'+k).value=r[k]||'');$('f_spm').value=r.spm||'';if($('f_single'))$('f_single').checked=!(+r.spm);$('f_work').value=r.work;$('f_stop').value=r.stop;$('f_brk').value=r.brk||'';$('f_qty').value=r.qty;$('f_ng').value=r.ng||'';$('f_ngp').value=r.ngp||'';$('f_reg').value=r.reg??1;$('f_sr').value=r.sr||'';$('f_note').value=r.note||'';if($('f_mold'))$('f_mold').value=r.mold||'';readout();}
+function readForm(){const _sg=$('f_single')&&$('f_single').checked;return{date:$('f_date').value,mc:$('f_mc').value,proc:$('f_proc').value.trim()||'P/R',cust:$('f_cust').value,pn:$('f_pn').value,name:$('f_name').value.trim(),w1:$('f_w1').value.trim(),w2:$('f_w2').value.trim(),w3:$('f_w3').value.trim(),w4:$('f_w4').value.trim(),spm:_sg?0:(+$('f_spm').value||0),work:+$('f_work').value||0,stop:+$('f_stop').value||0,brk:+$('f_brk').value||0,qty:+$('f_qty').value||0,ng:+$('f_ng').value||0,ngp:+$('f_ngp').value||0,reg:+$('f_reg').value,sr:$('f_sr').value.trim(),note:$('f_note').value.trim(),mold:($('f_mold')?$('f_mold').value.trim():''),fcnt:($('f_fcnt')?+$('f_fcnt').value||0:0),fmin:($('f_fmin')?+$('f_fmin').value||0:0)}}
+function writeForm(r){$('f_date').value=r.date;$('f_mc').value=r.mc;$('f_proc').value=r.proc||'P/R';$('f_cust').value=r.cust;fillPn(r.pn);$('f_pn').value=r.pn;$('f_name').value=r.name;['w1','w2','w3','w4'].forEach(k=>$('f_'+k).value=r[k]||'');$('f_spm').value=r.spm||'';if($('f_single'))$('f_single').checked=!(+r.spm);$('f_work').value=r.work;$('f_stop').value=r.stop;$('f_brk').value=r.brk||'';$('f_qty').value=r.qty;$('f_ng').value=r.ng||'';$('f_ngp').value=r.ngp||'';$('f_reg').value=r.reg??1;$('f_sr').value=r.sr||'';$('f_note').value=r.note||'';if($('f_mold'))$('f_mold').value=r.mold||'';if($('f_fcnt'))$('f_fcnt').value=r.fcnt||'';if($('f_fmin'))$('f_fmin').value=r.fmin||'';readout();}
 function resetForm(keepDate){const d=keepDate?$('f_date').value:today();editId=null;$('entryTitle').textContent='새 일보';if($('btnSave')){$('btnSave').textContent='저장 (Ctrl+Enter)';$('btnEdit').disabled=true;$('btnDel').disabled=true}
-  writeForm({date:d,mc:'',proc:'P/R',cust:'',pn:'',name:'',spm:'',work:'',stop:'',brk:'',qty:'',ng:'',reg:1,sr:'',note:'',mold:''});$('fmsg').textContent='';renderEntry();}
+  writeForm({date:d,mc:'',proc:'P/R',cust:'',pn:'',name:'',spm:'',work:'',stop:'',brk:'',qty:'',ng:'',reg:1,sr:'',note:'',mold:'',fcnt:'',fmin:''});$('fmsg').textContent='';renderEntry();}
 function saveRec(cont){
   const r=readForm();
   const miss=[];if(!r.date)miss.push('생산일자');if(!r.mc)miss.push('설비');if(!r.cust)miss.push('고객사');if(!r.pn)miss.push('품번');if(!r.work)miss.push('근무시간');
   if(!r.spm&&!($('f_single')&&$('f_single').checked))miss.push('SPM (단발이면 「단발 작업」에 체크)');
   if(miss.length){$('fmsg').textContent='입력 필요: '+miss.join(', ');$('fmsg').style.color='var(--red)';toast('저장 불가 — 입력 필요: '+miss.join(', '));return}
+  if((+r.fmin||0)>(+r.stop||0)){$('fmsg').textContent=`고장정지(${r.fmin}분)가 정지시간(${r.stop}분)보다 큽니다`;$('fmsg').style.color='var(--red)';toast(`저장 불가 — 고장정지 ${r.fmin}분 > 정지 ${r.stop}분`);return}
+  if((+r.fcnt||0)>0&&(+r.fmin||0)===0){$('fmsg').textContent='설비고장 건수를 적었으면 고장정지(분)도 입력하세요';$('fmsg').style.color='var(--red)';toast('저장 불가 — 고장정지(분) 입력 필요');return}
   {const net=(+r.work||0)-(+r.brk||0);
    if(r.stop>net){$('fmsg').textContent=`정지시간(${r.stop}분)이 실근무(${net}분 = 근무 ${r.work} − 휴식 ${r.brk||0})보다 큽니다`;$('fmsg').style.color='var(--red)';toast(`저장 불가 — 정지 ${r.stop}분 > 실근무 ${net}분`);return}}
   $('fmsg').style.color='';
@@ -1497,7 +1501,7 @@ async function openMes(dateArg,quiet){
       stop:(stopM!=null?stopM:(noRun?(last?last.stop:0):Math.max(0,work-brk0-(runEst||run)))),noRun,runEst,overRun,
       qty:cz?(+cz.actual_qty||0):(+x.qty||0),ng,ngp,ab:bad[x.pn]||0,
       w1:(cz&&cz.worker)||(last?last.w1:'')||'',closer:(cz&&cz.worker)||'',prevW:last?last.w1:'',   // 마감한 사람 = 실제 배치자
-      sr:dtTxt[code]||stopTxt[code]||moldTxt(code)||'',dtMin:dtMin[code],molds:moldSeq[code]||[],mold:(cz&&cz.mold_code)||'',
+      sr:dtTxt[code]||stopTxt[code]||moldTxt(code)||'',dtMin:dtMin[code],molds:moldSeq[code]||[],mold:(cz&&cz.mold_code)||'',fcnt:0,fmin:0,
       note:[badNote[x.pn]||'',cz&&cz.memo?String(cz.memo):''].filter(Boolean).join(' / '),
       ledClosed:!!(cz&&cz.fromLedger),closed:!!cz,waitClose:!cz&&(+x.qty||0)>0,mesQty:(cz&&cz.mes_qty!=null)?(+cz.mes_qty||0):(+x.qty||0),czReason:cz?(cz.reason||''):'',pending:!!x.pending,use:(upd||!dup)&&!!mc&&!x.pending,dup:!!dup,dupId:dup?dup.id:'',upd};
   });
@@ -1511,7 +1515,7 @@ function mesAll(v){
   drawMes(MESDATE||($('mes_d')&&$('mes_d').value)||'');
 }
 function mesSet(i,k,v){const r=MESROWS[i];if(!r)return;
-  if(k==='use')r.use=v; else r[k]=(['work','stop','qty','ng','ngp','brk','spmFix'].includes(k))?(+v||0):v;
+  if(k==='use')r.use=v; else r[k]=(['work','stop','qty','ng','ngp','brk','spmFix','fcnt','fmin'].includes(k))?(+v||0):v;
   if(k==='work'&&!r.noRun)r.stop=Math.max(0,r.work-r.run);
   if(k==='qty'||k==='spmFix'||k==='work'){ // 실적을 고치면 가동시간(실적÷SPM)으로 정지시간을 다시 잡음
     const sp=r.spmFix||spmFor(r.mc,r.pn)||0;
@@ -1535,6 +1539,7 @@ function drawMes(d){
     <td><input type=number value="${r.work}" onchange="mesSet(${r.i},'work',this.value)" style="width:70px;padding:3px 5px"><div class=muted style="font-size:11px">${r.workSrc==='마감시각'?'마감 '+String(r.closeEnd||'').slice(11,16):'표준'}</div></td>
     <td class=num${r.noRun?' style="color:var(--amber)"':''}>${r.run?fmt(r.run):'—'}</td>
     <td><input type=number value="${r.stop}" onchange="mesSet(${r.i},'stop',this.value)" style="width:70px;padding:3px 5px"></td>
+    <td><input type=number value="${r.fcnt||''}" onchange="mesSet(${r.i},'fcnt',this.value)" style="width:46px;padding:3px 5px" placeholder="0" title="설비 고장 건수"><input type=number value="${r.fmin||''}" onchange="mesSet(${r.i},'fmin',this.value)" style="width:56px;padding:3px 5px;margin-top:3px" placeholder="분" title="고장으로 선 시간(분)"></td>
     <td><input type=number value="${r.qty}" onchange="mesSet(${r.i},'qty',this.value)" style="width:90px;padding:3px 5px"></td>
     <td class=num title="MES 불량폐기(품번 기준)">${fmt(r.ab)}</td>
     <td><input type=number value="${r.ng}" onchange="mesSet(${r.i},'ng',this.value)" style="width:70px;padding:3px 5px"></td>
@@ -1572,8 +1577,8 @@ function drawMes(d){
   ${miss.length?`<div class="fl" style="gap:6px;margin:0 0 8px;flex-wrap:wrap"><span class="muted" style="font-size:12px">일보 없는 날 :</span>${miss.slice(0,8).map(x=>`<button class="s" onclick="openMes('${x}')">${x.slice(5)}</button>`).join('')}</div>`:''}
   <p class="muted" style="margin-top:0">MES 모니터링 서버에서 설비별 생산수량을 읽고, 현장에서 확정한 <b>실제 양품수량(생산마감)</b>이 있으면 그 값을 실적으로 씁니다. 근무시간·작업자·정지사유를 확인·수정한 뒤 저장하세요. 정지시간은 근무−MES가동으로 자동 계산되며 직접 고칠 수 있습니다. 정지사유·정지시간은 <b>MES 가동설비 모니터링</b>의 비가동 집계에서 그대로 가져옵니다(없으면 가동이 끊긴 시간대로 대체). 특기사항에는 MES 불량폐기 사유가 <b>코드 대신 불량유형 이름</b>으로 들어옵니다.</p>
   <div class="fl" style="margin-bottom:8px"><span class="tag">설비 ${nMc}대 · ${MESROWS.length}줄</span>${cloTag}${ledTag}${warn?`<span class="tag a">${warn}</span>`:''}</div>
-  <div class="tw" style="max-height:60vh"><table><tr><th><input type="checkbox" ${allOn?'checked':''} ${nSel?'':'disabled'} onclick="mesAll(this.checked)" title="전체 선택 / 해제"></th><th>MES</th><th>설비</th><th>품번</th><th>작업자</th><th class=num>SPM</th><th>근무(분)</th><th class=num>MES가동</th><th>정지(분)</th><th>실적(일생산)</th><th class=num>MES불량</th><th>작업불량</th><th>시타발·검사</th><th>정지사유</th><th>특기사항(불량사유)</th><th></th></tr>
-  ${MESROWS.length?rows:'<tr><td colspan=16 class=empty>이 날짜의 MES 자료가 없습니다</td></tr>'}</table></div>
+  <div class="tw" style="max-height:60vh"><table><tr><th><input type="checkbox" ${allOn?'checked':''} ${nSel?'':'disabled'} onclick="mesAll(this.checked)" title="전체 선택 / 해제"></th><th>MES</th><th>설비</th><th>품번</th><th>작업자</th><th class=num>SPM</th><th>근무(분)</th><th class=num>MES가동</th><th>정지(분)</th><th title="설비 고장 건수 / 고장으로 선 시간">고장<br>건·분</th><th>실적(일생산)</th><th class=num>MES불량</th><th>작업불량</th><th>시타발·검사</th><th>정지사유</th><th>특기사항(불량사유)</th><th></th></tr>
+  ${MESROWS.length?rows:'<tr><td colspan=17 class=empty>이 날짜의 MES 자료가 없습니다</td></tr>'}</table></div>
   <div class="fl" style="margin-top:12px"><button class="p" onclick="saveMes()" ${n?'':'disabled'}>선택 ${n}건 일보로 저장</button><span class="grow"></span><span class="muted">설비·품번을 여기서 고르면 다음부터 자동으로 연결됩니다</span></div>`;
 }
 function saveMes(quiet,dateArg){
@@ -1635,7 +1640,7 @@ function saveMes(quiet,dateArg){
     if(cust0&&!S.master.custs.includes(cust0))S.master.custs.push(cust0);
     S.recs.push({id:uid(),date:d,mc:r.mc,proc:'P/R',cust:cust0,pn:r.pn,name:name0,
       w1:r.w1,w2:'',w3:'',w4:'',spm:spm,work:r.work,stop:r.stop,brk:r.brk,qty:r.qty,ng:r.ng,ngp:r.ngp||0,
-      sr:r.sr,note:r.note,mold:r.mold||'',reg:1,mes:(r.mesQty!=null?r.mesQty:r.qty),mesRun:r.run,src:r.closed?'마감':'MES',ua:now(),by:localStorage.getItem('tj_me')||''});
+      sr:r.sr,note:r.note,mold:r.mold||'',fcnt:+r.fcnt||0,fmin:+r.fmin||0,reg:1,mes:(r.mesQty!=null?r.mesQty:r.qty),mesRun:r.run,src:r.closed?'마감':'MES',ua:now(),by:localStorage.getItem('tj_me')||''});
     n++;
   });
   if(quiet){commit();return n}
@@ -1687,7 +1692,7 @@ function sortBy(k){if(sortKey===k)sortDir*=-1;else{sortKey=k;sortDir=k==='date'?
 ['h_range','h_from','h_to','h_cust','h_mc','h_pn','h_w'].forEach(id=>$(id).addEventListener('change',renderHist));
 $('sp_q').addEventListener('input',renderSpm);
 $('h_q').addEventListener('input',renderHist);
-function histRows(L){return L.map(r=>{const c=calc(r);return{'생산일자':r.date.replace(/-/g,''),'설비명':r.mc,'공정명':r.proc,'고객사':r.cust,'품명':r.name,'품번':r.pn,'작업자1':r.w1||'','작업자2':r.w2||'','작업자3':r.w3||'','작업자4':r.w4||'','SPM':r.spm,'근무시간':r.work,'정지시간':r.stop,'휴식시간':r.brk||0,'가동시간':c.run,'가능수량':c.cap,'실적수량':r.qty,'MES원값':r.mes||'','조정수량':(r.mes?(+r.qty-+r.mes):''),'실적출처':r.src||'','가동율(%)':+(c.oper*100).toFixed(2),'효율(%)':+(c.eff*100).toFixed(2),'작업불량수량':r.ng||0,'시타발·검사폐기':r.ngp||0,'정지사유':r.sr,'특기사항':r.note,'금형코드':r.mold||'','생등':r.reg??1}})}
+function histRows(L){return L.map(r=>{const c=calc(r);return{'생산일자':r.date.replace(/-/g,''),'설비명':r.mc,'공정명':r.proc,'고객사':r.cust,'품명':r.name,'품번':r.pn,'작업자1':r.w1||'','작업자2':r.w2||'','작업자3':r.w3||'','작업자4':r.w4||'','SPM':r.spm,'근무시간':r.work,'정지시간':r.stop,'휴식시간':r.brk||0,'가동시간':c.run,'가능수량':c.cap,'실적수량':r.qty,'MES원값':r.mes||'','조정수량':(r.mes?(+r.qty-+r.mes):''),'실적출처':r.src||'','가동율(%)':+(c.oper*100).toFixed(2),'효율(%)':+(c.eff*100).toFixed(2),'작업불량수량':r.ng||0,'시타발·검사폐기':r.ngp||0,'정지사유':r.sr,'특기사항':r.note,'금형코드':r.mold||'','설비고장건수':r.fcnt||0,'고장정지시간':r.fmin||0,'생등':r.reg??1}})}
 function exportHist(){xl([{name:'생산이력',rows:histRows(histList().sort((a,b)=>a.date.localeCompare(b.date)||a.mc.localeCompare(b.mc,'ko',{numeric:true})))}],'생산이력_'+($('h_range').value.startsWith('m:')?$('h_range').value.slice(2):'전체')+'.xlsx')}
 
 /* ===== [v16.2] 일일 생산수량 조정 ===== */
@@ -1787,7 +1792,7 @@ function sortBy(k){if(sortKey===k)sortDir*=-1;else{sortKey=k;sortDir=k==='date'?
 ['h_range','h_from','h_to','h_cust','h_mc','h_pn','h_w'].forEach(id=>$(id).addEventListener('change',renderHist));
 $('sp_q').addEventListener('input',renderSpm);
 $('h_q').addEventListener('input',renderHist);
-function histRows(L){return L.map(r=>{const c=calc(r);return{'생산일자':r.date.replace(/-/g,''),'설비명':r.mc,'공정명':r.proc,'고객사':r.cust,'품명':r.name,'품번':r.pn,'작업자1':r.w1||'','작업자2':r.w2||'','작업자3':r.w3||'','작업자4':r.w4||'','SPM':r.spm,'근무시간':r.work,'정지시간':r.stop,'휴식시간':r.brk||0,'가동시간':c.run,'가능수량':c.cap,'실적수량':r.qty,'MES원값':r.mes||'','조정수량':(r.mes?(+r.qty-+r.mes):''),'조정사유':r.adj||'','실적출처':r.src||'','가동율(%)':+(c.oper*100).toFixed(2),'효율(%)':+(c.eff*100).toFixed(2),'작업불량수량':r.ng||0,'시타발·검사폐기':r.ngp||0,'정지사유':r.sr,'특기사항':r.note,'금형코드':r.mold||'','생등':r.reg??1}})}
+function histRows(L){return L.map(r=>{const c=calc(r);return{'생산일자':r.date.replace(/-/g,''),'설비명':r.mc,'공정명':r.proc,'고객사':r.cust,'품명':r.name,'품번':r.pn,'작업자1':r.w1||'','작업자2':r.w2||'','작업자3':r.w3||'','작업자4':r.w4||'','SPM':r.spm,'근무시간':r.work,'정지시간':r.stop,'휴식시간':r.brk||0,'가동시간':c.run,'가능수량':c.cap,'실적수량':r.qty,'MES원값':r.mes||'','조정수량':(r.mes?(+r.qty-+r.mes):''),'조정사유':r.adj||'','실적출처':r.src||'','가동율(%)':+(c.oper*100).toFixed(2),'효율(%)':+(c.eff*100).toFixed(2),'작업불량수량':r.ng||0,'시타발·검사폐기':r.ngp||0,'정지사유':r.sr,'특기사항':r.note,'금형코드':r.mold||'','설비고장건수':r.fcnt||0,'고장정지시간':r.fmin||0,'생등':r.reg??1}})}
 function exportHist(){xl([{name:'생산이력',rows:histRows(histList().sort((a,b)=>a.date.localeCompare(b.date)||a.mc.localeCompare(b.mc,'ko',{numeric:true})))}],'생산이력_'+($('h_range').value.startsWith('m:')?$('h_range').value.slice(2):'전체')+'.xlsx')}
 
 /* ===== [v16.2] 생산수량 조정 → production_close 반영 ===== */
@@ -2215,6 +2220,16 @@ function execHtml(){
     const x=srBy[r.mc]=srBy[r.mc]||{};
     t2.split(/\s*\/\s*|,/).filter(Boolean).forEach(s2=>{const mm=s2.match(/(\d+)\s*분/);const v=mm?+mm[1]:1;
       const nm=s2.replace(/\d+\s*분/,'').trim().slice(0,10);if(nm)x[nm]=(x[nm]||0)+v})});
+  // 설비 신뢰성 — MTBF(평균고장간격) · MTTR(평균수리시간). 일보의 설비고장 건수·고장정지(분) 기준
+  const relMc={};
+  R.forEach(r=>{const c=calc(r);const g=relMc[r.mc]=relMc[r.mc]||{run:0,f:0,fm:0};
+    g.run+=c.run;g.f+=+r.fcnt||0;g.fm+=+r.fmin||0});
+  const relT={run:0,f:0,fm:0};
+  Object.values(relMc).forEach(g=>{relT.run+=g.run;relT.f+=g.f;relT.fm+=g.fm});
+  const relL=Object.entries(relMc).filter(([,g])=>g.f>0)
+    .map(([k,g])=>({k,run:g.run,f:g.f,fm:g.fm,mtbf:g.run/g.f,mttr:g.fm/g.f,av:(g.run+g.fm)?g.run/(g.run+g.fm):1}))
+    .sort((a,b)=>a.mtbf-b.mtbf);
+  const hh=m=>(m/60).toFixed(1);
   const lossTop=Object.entries(byMc).map(([k,L])=>{
     const stop=L.reduce((a,r)=>a+(+r.stop||0),0), work=L.reduce((a,r)=>a+(+r.work||0),0);
     const spm=L.filter(r=>+r.spm).reduce((a,r)=>a+ +r.spm,0)/(L.filter(r=>+r.spm).length||1);
@@ -2257,6 +2272,22 @@ function execHtml(){
     <table><tr><th>설비</th><th class=num>정지(H)</th><th class=num>정지율</th><th class=num>손실 추정(EA)</th><th class=num>월 생산 대비</th><th>주요 정지사유</th></tr>
     ${lossTop.slice(0,5).map(x=>`<tr><td>${esc(x.k)}</td><td class=num>${fmt(Math.round(x.stop/60))}</td><td class=num><span class="tag ${x.rate>=.3?'r':x.rate>=.2?'a':''}">${pct(x.rate)}</span></td><td class=num><b>${fmt(Math.round(x.loss))}</b></td><td class=num>${(x.loss/(T.qty||1)*100).toFixed(1)}%</td><td class=muted>${esc(x.why)}</td></tr>`).join('')}
     <tr class=sum><td>합계</td><td class=num>${fmt(Math.round(T.stop/60))}</td><td class=num>${pct(stopR)}</td><td class=num>${fmt(Math.round(lossTop.reduce((a,x)=>a+x.loss,0)))}</td><td class=num>${(lossTop.reduce((a,x)=>a+x.loss,0)/(T.qty||1)*100).toFixed(1)}%</td><td></td></tr></table>
+  </div>
+
+  <div class="rpt-sec pgnew">
+    <h3>4-1. 설비 신뢰성 : MTBF · MTTR <span class="muted" style="font-weight:400;font-size:12px">MTBF 평균고장간격 = 가동시간 ÷ 고장건수 · MTTR 평균수리시간 = 고장정지 ÷ 고장건수 · 일보의 설비고장 기록 기준</span></h3>
+    ${relT.f?`<div class="grid g2" style="margin-bottom:8px">
+      <div><table><tr><th>설비</th><th class=num>가동(H)</th><th class=num>고장<br>건수</th><th class=num>고장정지(H)</th><th class=num>MTBF(H)</th><th class=num>MTTR(H)</th><th class=num>가용률</th></tr>
+      ${relL.slice(0,10).map(x=>`<tr><td>${esc(x.k)}</td><td class=num>${hh(x.run)}</td><td class=num><b>${x.f}</b></td><td class=num>${hh(x.fm)}</td><td class=num><b style="color:${x.mtbf<600?'var(--red)':x.mtbf<1800?'var(--amber)':'var(--green)'}">${hh(x.mtbf)}</b></td><td class=num><b style="color:${x.mttr>120?'var(--red)':x.mttr>60?'var(--amber)':'var(--green)'}">${hh(x.mttr)}</b></td><td class=num><span class="tag ${x.av>=.98?'g':x.av>=.95?'a':'r'}">${pct(x.av)}</span></td></tr>`).join('')}
+      <tr class=sum><td>전체</td><td class=num>${hh(relT.run)}</td><td class=num>${relT.f}</td><td class=num>${hh(relT.fm)}</td><td class=num>${hh(relT.run/relT.f)}</td><td class=num>${hh(relT.fm/relT.f)}</td><td class=num>${pct((relT.run+relT.fm)?relT.run/(relT.run+relT.fm):1)}</td></tr></table>
+      <div class="muted" style="font-size:11px;margin-top:4px">MTBF가 짧은 순 · MTBF는 길수록, MTTR은 짧을수록 좋습니다</div></div>
+      <div>${svgVBars(relL.slice(0,8).map(x=>({l:x.k.split(' ')[0],v:+hh(x.mtbf),txt:hh(x.mtbf)+'H',c:C.l1})),{W:470,H:150,rot:0,B:30})}
+      <div class="legend"><span><i style="background:${C.l1}"></i>MTBF (시간)</span></div></div>
+    </div>
+    <table><tr><th style="width:26%">설비</th><th style="width:37%">고장 원인 / 재발방지</th><th>담당 / 기한</th></tr>
+    ${relL.slice(0,3).map((x,i)=>`<tr><td>${esc(x.k)} <span class=muted>MTBF ${hh(x.mtbf)}H · MTTR ${hh(x.mttr)}H</span></td><td>${ta('relD'+i,'원인과 재발방지 대책')}</td><td>${ta('relW'+i,'')}</td></tr>`).join('')}
+    </table>`
+    :`<p class="muted">이번 달 <b>설비고장 기록이 없습니다.</b> 일보 작성 시 <b>설비고장 건수</b>와 <b>고장정지(분)</b>를 입력하면 설비별 MTBF·MTTR이 자동으로 산출됩니다. 계획정지(조회·금형점검·소재교환 등)는 제외하고 <b>설비 고장으로 선 경우만</b> 적으십시오.</p>`}
   </div>
 
   <div class="rpt-sec pgnew">
@@ -3441,10 +3472,10 @@ $('fImp').addEventListener('change',async e=>{
     if(!A){bad++;continue}
     const H=A[hi].map(x=>String(x).replace(/\s|\(.*\)|\n/g,''));
     const col=n=>H.indexOf(n);
-    const ci={date:col('생산일자'),mc:col('설비명'),proc:col('공정명'),cust:col('고객사'),name:col('품명'),pn:col('품번'),w1:col('작업자1'),w2:col('작업자2'),w3:col('작업자3'),w4:col('작업자4'),spm:col('SPM'),work:col('근무시간'),stop:col('정지시간'),cap:col('가능수량'),qty:col('실적수량'),ng:col('작업불량수량'),sr:col('정지사유'),note:col('특기사항'),mold:col('금형코드'),reg:H.findIndex(x=>x.startsWith('생등'))};
+    const ci={date:col('생산일자'),mc:col('설비명'),proc:col('공정명'),cust:col('고객사'),name:col('품명'),pn:col('품번'),w1:col('작업자1'),w2:col('작업자2'),w3:col('작업자3'),w4:col('작업자4'),spm:col('SPM'),work:col('근무시간'),stop:col('정지시간'),cap:col('가능수량'),qty:col('실적수량'),ng:col('작업불량수량'),sr:col('정지사유'),note:col('특기사항'),mold:col('금형코드'),fcnt:col('설비고장건수'),fmin:col('고장정지시간'),reg:H.findIndex(x=>x.startsWith('생등'))};
     for(let i=hi+1;i<A.length;i++){const row=A[i];const dv=String(row[ci.date]||'').replace(/\D/g,'');if(dv.length!==8)continue;
       const g=k=>ci[k]>=0?row[ci[k]]:'';const z=v=>(v===0||v==='0'||v==null)?'':String(v).trim();
-      const r={date:dv.slice(0,4)+'-'+dv.slice(4,6)+'-'+dv.slice(6),mc:String(g('mc')).trim().replace(/\s+/g,' '),proc:z(g('proc'))||'P/R',cust:String(g('cust')).trim(),name:String(g('name')).trim(),pn:String(g('pn')).trim(),w1:z(g('w1')),w2:z(g('w2')),w3:z(g('w3')),w4:z(g('w4')),spm:+g('spm')||0,work:+g('work')||0,stop:+g('stop')||0,brk:0,qty:+g('qty')||0,ng:+g('ng')||0,sr:z(g('sr')),note:z(g('note')),mold:z(g('mold')),reg:g('reg')===''?1:+g('reg'),ua:now(),by:'엑셀:'+f.name};
+      const r={date:dv.slice(0,4)+'-'+dv.slice(4,6)+'-'+dv.slice(6),mc:String(g('mc')).trim().replace(/\s+/g,' '),proc:z(g('proc'))||'P/R',cust:String(g('cust')).trim(),name:String(g('name')).trim(),pn:String(g('pn')).trim(),w1:z(g('w1')),w2:z(g('w2')),w3:z(g('w3')),w4:z(g('w4')),spm:+g('spm')||0,work:+g('work')||0,stop:+g('stop')||0,brk:0,qty:+g('qty')||0,ng:+g('ng')||0,sr:z(g('sr')),note:z(g('note')),mold:z(g('mold')),fcnt:+g('fcnt')||0,fmin:+g('fmin')||0,reg:g('reg')===''?1:+g('reg'),ua:now(),by:'엑셀:'+f.name};
       if(!r.mc||!r.pn||(!r.work&&!r.qty&&!r.ng)){bad++;continue}
       // 가능수량이 있으면 식사·휴식 제외분(brk)을 역산 — ATC 양식은 근무시간에서 60분을 뺀 값으로 계산함
       const capX=+g('cap')||0;
