@@ -823,17 +823,22 @@ const CLOSE_MAX=16*60;
 /* 마감시각 보정(분)·표준 허용오차(분) — 기준정보에서 조정 */
 const closeCfg=()=>{const o=(S.master&&S.master.closeCfg)||{};
   return{pad:(o.pad==null?0:+o.pad), tol:(o.tol==null?30:+o.tol), unit:(o.unit==null?30:+o.unit||30)}};
-function workFromClose(d,iso){
-  if(!iso)return 0;
-  const t=new Date(iso); if(isNaN(t))return 0;
-  const on=new Date(d+'T'+shiftOf(d).on+':00+09:00'); if(isNaN(on))return 0;
+/* 마감시각 → 근무시간 판정.
+   src 'close' = 잔업·조퇴 실제값 · 'std' = 허용오차 내(표준 근무시간) · '' = 판정 불가(중간 마감·오조작) */
+function workJudge(d,iso){
+  const std=stdWork(d);
+  if(!iso)return{w:0,src:''};
+  const t=new Date(iso); if(isNaN(t))return{w:0,src:''};
+  const on=new Date(d+'T'+shiftOf(d).on+':00+09:00'); if(isNaN(on))return{w:0,src:''};
   const C=closeCfg();
   let m=Math.round((t-on)/60000)+C.pad;
-  if(m<CLOSE_MIN||m>CLOSE_MAX)return 0;                  // 중간 마감·오조작만 제외
-  m=Math.round(m/C.unit)*C.unit;                         // 가장 가까운 기준시각으로 (기본 30분 단위)
-  if(Math.abs(m-stdWork(d))<=C.tol)return 0;             // 표준 ±허용오차 이내면 표준 근무시간 유지
-  return m;                                              // 잔업·조퇴만 실제값 반영
+  if(m<CLOSE_MIN||m>CLOSE_MAX)return{w:0,src:''};              // 중간 마감·오조작 — 건드리지 않음
+  m=Math.round(m/C.unit)*C.unit;                               // 가장 가까운 기준시각 (기본 30분 단위)
+  if(Math.abs(m-std)<=C.tol)return{w:std,src:'std'};           // 허용오차 내 → 표준 근무시간
+  return{w:m,src:'close'};                                     // 잔업·조퇴만 실제값
 }
+/* 잔업·조퇴일 때만 값을 돌려준다 (0이면 표준 근무시간을 쓰라는 뜻) */
+function workFromClose(d,iso){const r=workJudge(d,iso);return r.src==='close'?r.w:0}
 // MES 가동설비 모니터링 서버(정지사유 daily_downtime)
 const DT_URL='https://omngtyewdaqpphnzeate.supabase.co';
 // MES 불량코드(ICOM_RECIEVE_DATA_NG NG_REASON_CODE) → 불량유형
@@ -3804,22 +3809,27 @@ async function applyCloseWork(){
       if(!end[k]||x.closed_at>end[k])end[k]=x.closed_at});
     const byMc={};
     Object.entries(end).forEach(([code,iso])=>{const mc=mm[code];if(!mc)return;
-      const w=workFromClose(d,iso);if(w)byMc[mc]=Math.max(byMc[mc]||0,w)});
+      const j=workJudge(d,iso);if(!j.src)return;                       // 판정 불가만 제외
+      const cur=byMc[mc];
+      // 같은 설비에 여러 마감이 잡히면 더 긴 근무(늦은 퇴근)를 택한다
+      if(!cur||j.w>cur.w)byMc[mc]={w:j.w,src:j.src};});
     if(!Object.keys(byMc).length){noData.push(d);continue}
     S.recs.filter(r=>r.date===d).forEach(r=>{
-      const w=byMc[r.mc];
-      if(!w||w===+r.work)return;
-      plan.push({r,was:+r.work||0,now:w});
+      const o=byMc[r.mc];
+      if(!o||o.w===+r.work)return;
+      plan.push({r,was:+r.work||0,now:o.w,src:o.src});
     });
   }
   if(!plan.length){
     alert(`바뀔 일보가 없습니다.\n\n대상 ${days.length}일 중 마감시각 자료 없음 ${noData.length}일\n${noData.slice(0,10).join(', ')}${noData.length>10?' …':''}`);
     return;
   }
+  const nStd=plan.filter(p=>p.src==='std').length, nCl=plan.length-nStd;
   const smp=plan.slice(0,12).map(p=>{const sw=stdWork(p.r.date),df=p.now-sw;
-    return `  ${p.r.date.slice(5)} ${p.r.mc} ${p.was} → ${p.now}분${Math.abs(df)>closeCfg().tol?`  ⚠ 표준 ${sw} ${df>0?'+':'−'}${Math.abs(df)}분`:''}`}).join('\n');
+    return `  ${p.r.date.slice(5)} ${p.r.mc} ${p.was} → ${p.now}분  ${p.src==='std'?'(표준 복귀)':`(${df>0?'잔업 +':'조퇴 −'}${Math.abs(df)}분)`}`}).join('\n');
   if(!confirm(`근무시간을 작업자 마감시각 기준으로 바꿉니다.\n\n`
     +`대상 ${plan.length}건 (${days[0]} ~ ${days[days.length-1]})\n`
+    +`  · 표준 근무시간으로 되돌림 ${nStd}건\n  · 잔업·조퇴 반영 ${nCl}건\n`
     +`마감시각 자료 없어 건너뛴 날 ${noData.length}일\n\n${smp}${plan.length>12?`\n  … 외 ${plan.length-12}건`:''}\n\n`
     +`가동율·효율·월간보고서 수치가 함께 바뀝니다. 계속할까요?`))return;
   plan.forEach(p=>{
