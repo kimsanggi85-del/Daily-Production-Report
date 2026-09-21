@@ -602,6 +602,18 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
       <div id="planBox" class="tw" style="max-height:44vh"></div>
     </div>
 
+    <div class="panel"><h3>마감시각 → 근무시간 <span class="muted" style="font-weight:400;font-size:12px">작업자가 생산마감을 누른 시각으로 근무시간(잔업·조퇴)을 잡습니다</span></h3>
+      <p class="muted">근무시간 = (마감시각 + 보정) − 출근시각, 10분 단위. <b>표준 퇴근시각 ±허용오차 이내면 표준 근무시간</b>(평일 660분 · 수요일 540분)을 그대로 씁니다. 그 밖은 실제값으로 잡고 누락일보콜 화면에 확인 알람이 뜹니다.</p>
+      <div class="fl" style="flex-wrap:wrap;gap:10px">
+        <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px">마감시각 보정
+          <input type=number id="cc_pad" onchange="closeSet()" style="width:70px;padding:3px 5px">분
+          <span class="muted">퇴근 전에 마감하면 +, 후에 하면 −</span></label>
+        <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px">표준 허용오차
+          <input type=number id="cc_tol" min="0" onchange="closeSet()" style="width:70px;padding:3px 5px">분</label>
+      </div>
+      <div id="ccPrev" class="muted" style="margin-top:8px;font-size:12px"></div>
+    </div>
+
     <div class="panel"><h3>계획정지 표준시간 <span class="muted" style="font-weight:400;font-size:12px">고장시간 추정에 씁니다 — 정지시간에서 이 값들을 빼고 남은 시간을 고장으로 봅니다</span></h3>
       <p class="muted">2026-08 일보 94줄에서 역산한 값이 기본입니다(평균오차 ±27분). 현장 실제와 다르면 고치세요. 0으로 두면 그 사유는 계산에서 빠집니다.</p>
       <div id="stdStopBox" class="fl" style="flex-wrap:wrap;gap:8px"></div>
@@ -802,16 +814,21 @@ function shiftOf(d){const w=new Date(d+'T00:00:00').getDay();return w===3?SHIFT.
 function stdWork(d){return shiftOf(d).span}   // 재적 근무(분)
 function stdBrk(d){return shiftOf(d).brk}     // 휴식(분)
 /* 작업자 마감시각 → 재적 근무시간 역산 (잔업·조퇴 반영). 믿기 어려운 값은 0을 돌려 표준값을 쓰게 한다 */
-const CLOSE_PAD=10;   // 퇴근 10분 전부터 마감하므로 마감시각 + 10분을 퇴근시각으로 본다
 const CLOSE_MIN=120;  // 이보다 짧으면 퇴근 마감이 아니라 작업 중간 마감으로 보고 제외
 const CLOSE_MAX=16*60;
+/* 마감시각 보정(분)·표준 허용오차(분) — 기준정보에서 조정 */
+const closeCfg=()=>{const o=(S.master&&S.master.closeCfg)||{};
+  return{pad:(o.pad==null?0:+o.pad), tol:(o.tol==null?30:+o.tol)}};
 function workFromClose(d,iso){
   if(!iso)return 0;
   const t=new Date(iso); if(isNaN(t))return 0;
   const on=new Date(d+'T'+shiftOf(d).on+':00+09:00'); if(isNaN(on))return 0;
-  const m=Math.round((t-on)/60000)+CLOSE_PAD;
-  if(m<CLOSE_MIN||m>CLOSE_MAX)return 0;           // 중간 마감·오조작만 제외
-  return Math.round(m/10)*10;                     // 마감시각 그대로 (10분 단위) — 일찍 끝나도 늦게 끝나도 반영
+  const C=closeCfg();
+  let m=Math.round((t-on)/60000)+C.pad;
+  if(m<CLOSE_MIN||m>CLOSE_MAX)return 0;                  // 중간 마감·오조작만 제외
+  m=Math.round(m/10)*10;                                 // 10분 단위
+  if(Math.abs(m-stdWork(d))<=C.tol)return 0;             // 표준 ±허용오차 이내면 표준 근무시간 유지
+  return m;                                              // 잔업·조퇴만 실제값 반영
 }
 // MES 가동설비 모니터링 서버(정지사유 daily_downtime)
 const DT_URL='https://omngtyewdaqpphnzeate.supabase.co';
@@ -1589,7 +1606,7 @@ function mesAll(v){
   drawMes(MESDATE||($('mes_d')&&$('mes_d').value)||'');
 }
 function mesStdAll(){const d=MESDATE||($('mes_d')&&$('mes_d').value)||'';const sw=stdWork(d);
-  MESROWS.forEach(r=>{if(Math.abs((+r.work||0)-sw)<20)return;
+  MESROWS.forEach(r=>{if(Math.abs((+r.work||0)-sw)<=closeCfg().tol)return;
     r.work=sw;r.brk=stdBrk(d);r.workSrc='표준';r.stop=Math.max(0,Math.min(+r.stop||0,r.work-r.brk))});
   drawMes(d);toast('표준 근무시간으로 되돌렸습니다');}
 function mesStd(i){const r=MESROWS[i];if(!r)return;const d=MESDATE||($('mes_d')&&$('mes_d').value)||'';
@@ -1618,7 +1635,7 @@ function drawMes(d){
     <td><select onchange="mesSet(${r.i},'pn',this.value)" style="min-width:130px;padding:3px 5px">${opt(S.master.items.map(x=>x.pn),r.pn)}<option value="@${esc(r.pnCode)}"${r.pn==='@'+r.pnCode?' selected':''}>＋ ${esc(r.pnCode)} 신규 등록</option></select><div class=muted style="font-size:11px">${esc(r.name2)}</div></td>
     <td><input value="${esc(r.w1)}" list="dlW" onchange="mesSet(${r.i},'w1',this.value)" style="width:80px;padding:3px 5px"></td>
     <td><input type=number value="${spm||''}" onchange="mesSet(${r.i},'spmFix',this.value)" style="width:64px;padding:3px 5px" placeholder="입력"></td>
-    <td>${(()=>{const sw=stdWork(d),df=(+r.work||0)-sw;const big=Math.abs(df)>=20;
+    <td>${(()=>{const sw=stdWork(d),df=(+r.work||0)-sw;const big=Math.abs(df)>closeCfg().tol;
       return `<input type=number value="${r.work}" onchange="mesSet(${r.i},'work',this.value)" style="width:70px;padding:3px 5px${big?';border-color:var(--amber);background:rgba(255,176,32,.10)':''}">
       <div class="muted" style="font-size:11px">${r.workSrc==='마감시각'?'마감 '+String(r.closeEnd||'').slice(11,16):'표준'}</div>
       ${big?`<div style="font-size:11px;color:var(--amber);font-weight:600">표준 ${sw} ${df>0?'+':'−'}${Math.abs(df)}분</div>
@@ -1637,8 +1654,8 @@ function drawMes(d){
   const n=MESROWS.filter(r=>r.use).length;
   const nSel=MESROWS.filter(r=>r.mc&&!r.pending).length;      // 전체 선택 대상 줄 수
   // 마감시각으로 잡힌 근무시간이 표준과 20분 넘게 차이나면 관리자가 확인하도록 알린다
-  const swD=stdWork(d);
-  const devL=MESROWS.filter(r=>Math.abs((+r.work||0)-swD)>=20);
+  const swD=stdWork(d), devTol=closeCfg().tol;
+  const devL=MESROWS.filter(r=>Math.abs((+r.work||0)-swD)>devTol);
   const devOver=devL.filter(r=>(+r.work||0)>swD).length, devUnder=devL.length-devOver;
   const allOn=nSel>0&&n>=nSel;
   const nMc=new Set(MESROWS.map(r=>r.code)).size;
@@ -1668,7 +1685,7 @@ function drawMes(d){
   <p class="muted" style="margin-top:0">MES 모니터링 서버에서 설비별 생산수량을 읽고, 현장에서 확정한 <b>실제 양품수량(생산마감)</b>이 있으면 그 값을 실적으로 씁니다. 근무시간·작업자·정지사유를 확인·수정한 뒤 저장하세요. 정지시간은 근무−MES가동으로 자동 계산되며 직접 고칠 수 있습니다. 정지사유·정지시간은 <b>MES 가동설비 모니터링</b>의 비가동 집계에서 그대로 가져옵니다(없으면 가동이 끊긴 시간대로 대체). 특기사항에는 MES 불량폐기 사유가 <b>코드 대신 불량유형 이름</b>으로 들어옵니다.</p>
   <div class="fl" style="margin-bottom:8px"><span class="tag">설비 ${nMc}대 · ${MESROWS.length}줄</span>${cloTag}${ledTag}${warn?`<span class="tag a">${warn}</span>`:''}</div>
   ${devL.length?`<div style="border:1px solid var(--amber);background:rgba(255,176,32,.10);border-radius:6px;padding:8px 10px;margin-bottom:8px;font-size:13px">
-    <b style="color:var(--amber)">⚠ 근무시간 확인 필요 ${devL.length}줄</b> — 마감시각으로 잡힌 근무가 표준 ${swD}분과 20분 넘게 차이납니다${devOver?` · 초과 ${devOver}줄`:''}${devUnder?` · 미달 ${devUnder}줄`:''}
+    <b style="color:var(--amber)">⚠ 근무시간 확인 필요 ${devL.length}줄</b> — 마감시각으로 잡힌 근무가 표준 ${swD}분과 ${devTol}분 넘게 차이납니다${devOver?` · 초과 ${devOver}줄`:''}${devUnder?` · 미달 ${devUnder}줄`:''}
     <div class="muted" style="font-size:12px;margin-top:3px">실제 잔업·조퇴면 그대로 저장하시고, <b>마감을 늦게 눌러 생긴 차이면</b> 근무 칸의 <b>표준으로</b> 버튼을 누르세요. 근무시간이 늘면 가능수량이 커져 효율이 낮게 나옵니다.</div>
     <div class="fl" style="margin-top:6px"><button class="s" onclick="mesStdAll()">차이나는 ${devL.length}줄 모두 표준으로</button>
       <span class="muted" style="font-size:12px">${devL.slice(0,6).map(r=>esc(r.mc||r.code)+' '+((+r.work||0)>swD?'+':'−')+Math.abs((+r.work||0)-swD)+'분').join(' · ')}${devL.length>6?' …':''}</span></div>
@@ -1780,7 +1797,7 @@ function renderHist(){
   $('h_sum').textContent=`${L.length}건 · 생산 ${fmt(q)} EA · 가동율 ${pct(run/work)} · 효율 ${pct(q/cap)} · 불량 ${fmt(ng)}`;
   const cols=[['date','생산일자',0,'c-date'],['mc','설비',0,'c-mc'],['cust','고객사',0,'c-cust'],['pn','품번',0,'c-pn'],['name','품명',0,'c-name'],['w1','작업자',0,'c-w'],['spm','SPM',1,'c-spm'],['work','근무',1,'c-work'],['stop','정지',1,'c-stop'],['brk','휴식',1,'c-brk'],['run','가동',1,'c-run'],['cap','가능',1,'c-cap'],['qty','실적',1,'c-qty'],['mes','조정수량',1,'c-mes'],['oper','가동율',1,'c-oper'],['eff','효율',1,'c-eff'],['ng','불량',1,'c-ng'],['sr','정지사유',0,'c-sr'],['note','특기사항',0,'c-note']];
   const h='<tr><th class="c-chk"><input type="checkbox" id="chkAll" onclick="event.stopPropagation();histAll(this.checked)" title="모두 선택"></th>'+cols.map(c=>`<th class="sort ${c[2]?'num':''} ${c[3]} ${sortKey===c[0]?(sortDir>0?'asc':'desc'):''}" onclick="sortBy('${c[0]}')">${c[1]}</th>`).join('')+'<th class="c-del"></th></tr>';
-  $('tHist').innerHTML=h+(L.length?L.map(r=>`<tr class="${r.id===editId?'sel':''} ${r.eff>1?'overrow':''}" onclick="editRec('${r.id}')"><td class="c-date"><span class="dfull">${r.date}</span><span class="dmob">${r.date.slice(5).replace('-','/')}</span></td><td class="c-mc">${esc(r.mc)}</td><td class="c-cust"><span class="tag">${esc(r.cust)}</span></td><td class="c-pn">${esc(r.pn)}${r.mold?`<div class=muted style="font-size:11px">금형 ${esc(r.mold)}</div>`:''}</td><td class="muted c-name">${esc(r.name)}</td><td class="c-w">${esc(workers(r).join(','))}</td><td class="num c-spm">${r.spm}</td><td class="num c-work">${r.work}${(()=>{const sw=stdWork(r.date),df=r.work-sw;return Math.abs(df)>=20?`<div style="font-size:10px;color:var(--amber)">${df>0?'+':'−'}${Math.abs(df)}</div>`:''})()}</td><td class="num c-stop">${r.stop}</td><td class="num c-brk">${r.brk||''}</td><td class="num c-run">${r.run}</td><td class="num c-cap">${fmt(r.cap)}</td><td class="num c-qty"><b>${fmt(r.qty)}</b></td><td class="num c-mes">${(()=>{if(!r.mes)return'';const d=+r.qty-+r.mes;
+  $('tHist').innerHTML=h+(L.length?L.map(r=>`<tr class="${r.id===editId?'sel':''} ${r.eff>1?'overrow':''}" onclick="editRec('${r.id}')"><td class="c-date"><span class="dfull">${r.date}</span><span class="dmob">${r.date.slice(5).replace('-','/')}</span></td><td class="c-mc">${esc(r.mc)}</td><td class="c-cust"><span class="tag">${esc(r.cust)}</span></td><td class="c-pn">${esc(r.pn)}${r.mold?`<div class=muted style="font-size:11px">금형 ${esc(r.mold)}</div>`:''}</td><td class="muted c-name">${esc(r.name)}</td><td class="c-w">${esc(workers(r).join(','))}</td><td class="num c-spm">${r.spm}</td><td class="num c-work">${r.work}${(()=>{const sw=stdWork(r.date),df=r.work-sw;return Math.abs(df)>closeCfg().tol?`<div style="font-size:10px;color:var(--amber)">${df>0?'+':'−'}${Math.abs(df)}</div>`:''})()}</td><td class="num c-stop">${r.stop}</td><td class="num c-brk">${r.brk||''}</td><td class="num c-run">${r.run}</td><td class="num c-cap">${fmt(r.cap)}</td><td class="num c-qty"><b>${fmt(r.qty)}</b></td><td class="num c-mes">${(()=>{if(!r.mes)return'';const d=+r.qty-+r.mes;
       if(!d)return'<span class=muted>일치</span>';
       return `<b style="color:${d>0?'var(--green)':'var(--red)'}">${d>0?'+':'−'}${fmt(Math.abs(d))}</b><br><span class=muted style="font-size:11px">MES ${fmt(r.mes)}</span>`})()}</td><td class="num c-oper"><span class="tag ${cls(r.oper)}">${pct(r.oper)}</span></td><td class="num c-eff">${r.single?'<span class=muted>단발</span>':`<span class="tag ${cls(r.eff)}">${pct(r.eff)}</span>`}</td><td class="num c-ng">${r.ng||''}</td><td class="muted c-sr">${esc(r.sr)}</td><td class="muted c-note">${esc(r.note)}</td><td class="c-del"><button class="s d" onclick="event.stopPropagation();delRec('${r.id}')">삭제</button></td></tr>`).join('')+`<tr class=sum><td class="c-date">합계</td><td class="c-mc">${L.length}건</td><td class="c-cust"></td><td class="c-pn"></td><td class="c-name"></td><td class="c-w"></td><td class="num c-spm"></td><td class="num c-work">${fmt(work)}</td><td class="num c-stop">${fmt(work-run)}</td><td class="num c-brk"></td><td class="num c-run">${fmt(run)}</td><td class="num c-cap">${fmt(cap)}</td><td class="num c-qty">${fmt(q)}</td><td class="num c-mes"></td><td class="num c-oper">${pct(run/work)}</td><td class="num c-eff">${pct(q/cap)}</td><td class="num c-ng">${fmt(ng)}</td><td class="c-sr"></td><td class="c-note"></td><td class="c-del"></td></tr>`:'<tr><td colspan=20 class=empty>조건에 맞는 일보가 없습니다</td></tr>');
 }
@@ -1880,7 +1897,7 @@ function renderHist(){
   $('h_sum').textContent=`${L.length}건 · 생산 ${fmt(q)} EA · 가동율 ${pct(run/work)} · 효율 ${pct(q/cap)} · 불량 ${fmt(ng)}`;
   const cols=[['date','생산일자',0,'c-date'],['mc','설비',0,'c-mc'],['cust','고객사',0,'c-cust'],['pn','품번',0,'c-pn'],['name','품명',0,'c-name'],['w1','작업자',0,'c-w'],['spm','SPM',1,'c-spm'],['work','근무',1,'c-work'],['stop','정지',1,'c-stop'],['brk','휴식',1,'c-brk'],['run','가동',1,'c-run'],['cap','가능',1,'c-cap'],['qty','실적',1,'c-qty'],['mes','조정수량',1,'c-mes'],['oper','가동율',1,'c-oper'],['eff','효율',1,'c-eff'],['ng','불량',1,'c-ng'],['sr','정지사유',0,'c-sr'],['note','특기사항',0,'c-note']];
   const h='<tr><th class="c-chk"><input type="checkbox" id="chkAll" onclick="event.stopPropagation();histAll(this.checked)" title="모두 선택"></th>'+cols.map(c=>`<th class="sort ${c[2]?'num':''} ${c[3]} ${sortKey===c[0]?(sortDir>0?'asc':'desc'):''}" onclick="sortBy('${c[0]}')">${c[1]}</th>`).join('')+'<th class="c-del"></th></tr>';
-  $('tHist').innerHTML=h+(L.length?L.map(r=>`<tr class="${r.id===editId?'sel':''} ${r.eff>1?'overrow':''}" onclick="editRec('${r.id}')"><td class="c-chk"><input type="checkbox" class="hchk" value="${r.id}" ${HSEL.has(r.id)?'checked':''} onclick="event.stopPropagation();histPick('${r.id}',this.checked)"></td><td class="c-date"><span class="dfull">${r.date}</span><span class="dmob">${r.date.slice(5).replace('-','/')}</span></td><td class="c-mc">${esc(r.mc)}</td><td class="c-cust"><span class="tag">${esc(r.cust)}</span></td><td class="c-pn">${esc(r.pn)}${r.mold?`<div class=muted style="font-size:11px">금형 ${esc(r.mold)}</div>`:''}</td><td class="muted c-name">${esc(r.name)}</td><td class="c-w">${esc(workers(r).join(','))}</td><td class="num c-spm">${r.spm}</td><td class="num c-work">${r.work}${(()=>{const sw=stdWork(r.date),df=r.work-sw;return Math.abs(df)>=20?`<div style="font-size:10px;color:var(--amber)">${df>0?'+':'−'}${Math.abs(df)}</div>`:''})()}</td><td class="num c-stop">${r.stop}</td><td class="num c-brk">${r.brk||''}</td><td class="num c-run">${r.run}</td><td class="num c-cap">${fmt(r.cap)}</td><td class="num c-qty"><b>${fmt(r.qty)}</b></td><td class="num c-mes">${(()=>{if(!r.mes)return'';const d=+r.qty-+r.mes;
+  $('tHist').innerHTML=h+(L.length?L.map(r=>`<tr class="${r.id===editId?'sel':''} ${r.eff>1?'overrow':''}" onclick="editRec('${r.id}')"><td class="c-chk"><input type="checkbox" class="hchk" value="${r.id}" ${HSEL.has(r.id)?'checked':''} onclick="event.stopPropagation();histPick('${r.id}',this.checked)"></td><td class="c-date"><span class="dfull">${r.date}</span><span class="dmob">${r.date.slice(5).replace('-','/')}</span></td><td class="c-mc">${esc(r.mc)}</td><td class="c-cust"><span class="tag">${esc(r.cust)}</span></td><td class="c-pn">${esc(r.pn)}${r.mold?`<div class=muted style="font-size:11px">금형 ${esc(r.mold)}</div>`:''}</td><td class="muted c-name">${esc(r.name)}</td><td class="c-w">${esc(workers(r).join(','))}</td><td class="num c-spm">${r.spm}</td><td class="num c-work">${r.work}${(()=>{const sw=stdWork(r.date),df=r.work-sw;return Math.abs(df)>closeCfg().tol?`<div style="font-size:10px;color:var(--amber)">${df>0?'+':'−'}${Math.abs(df)}</div>`:''})()}</td><td class="num c-stop">${r.stop}</td><td class="num c-brk">${r.brk||''}</td><td class="num c-run">${r.run}</td><td class="num c-cap">${fmt(r.cap)}</td><td class="num c-qty"><b>${fmt(r.qty)}</b></td><td class="num c-mes">${(()=>{if(!r.mes)return'';const d=+r.qty-+r.mes;
       if(!d)return'<span class=muted>일치</span>';
       return `<b style="color:${d>0?'var(--green)':'var(--red)'}">${d>0?'+':'−'}${fmt(Math.abs(d))}</b><br><span class=muted style="font-size:11px">MES ${fmt(r.mes)}${r.adj?' · '+esc(r.adj):''}</span>`})()}</td><td class="num c-oper"><span class="tag ${cls(r.oper)}">${pct(r.oper)}</span></td><td class="num c-eff">${r.single?'<span class=muted>단발</span>':`<span class="tag ${cls(r.eff)}">${pct(r.eff)}</span>`}</td><td class="num c-ng">${r.ng||''}</td><td class="muted c-sr">${esc(r.sr)}</td><td class="muted c-note">${esc(r.note)}</td><td class="c-del"><button class="s d" onclick="event.stopPropagation();delRec('${r.id}')">삭제</button></td></tr>`).join('')+`<tr class=sum><td class="c-date">합계</td><td class="c-mc">${L.length}건</td><td class="c-cust"></td><td class="c-pn"></td><td class="c-name"></td><td class="c-w"></td><td class="num c-spm"></td><td class="num c-work">${fmt(work)}</td><td class="num c-stop">${fmt(work-run)}</td><td class="num c-brk"></td><td class="num c-run">${fmt(run)}</td><td class="num c-cap">${fmt(cap)}</td><td class="num c-qty">${fmt(q)}</td><td class="num c-mes"></td><td class="num c-oper">${pct(run/work)}</td><td class="num c-eff">${pct(q/cap)}</td><td class="num c-ng">${fmt(ng)}</td><td class="c-sr"></td><td class="c-note"></td><td class="c-del"></td></tr>`:'<tr><td colspan=20 class=empty>조건에 맞는 일보가 없습니다</td></tr>');
 }
@@ -3593,6 +3610,16 @@ function flImpSave(){
 }
 /* ===== 설비고장 소급 입력 — 지난달 일보에 고장건수·고장정지를 채워 MTBF/MTTR을 산출한다 ===== */
 const FAIL_KW=['설비이상','고장','파손','수리','오작동','에러','멈춤','막힘','풀림','떨어짐','교체'];
+function closeSet(){S.master.closeCfg={pad:+$('cc_pad').value||0,tol:Math.max(0,+$('cc_tol').value||0)};commit0();closeDraw();toast('마감시각 기준을 바꿨습니다')}
+function closeDraw(){
+  if(!$('cc_pad'))return;
+  const C=closeCfg();$('cc_pad').value=C.pad;$('cc_tol').value=C.tol;
+  const d=today(), sw=stdWork(d);
+  const rows=['18:30','19:00','19:20','19:35','21:40','16:20'].map(t=>{
+    const iso=d+'T'+t+':00+09:00', w=workFromClose(d,iso)||sw, df=w-sw;
+    return `${t} → ${w}분${df?` <span style="color:var(--amber)">(표준 ${df>0?'+':''}${df})</span>`:' <span class="muted">(표준)</span>'}`;});
+  $('ccPrev').innerHTML='<b>현재 설정 미리보기</b> — 오늘(표준 '+sw+'분) 기준 마감시각별 근무시간<br>'+rows.join(' &nbsp;·&nbsp; ');
+}
 function stdStopDraw(){
   const box=$('stdStopBox'); if(!box)return;
   const T=stdStop();
@@ -3775,7 +3802,7 @@ async function applyCloseWork(){
     return;
   }
   const smp=plan.slice(0,12).map(p=>{const sw=stdWork(p.r.date),df=p.now-sw;
-    return `  ${p.r.date.slice(5)} ${p.r.mc} ${p.was} → ${p.now}분${Math.abs(df)>=20?`  ⚠ 표준 ${sw} ${df>0?'+':'−'}${Math.abs(df)}분`:''}`}).join('\n');
+    return `  ${p.r.date.slice(5)} ${p.r.mc} ${p.was} → ${p.now}분${Math.abs(df)>closeCfg().tol?`  ⚠ 표준 ${sw} ${df>0?'+':'−'}${Math.abs(df)}분`:''}`}).join('\n');
   if(!confirm(`근무시간을 작업자 마감시각 기준으로 바꿉니다.\n\n`
     +`대상 ${plan.length}건 (${days[0]} ~ ${days[days.length-1]})\n`
     +`마감시각 자료 없어 건너뛴 날 ${noData.length}일\n\n${smp}${plan.length>12?`\n  … 외 ${plan.length-12}건`:''}\n\n`
@@ -3804,7 +3831,7 @@ function renderLog(){
 }
 function mdel(t,v){S.master.mdel=S.master.mdel||{};S.master.mdel[t+'|'+v]=now();}
 function renderMaster(){
-  stdStopDraw();planDraw();
+  closeDraw();stdStopDraw();planDraw();
   const m=S.master;
   $('tItems').innerHTML='<tr><th>고객사</th><th>품번</th><th>품명</th><th class=num>SPM 표준</th><th class=num>일보수</th><th></th></tr>'+m.items.slice().sort((a,b)=>a.cust.localeCompare(b.cust,'ko')||a.pn.localeCompare(b.pn,'ko',{numeric:true})).map(i=>{const n=S.recs.filter(r=>r.pn===i.pn).length;return `<tr><td><input value="${esc(i.cust)}" list="dlC" onchange="upItemCust('${esc(i.pn)}',this.value)" placeholder="고객사" style="min-width:110px;padding:3px 6px"></td><td><input value="${esc(i.pn)}" onchange="upItemPn('${esc(i.pn)}',this.value)" style="min-width:120px;padding:3px 6px"></td><td><input value="${esc(i.name)}" onchange="upItem('${esc(i.pn)}','name',this.value)" style="padding:3px 6px"></td><td class=num>${(()=>{const db=S.master.spmdb||[];
       const com=db.find(x=>x.pn===i.pn&&!x.mc);
