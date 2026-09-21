@@ -655,9 +655,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
 
   <!-- 데이터 -->
   <section class="pg" id="pg-mtbf">
-    <div class="top"><h2>설비 신뢰성 : MTBF · MTTR <span class="muted" style="font-size:12px;font-weight:400">고객 감사 제출용</span></h2>
-      <span class="grow"></span>
-      <button onclick="window.print()" class="noprint">인쇄 (A4)</button></div>
+    <p class="muted noprint" style="margin:0 0 8px;font-size:12px">고객 감사 제출용 · 고객사를 고르면 그 고객 제품을 만든 설비만 집계합니다</p>
     <div class="fl noprint" style="margin-bottom:10px;flex-wrap:wrap">
       <select id="rb_year" onchange="rbRender()" style="width:120px"></select>
       <select id="rb_cust" onchange="rbRender()" style="width:160px"></select>
@@ -665,11 +663,12 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
       <label class="fl" style="gap:4px;font-size:12px">MTBF 목표<input type=number id="rb_tb" onchange="rbSet()" style="width:66px;padding:3px 5px">H</label>
       <label class="fl" style="gap:4px;font-size:12px">MTTR 목표<input type=number id="rb_tr" onchange="rbSet()" style="width:66px;padding:3px 5px">분</label>
       <button class="s" onclick="rbCopy()">표 복사</button>
+      <button onclick="window.print()">인쇄 (A4)</button>
     </div>
     <div id="rbBody"></div>
   </section>
   <section class="pg" id="pg-fail">
-    <div class="top"><h2>고장이력대장 <span class="muted" style="font-size:12px;font-weight:400">설비·금형 고장 한 건당 한 줄 · IATF 8.5.1.5 TPM 기록</span></h2></div>
+    <p class="muted" style="margin:0 0 8px;font-size:12px">설비·금형 고장 한 건당 한 줄 · IATF 8.5.1.5 TPM 기록</p>
     <div class="fl" style="margin-bottom:10px;flex-wrap:wrap">
       <select id="fl_mo" onchange="flRender()" style="width:170px"></select>
       <select id="fl_mc" onchange="flRender()" style="width:150px"></select>
@@ -1034,7 +1033,9 @@ function go(p){pg=p;document.querySelectorAll('nav a').forEach(a=>a.classList.to
   const _e=(p==='entry');
   $('title').style.display=_e?'none':'';
   if($('topMes'))$('topMes').style.display=_e?'flex':'none';
-  if($('btnToday'))$('btnToday').style.display=_e?'none':'';
+  {const yr=(p==='fail'||p==='mtbf');
+   if($('btnToday'))$('btnToday').style.display=(_e||yr)?'none':'';
+   const mn=document.querySelector('.top .mon'); if(mn)mn.style.display=yr?'none':'';}
   if(p==='entry'&&!editId&&!$('f_date').value)$('f_date').value=today();
   renderAll();window.scrollTo(0,0);}
 document.querySelectorAll('nav a').forEach(a=>a.onclick=()=>{go(a.dataset.pg);tglNav(0);});
@@ -3301,43 +3302,43 @@ function rbRender(){
   $('rbBody').innerHTML=`
   <div class="panel">
     <h3 style="margin-top:0">설비 신뢰성 지표 · ${D.y}년 ${D.cu?'· '+esc(D.cu)+' 생산설비':''}${D.mc?' · '+esc(D.mc):''}</h3>
-    <table style="margin-bottom:10px"><tr><th style="width:20%">지표</th><th style="width:44%">정의 · 산식</th><th>집계 범위</th></tr>
+    <div class="tw" style="margin-bottom:10px"><table><tr><th style="width:20%">지표</th><th style="width:44%">정의 · 산식</th><th>집계 범위</th></tr>
       <tr><td><b>MTBF</b> 평균고장간격</td><td>가동시간 ÷ 설비고장 건수<div class=muted style="font-size:11px">가동시간 = 재적근무 − 휴식 − 정지</div></td>
           <td rowspan=3>설비 고장으로 생산이 멈춘 건만<div class=muted style="font-size:11px">제외 : 계획정지(조회·금형점검·소재교환·측정대기·3정5행·청소) · 금형 고장</div>
           <div class=muted style="font-size:11px">출처 : 고장이력대장(건별) → 생산일보 가동시간</div></td></tr>
       <tr><td><b>MTTR</b> 평균수리시간</td><td>고장정지시간 ÷ 설비고장 건수<div class=muted style="font-size:11px">발견 ~ 복구 완료(대기 포함)</div></td></tr>
-      <tr><td><b>가용률</b></td><td>MTBF ÷ (MTBF + MTTR)</td></tr></table>
+      <tr><td><b>가용률</b></td><td>MTBF ÷ (MTBF + MTTR)</td></tr></table></div>
     <div class="kpis">
       <div class="kpi ${Y.f&&dB<100?'bad':''}"><small>MTBF 연 누계</small><b>${Y.f?hh(Y.mtbf):'-'}</b><em>시간 · 목표 ${T.b}H · 달성률 ${Y.f?dB.toFixed(0):'-'}%</em></div>
       <div class="kpi ${Y.f&&dR<100?'bad':''}"><small>MTTR 연 누계</small><b>${Y.f?Y.mttr.toFixed(0):'-'}</b><em>분 · 목표 ${T.r}분 이하 · 달성률 ${Y.f?dR.toFixed(0):'-'}%</em></div>
       <div class="kpi"><small>설비고장</small><b>${Y.f}</b><em>건 · 정지 ${hh(Y.fm)}H</em></div>
       <div class="kpi"><small>가용률</small><b>${pct(Y.av)}</b><em>가동 ${hh(Y.run)}H 기준</em></div>
     </div>
-    ${live.length?`<div style="margin-top:10px">${svgCombo(live.map(x=>x.i+'월'),live.map(x=>Math.round(x.mtbf/60)),
-        [{v:live.map(x=>Math.min(1,x.mttr/(T.r*4||240))),c:C.l2}],{W:900,H:180})}
+    ${live.length?`<div style="margin-top:10px"><div class="tw">${svgCombo(live.map(x=>x.i+'월'),live.map(x=>Math.round(x.mtbf/60)),
+        [{v:live.map(x=>Math.min(1,x.mttr/(T.r*4||240))),c:C.l2}],{W:900,H:180})}</div>
       <div class="legend"><span><i style="background:${C.bar}"></i>MTBF(시간)</span><span><i style="background:${C.l2}"></i>MTTR</span></div></div>`:''}
-    <table style="margin-top:10px"><tr><th>월</th>${live.map(x=>`<th class=num>${x.i}</th>`).join('')}<th class=num>누계</th></tr>
+    <div class="tw" style="margin-top:10px"><table><tr><th>월</th>${live.map(x=>`<th class=num>${x.i}</th>`).join('')}<th class=num>누계</th></tr>
       <tr><td>가동시간(H)</td>${live.map(x=>`<td class=num>${hh(x.run)}</td>`).join('')}<td class=num><b>${hh(Y.run)}</b></td></tr>
       <tr><td>고장 건수</td>${live.map(x=>`<td class=num>${x.f||'-'}</td>`).join('')}<td class=num><b>${Y.f}</b></td></tr>
       <tr><td>고장정지(H)</td>${live.map(x=>`<td class=num>${x.fm?hh(x.fm):'-'}</td>`).join('')}<td class=num><b>${hh(Y.fm)}</b></td></tr>
       <tr class=sum><td><b>MTBF(H)</b></td>${live.map(x=>`<td class=num>${x.f?hh(x.mtbf):'-'}</td>`).join('')}<td class=num><b>${Y.f?hh(Y.mtbf):'-'}</b></td></tr>
-      <tr class=sum><td><b>MTTR(분)</b></td>${live.map(x=>`<td class=num>${x.f?x.mttr.toFixed(0):'-'}</td>`).join('')}<td class=num><b>${Y.f?Y.mttr.toFixed(0):'-'}</b></td></tr></table>
+      <tr class=sum><td><b>MTTR(분)</b></td>${live.map(x=>`<td class=num>${x.f?x.mttr.toFixed(0):'-'}</td>`).join('')}<td class=num><b>${Y.f?Y.mttr.toFixed(0):'-'}</b></td></tr></table></div>
     <div class="muted" style="font-size:11px;margin-top:4px">월 표본이 작아 단월 변동이 큽니다. 목표 관리는 <b>연 누계</b> 기준입니다.</div>
     <h4 style="margin:12px 0 6px">설비별 ${D.y}년 누계</h4>
-    <table><tr><th>설비</th><th class=num>가동(H)</th><th class=num>고장</th><th class=num>고장정지(H)</th><th class=num>MTBF(H)</th><th class=num>MTTR(분)</th><th class=num>가용률</th></tr>
+    <div class="tw"><table><tr><th>설비</th><th class=num>가동(H)</th><th class=num>고장</th><th class=num>고장정지(H)</th><th class=num>MTBF(H)</th><th class=num>MTTR(분)</th><th class=num>가용률</th></tr>
       ${MC.map(x=>`<tr><td>${esc(x.k)}</td><td class=num>${hh(x.run)}</td><td class=num>${x.f||'-'}</td><td class=num>${x.fm?hh(x.fm):'-'}</td>
         <td class=num>${x.f?`<b style="color:${x.mtbf/60>=T.b?'var(--green)':'var(--red)'}">${hh(x.mtbf)}</b>`:'<span class=muted>고장 없음</span>'}</td>
         <td class=num>${x.f?`<b style="color:${x.mttr<=T.r?'var(--green)':'var(--red)'}">${x.mttr.toFixed(0)}</b>`:'-'}</td>
         <td class=num>${x.f?pct(x.run/(x.run+x.fm)):'100%'}</td></tr>`).join('')}
       <tr class=sum><td>합계</td><td class=num>${hh(Y.run)}</td><td class=num>${Y.f}</td><td class=num>${hh(Y.fm)}</td>
-        <td class=num>${Y.f?hh(Y.mtbf):'-'}</td><td class=num>${Y.f?Y.mttr.toFixed(0):'-'}</td><td class=num>${pct(Y.av)}</td></tr></table>
+        <td class=num>${Y.f?hh(Y.mtbf):'-'}</td><td class=num>${Y.f?Y.mttr.toFixed(0):'-'}</td><td class=num>${pct(Y.av)}</td></tr></table></div>
     <h4 style="margin:12px 0 6px">목표 설정 근거 및 개선활동</h4>
-    <table><tr><th style="width:22%">항목</th><th>내용</th></tr>
+    <div class="tw"><table><tr><th style="width:22%">항목</th><th>내용</th></tr>
       <tr><td>목표 설정 근거</td><td>${ta('why','예: 전년 실적 MTBF 85H 대비 18% 향상 목표 · 고객 요구수준 반영')}</td></tr>
       <tr><td>미달 원인 분석</td><td>${ta('cause','예: 43호기 노후 유압계통 반복 고장이 전체 고장의 40% 차지')}</td></tr>
       <tr><td>개선 대책</td><td>${ta('act','예: 43호기 유압펌프 예방교체 주기 6→3개월 단축, 핵심부품 재고 확보')}</td></tr>
       <tr><td>효과 확인</td><td>${ta('eff','예: 대책 적용 후 3개월 MTBF 추이 재평가')}</td></tr>
-      <tr><td>담당 / 승인</td><td>${ta('who','작성 / 검토 / 승인')}</td></tr></table>
+      <tr><td>담당 / 승인</td><td>${ta('who','작성 / 검토 / 승인')}</td></tr></table></div>
     ${(()=>{const noF=MC.filter(x=>!x.f).length;
       return noF?`<div class="muted" style="font-size:11px;margin-top:6px">고장 기록이 없는 설비 ${noF}대는 MTBF 산출에서 제외했습니다(0으로 나눌 수 없음). 실제 무고장인지 <b>기록 누락</b>인지 확인하십시오.</div>`:''})()}
     <div class="muted" style="font-size:11px;margin-top:4px">작성일자 : ${today()} · 자료출처 : 고장이력대장 · 생산일보</div>
