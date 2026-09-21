@@ -721,7 +721,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
         <button class="p" onclick="applyMold()">마감 자료에서 금형코드 채우기</button>
       </div>
       <div class="panel"><h3>근무시간 마감시각 반영</h3>
-        <p class="muted">저장된 일보의 근무시간(재적)을 작업자가 <b>생산마감을 누른 시각</b> 기준으로 다시 잡습니다. 잔업·조퇴가 반영됩니다. 출근 08:00 기준 · 마감시각 + 10분(퇴근 10분 전 마감) · 10분 단위. 일찍 끝나든 늦게 끝나든 그 시각 그대로 잡습니다. 2시간 미만이거나 16시간을 넘는 값만 작업 중간 마감으로 보고 건너뜁니다.</p>
+        <p class="muted" id="ccRule">저장된 일보의 근무시간(재적)을 작업자가 <b>생산마감을 누른 시각</b> 기준으로 다시 잡습니다.</p>
         <button class="p" onclick="applyCloseWork()">마감시각으로 근무시간 다시 잡기</button>
       </div>
       <div class="panel"><h3>중복 일보 정리</h3>
@@ -3615,7 +3615,17 @@ function flImpSave(){
 /* ===== 설비고장 소급 입력 — 지난달 일보에 고장건수·고장정지를 채워 MTBF/MTTR을 산출한다 ===== */
 const FAIL_KW=['설비이상','고장','파손','수리','오작동','에러','멈춤','막힘','풀림','떨어짐','교체'];
 function closeSet(){S.master.closeCfg={pad:+$('cc_pad').value||0,tol:Math.max(0,+$('cc_tol').value||0),unit:+$('cc_unit').value||30};commit0();closeDraw();toast('마감시각 기준을 바꿨습니다')}
+/* 데이터 관리 패널 설명 — 기준정보 설정을 그대로 읽어 표시 (설정이 바뀌면 문구도 바뀜) */
+function ccRuleDraw(){
+  const e=$('ccRule'); if(!e)return;
+  const C=closeCfg(), on=shiftOf(today()).on;
+  e.innerHTML='저장된 일보의 근무시간(재적)을 작업자가 <b>생산마감을 누른 시각</b> 기준으로 다시 잡습니다. 잔업·조퇴가 반영됩니다.<br>'
+   +`출근 ${on} 기준 · 마감시각 ${C.pad>0?'+ '+C.pad+'분':C.pad<0?'− '+Math.abs(C.pad)+'분':'그대로'} · <b>${C.unit}분 단위</b>로 가장 가까운 시각에 맞춤 · `
+   +`표준 퇴근시각 <b>±${C.tol}분</b> 이내면 표준 근무시간(평일 ${SHIFT.base.span}분 · 수요일 ${SHIFT.wed.span}분) 유지.<br>`
+   +`2시간 미만이거나 16시간을 넘는 값은 작업 중간 마감으로 보고 건너뜁니다. <span class="muted">이 기준은 기준정보 → <b>마감시각 → 근무시간</b>에서 바꿉니다.</span>`;
+}
 function closeDraw(){
+  ccRuleDraw();
   if(!$('cc_pad'))return;
   const C=closeCfg();$('cc_pad').value=C.pad;$('cc_tol').value=C.tol;if($('cc_unit'))$('cc_unit').value=C.unit;
   const d=today(), sw=stdWork(d), on=shiftOf(d).on;
@@ -4075,7 +4085,7 @@ function delM(k,v){
 }
 
 /* ===== 데이터 ===== */
-function renderData(){$('me').value=localStorage.getItem('tj_me')||'';
+function renderData(){ccRuleDraw();$('me').value=localStorage.getItem('tj_me')||'';
   const b=$('btnAutoEntry');
   if(b){const on=autoEntryOn();b.textContent=on?'자동 등록 켜짐 · 끄기':'자동 등록 꺼짐 · 켜기';b.className=on?'p':'';}
   const dm=$('dupMsg');
