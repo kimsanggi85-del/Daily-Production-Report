@@ -649,6 +649,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
       <select id="fl_kind" onchange="flRender()" style="width:120px"><option value="">구분 전체</option><option value="설비">설비</option><option value="금형">금형</option></select>
       <input id="fl_q" oninput="flRender()" placeholder="검색 (현상·원인·조치·부품)" class="grow">
       <button class="p" onclick="flForm()">＋ 고장 등록</button>
+      <button class="s" onclick="flImport()" title="일보 정지사유에서 고장 후보를 뽑아 옵니다">일보에서 불러오기</button>
       <button class="s" onclick="flCopy()">표 복사</button>
     </div>
     <div id="fl_kpi" class="kpis"></div>
@@ -3297,6 +3298,74 @@ function flCopy(){
   const t=['발생일자\tetc'.replace('etc','발생시각\t복구시각\t정지(분)\t설비\t구분\t금형코드\t현상\t원인\t조치내용\t교체부품\t조치자\t재발방지')]
     .concat(L.map(f=>[f.date,f.t1||'',f.t2||'',f.min,f.mc,f.kind,f.mold||'',f.sym,f.cause,f.act,f.part,f.by,f.prev].join('\t'))).join('\n');
   try{navigator.clipboard.writeText(t);toast('클립보드에 복사했습니다')}catch(e){alert(t)}
+}
+/* 일보 정지사유에서 고장 후보를 뽑아 대장 초안으로 만든다 (시간만 채우면 등록) */
+let FLIMP=[],FLIMPKD='설비';
+function flImport(){
+  const mo=(prompt('일보에서 고장 후보를 뽑을 월 (YYYY-MM)',month||today().slice(0,7))||'').trim();
+  if(!/^\d{4}-\d{2}$/.test(mo))return;
+  const has=new Set((S.fails||[]).map(f=>f.date+'|'+f.mc));
+  FLIMP=S.recs.filter(r=>r.date.slice(0,7)===mo)
+    .filter(r=>FAIL_KW.some(k=>((r.sr||'')+(r.note||'')).includes(k)))
+    .filter(r=>!has.has(r.date+'|'+r.mc))
+    .map(r=>({date:r.date,mc:r.mc,stop:+r.stop||0,sr:r.sr||'',note:r.note||'',
+      kd:flKind((r.sr||'')+' '+(r.note||''))||'설비',min:0,sym:'',on:false}))
+    .filter((r,i,A)=>A.findIndex(x=>x.date===r.date&&x.mc===r.mc)===i)
+    .sort((a,b)=>a.date.localeCompare(b.date)||String(a.mc).localeCompare(String(b.mc),'ko',{numeric:true}));
+  if(!FLIMP.length){alert(`${mo} 일보에서 새로 뽑을 고장 후보가 없습니다.\n(이미 대장에 있는 날짜·설비는 제외됩니다)`);return}
+  FLIMPKD='설비';$('mask').classList.add('on');drawFlImp(mo);
+}
+function flImpSet(i,k,v){const r=FLIMP[i];if(!r)return;
+  r[k]=(k==='min')?(+v||0):(k==='on'?!!v:v);
+  if(k==='min'&&+v>0)r.on=true;
+  drawFlImp($('fi_mo').textContent);}
+function flImpKd(v){FLIMPKD=v;drawFlImp($('fi_mo').textContent)}
+function drawFlImp(mo){
+  const L=FLIMP.filter(r=>!FLIMPKD||r.kd===FLIMPKD);
+  const ready=FLIMP.filter(r=>r.on&&r.min>0);
+  const KC={'설비':'r','금형':'a'};
+  $('modal').innerHTML=`<div class="fl" style="margin-bottom:10px">
+    <h2 style="margin:0">일보에서 고장 불러오기 · <span id="fi_mo">${mo}</span></h2>
+    <select onchange="flImpKd(this.value)" style="width:150px">
+      <option value="설비"${FLIMPKD==='설비'?' selected':''}>설비 계열</option>
+      <option value="금형"${FLIMPKD==='금형'?' selected':''}>금형 계열</option>
+      <option value=""${FLIMPKD===''?' selected':''}>전체</option></select>
+    <span style="flex:1"></span><button onclick="closeMask()">닫기</button></div>
+  <div class="fl" style="margin-bottom:8px">
+    <span class="tag">후보 ${FLIMP.length}건</span>
+    <span class="tag r">설비 ${FLIMP.filter(r=>r.kd==='설비').length}</span>
+    <span class="tag a">금형 ${FLIMP.filter(r=>r.kd==='금형').length}</span>
+    <span class="tag ${ready.length?'g':''}">등록 대상 ${ready.length}건</span></div>
+  <p class="muted" style="margin-top:0">일보 정지사유에서 고장으로 보이는 날을 뽑았습니다. <b>정지시간 중 고장으로 선 시간(분)만</b> 적으면 등록 대상이 됩니다. 현상은 비워두면 정지사유가 그대로 들어갑니다. 등록 후 대장에서 원인·조치·재발방지를 채우세요.</p>
+  <div class="tw" style="max-height:56vh"><table><tr><th></th><th>일자</th><th>설비</th><th>구분</th><th class=num>일보<br>정지</th><th>정지사유 (일보)</th><th>고장<br>정지(분)</th><th>현상 (비우면 정지사유)</th></tr>
+  ${L.length?L.map(r=>{const i=FLIMP.indexOf(r);return `<tr${r.on&&r.min>0?' style="background:rgba(60,190,120,.10)"':''}>
+    <td><input type=checkbox ${r.on?'checked':''} onchange="flImpSet(${i},'on',this.checked)"></td>
+    <td>${esc(r.date.slice(5))}</td><td>${esc(r.mc)}</td>
+    <td><select onchange="flImpSet(${i},'kd',this.value)" style="width:78px;padding:3px 4px"><option value="설비"${r.kd==='설비'?' selected':''}>설비</option><option value="금형"${r.kd==='금형'?' selected':''}>금형</option></select></td>
+    <td class=num>${r.stop}</td>
+    <td style="font-size:12px;max-width:300px">${esc(r.sr)}${r.note?`<div class=muted style="font-size:11px">${esc(r.note)}</div>`:''}</td>
+    <td><input type=number min=0 max=${r.stop} value="${r.min||''}" onchange="flImpSet(${i},'min',this.value)" style="width:64px;padding:3px 5px${r.min>r.stop?';border-color:var(--red)':''}" placeholder="분"></td>
+    <td><input value="${esc(r.sym)}" onchange="flImpSet(${i},'sym',this.value)" style="min-width:190px;padding:3px 5px" placeholder="${esc(r.sr.slice(0,28))}"></td></tr>`}).join('')
+    :'<tr><td colspan=8 class=empty>해당 구분의 후보가 없습니다</td></tr>'}</table></div>
+  <div class="fl" style="margin-top:12px"><button class="p" onclick="flImpSave()" ${ready.length?'':'disabled'}>${ready.length}건 대장에 등록</button>
+    <span class="grow"></span><span class="muted" style="font-size:12px">고장정지(분)를 적은 줄만 등록됩니다</span></div>`;
+}
+function flImpSave(){
+  const L=FLIMP.filter(r=>r.on&&r.min>0);
+  if(!L.length)return;
+  const bad=L.filter(r=>r.min>r.stop);
+  if(bad.length&&!confirm(`고장정지가 일보 정지시간보다 큰 줄이 ${bad.length}건 있습니다.\n그래도 등록할까요?`))return;
+  S.fails=S.fails||[];
+  const mcs=new Set();
+  L.forEach(r=>{
+    S.fails.push({id:uid(),date:r.date,mc:r.mc,kind:r.kd,t1:'',t2:'',min:r.min,mold:'',
+      sym:r.sym||r.sr,cause:'',act:'',part:'',by:'',prev:'',ua:now()});
+    mcs.add(r.date+'|'+r.mc);
+  });
+  mcs.forEach(k=>{const[d,mc]=k.split('|');flSync(d,mc)});
+  logAdd('고장이력 일괄 등록',`${L.length}건 (일보 정지사유에서)`);
+  commit();closeMask();
+  toast(`${L.length}건을 대장에 등록하고 일보에 반영했습니다`);
 }
 /* ===== 설비고장 소급 입력 — 지난달 일보에 고장건수·고장정지를 채워 MTBF/MTTR을 산출한다 ===== */
 const FAIL_KW=['설비이상','고장','파손','수리','오작동','에러','멈춤','막힘','풀림','떨어짐','교체'];
