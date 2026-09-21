@@ -2216,12 +2216,14 @@ function rptGroups(st,cu){
 
 /* OEE(설비종합효율) 계산 — 시간가동율 A × 성능가동율 P × 양품율 Q */
 function oeeOf(list){
-  let work=0,run=0,cap=0,capRun=0,qty=0,ng=0,ngp=0;
+  // JIPM 표준 : 시간가동율 = 가동시간 ÷ 부하시간(계획 휴식·식사 제외 = 실근무)
+  // 보고서 1.핵심지표의 가동율과 같은 분모를 쓴다 (한 보고서에 두 개의 가동율이 나오지 않도록)
+  let work=0,net=0,run=0,cap=0,capRun=0,qty=0,ng=0,ngp=0;
   list.forEach(r=>{const c=calc(r);
-    work+=+r.work||0;run+=c.run;cap+=c.cap;qty+=+r.qty||0;ng+=+r.ng||0;ngp+=+r.ngp||0;
+    work+=+r.work||0;net+=c.net;run+=c.run;cap+=c.cap;qty+=+r.qty||0;ng+=+r.ng||0;ngp+=+r.ngp||0;
     capRun+=(+r.spm||0)*c.run;});                 // 성능 기준 = SPM × 실가동시간
-  const A=work?run/work:NaN, P=capRun?qty/capRun:NaN, Q=qty?(qty-ng-ngp)/qty:NaN;   // 총 불량 = 작업불량 + 시타발·검사폐기
-  return{A,P,Q,oee:(isFinite(A)&&isFinite(P)&&isFinite(Q))?A*Math.min(P,1.2)*Q:NaN,work,run,qty,ng,ngp,cap};
+  const A=net?run/net:NaN, P=capRun?qty/capRun:NaN, Q=qty?(qty-ng-ngp)/qty:NaN;   // 총 불량 = 작업불량 + 시타발·검사폐기
+  return{A,P,Q,oee:(isFinite(A)&&isFinite(P)&&isFinite(Q))?A*Math.min(P,1.2)*Q:NaN,work,net,run,qty,ng,ngp,cap};
 }
 function oeeGrade(v){return v>=.85?'월드클래스':v>=.6?'양호':v>=.4?'개선 필요':'시급'}
 
@@ -2384,7 +2386,11 @@ function execHtml(){
   </div>
 
   <div class="rpt-sec pgnew">
-    <h3>3. OEE 설비종합효율 <span class="muted" style="font-weight:400;font-size:12px">시간가동율 × 성능가동율 × 양품율 · 양품율은 <b>작업불량＋시타발·검사폐기</b> 기준 · 세계 최고 수준 85%</span></h3>
+    <h3>3. OEE 설비종합효율 <span class="muted" style="font-weight:400;font-size:12px">시간가동율 × 성능가동율 × 양품율 · 세계 최고 수준 85%</span></h3>
+    <table style="margin-bottom:8px"><tr><th style="width:18%">구성요소</th><th>산식</th><th style="width:30%">낮을 때의 의미</th></tr>
+      <tr><td><b>시간가동율</b></td><td>가동시간 ÷ 부하시간 <span class=muted>(부하시간 = 재적근무 − 휴식·식사)</span> — <b>1.핵심지표의 가동율과 동일</b></td><td>정지시간이 길다</td></tr>
+      <tr><td><b>성능가동율</b></td><td>실적수량 ÷ (SPM 표준 × 가동시간)</td><td>표준 속도보다 느리게 돌았다</td></tr>
+      <tr><td><b>양품율</b></td><td>(실적 − 총 불량) ÷ 실적 <span class=muted>총 불량 = 작업불량 + 시타발·검사폐기</span></td><td>불량이 많다</td></tr></table>
     <div class="grid g2">
       <div>${svgCombo(mons0.map(x=>x.slice(2).replace('-','.')),oeeMs.map(x=>Math.round((x.oee||0)*1000)/10),
         [{v:oeeMs.map(x=>x.A||0),c:C.l1},{v:oeeMs.map(x=>x.P||0),c:C.l2},{v:oeeMs.map(x=>isFinite(x.Q)?x.Q:0),c:'#8A6BBE'}],{W:520,H:180})}
