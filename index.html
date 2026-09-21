@@ -2342,9 +2342,12 @@ function execHtml(){
     return{run,f,fm,mtbf:f?run/f:0,mttr:f?fm/f:0,av:(run+fm)?run/(run+fm):1}};
   const relMs=mons.map(mo=>({mo,...relOf(S.recs.filter(r=>r.date.slice(0,7)===mo))}));
   const relYtd=relOf(S.recs.filter(r=>r.date.slice(0,4)===month.slice(0,4)&&r.date.slice(0,7)<=month));
-  // 설비 커버리지 — 기준정보 설비 중 이번 달 일보가 있는 비율
-  const mcAll=(S.master.mcs||[]).length, mcRun=new Set(R.map(r=>r.mc)).size;
-  const mcNone=(S.master.mcs||[]).filter(m=>!R.some(r=>r.mc===m));
+  // 일보 누락 의심 — 최근 3개월 가동 기록이 있는데 이번 달만 없는 설비 (미사용 설비는 제외)
+  const mcNow=new Set(R.map(r=>r.mc));
+  const ago=(()=>{const [y,m]=month.split('-').map(Number);const d=new Date(y,m-4,1);
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')})();
+  const mcGone=[...new Set(S.recs.filter(r=>r.date.slice(0,7)>=ago&&r.date.slice(0,7)<month).map(r=>r.mc))]
+    .filter(m=>!mcNow.has(m)).sort((a,b)=>a.localeCompare(b,'ko',{numeric:true}));
   // 금형교체 집계 — 일보의 금형코드 기준. 같은 날짜·설비에서 쓰인 금형 종류 수 − 1 = 교체 횟수
   const mdDay={};
   R.forEach(r=>{if(!r.mold)return;const k=r.date+'|'+r.mc;(mdDay[k]=mdDay[k]||new Set()).add(r.mold)});
@@ -2407,16 +2410,10 @@ function execHtml(){
   </div>
 
   <div class="rpt-sec pgnew">
-    <h3>4-1. 설비 신뢰성 : MTBF · MTTR</h3>
-    <table style="margin-bottom:8px"><tr><th style="width:22%">지표 정의</th><th>산식 및 범위</th></tr>
-      <tr><td><b>MTBF</b> 평균고장간격</td><td>가동시간 ÷ 설비고장 건수 &nbsp;<span class="muted">가동시간 = 재적근무 − 휴식 − 정지</span></td></tr>
-      <tr><td><b>MTTR</b> 평균수리시간</td><td>고장정지시간 ÷ 설비고장 건수 &nbsp;<span class="muted">발견부터 복구 완료까지(대기 포함)</span></td></tr>
-      <tr><td><b>가용률</b></td><td>MTBF ÷ (MTBF + MTTR)</td></tr>
-      <tr><td><b>집계 대상</b></td><td>설비 고장으로 생산이 멈춘 건만. <b>계획정지 제외</b>(조회·금형점검·소재교환·측정대기·3정5행·청소), <b>금형 고장 제외</b>(별도 4-2 집계)</td></tr>
-      <tr><td><b>자료 출처</b></td><td>고장이력대장(건별 기록) → 일보 반영 · 고객사 구분 없이 설비 단위로 집계</td></tr></table>
-    ${mcNone.length?`<div style="border:1px solid var(--amber);background:rgba(255,176,32,.10);border-radius:6px;padding:7px 10px;margin-bottom:8px;font-size:12px">
-      <b style="color:var(--amber)">집계 범위 확인</b> — 등록 설비 ${mcAll}대 중 이번 달 일보가 있는 설비 ${mcRun}대. 일보 없는 설비: ${mcNone.slice(0,12).map(esc).join(', ')}${mcNone.length>12?` 외 ${mcNone.length-12}대`:''}
-      <div class="muted" style="margin-top:2px">가동 중인데 일보가 없으면 그 설비는 MTBF 집계에서 빠집니다.</div></div>`:''}
+    <h3>4-1. 설비 신뢰성 : MTBF · MTTR <span class="muted" style="font-weight:400;font-size:12px">MTBF = 가동시간 ÷ 고장건수 · MTTR = 고장정지 ÷ 고장건수 · 설비 고장만(계획정지·금형 제외)</span></h3>
+    ${mcGone.length?`<div class="noprint" style="border:1px solid var(--amber);background:rgba(255,176,32,.10);border-radius:6px;padding:7px 10px;margin-bottom:8px;font-size:12px">
+      <b style="color:var(--amber)">일보 누락 의심 ${mcGone.length}대</b> — 최근 3개월 가동 기록이 있는데 이번 달 일보가 없습니다 : ${mcGone.slice(0,10).map(esc).join(', ')}${mcGone.length>10?` 외 ${mcGone.length-10}대`:''}
+      <div class="muted" style="margin-top:2px">이 경고는 화면에만 표시되며 인쇄물에는 나오지 않습니다.</div></div>`:''}
     ${relT.f?`<div class="grid g2" style="margin-bottom:8px">
       <div><table><tr><th>설비</th><th class=num>가동(H)</th><th class=num>고장<br>건수</th><th class=num>고장정지(H)</th><th class=num>MTBF(H)</th><th class=num>MTTR(H)</th><th class=num>가용률</th></tr>
       ${relL.slice(0,10).map(x=>`<tr><td>${esc(x.k)}</td><td class=num>${hh(x.run)}</td><td class=num><b>${x.f}</b></td><td class=num>${hh(x.fm)}</td><td class=num><b style="color:${x.mtbf<600?'var(--red)':x.mtbf<1800?'var(--amber)':'var(--green)'}">${hh(x.mtbf)}</b></td><td class=num><b style="color:${x.mttr>120?'var(--red)':x.mttr>60?'var(--amber)':'var(--green)'}">${hh(x.mttr)}</b></td><td class=num><span class="tag ${x.av>=.98?'g':x.av>=.95?'a':'r'}">${pct(x.av)}</span></td></tr>`).join('')}
