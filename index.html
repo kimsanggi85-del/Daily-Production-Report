@@ -597,8 +597,8 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
         <div class="tw" style="max-height:60vh"><table id="tItems"></table></div>
     </div>
 
-    <div class="panel"><h3>월 생산계획 <span class="muted" style="font-weight:400;font-size:12px">MES 작업지시 기준 — 달성률 = 일보 실적 ÷ 목표수량 · 진척률 = 일보 실적 ÷ 계획수량</span></h3>
-      <p class="muted">2026년 1~8월은 MES 원본에서 집계한 값이 기본으로 들어 있습니다. 고치면 그 값이 우선합니다. 월간보고서 핵심지표에 <b>계획 달성률</b>로 표시됩니다.</p>
+    <div class="panel"><h3>월 생산계획 <span class="muted" style="font-weight:400;font-size:12px">달성률 = 실적 ÷ MES 목표수량 · 효율 = 실적 ÷ 가능수량(계획수량)</span></h3>
+      <p class="muted">입력하실 것은 <b>목표수량</b>(MES 작업지시) 하나입니다. 2026년 1~8월은 MES 원본에서 집계한 값이 들어 있습니다. <b>가능수량이 곧 계획수량</b>이므로 <b>효율 = 계획 대비 실적</b>이며 일보에서 자동 계산됩니다.</p>
       <div id="planBox" class="tw" style="max-height:44vh"></div>
     </div>
 
@@ -1102,6 +1102,14 @@ function renderDash(){
     $('dashOver').style.display=over.length?'':'none';}
   $('kpis').innerHTML=`
    <div class="kpi"><small>생산수량</small><b>${fmt(qty)}</b><em>${R.length}건 · ${days}일 · 가동 ${(run/60).toFixed(0)}H</em></div>
+   ${(()=>{const PL=planOf(month);if(!PL.tgt)return'';
+     const d=qty/PL.tgt;
+     // 가동일 진행률로 본 예상 마감 — 월 중간에도 달성 여부를 가늠할 수 있게
+     const wd=[...Array(new Date(+month.slice(0,4),+month.slice(5),0).getDate())].map((_,i)=>new Date(+month.slice(0,4),+month.slice(5)-1,i+1))
+       .filter(x=>x.getDay()!==0).length;
+     const pace=days?qty/days*wd:0;
+     return `<div class="kpi ${d>=1?'good':d>=.9?'warn':'bad'}"><small>계획 달성률 <span class="muted" style="font-weight:400">MES 작업지시</span></small><b>${(d*100).toFixed(1)}%</b>
+       <em>목표 ${fmt(PL.tgt)} · 남은 물량 ${fmt(Math.max(0,PL.tgt-qty))} EA<br>이 속도면 월말 ${fmt(Math.round(pace))} EA (${PL.tgt?(pace/PL.tgt*100).toFixed(0):0}%)</em></div>`})()}
    <div class="kpi ${cls(oper)==='a'?'warn':cls(oper)==='r'?'bad':cls(oper)==='g'?'good':''}"><small>평균 가동율(가중)</small><b>${pct(oper)}</b><em>정지 ${((net-run)/60).toFixed(1)}H / 실근무 ${(net/60).toFixed(0)}H</em></div>
    <div class="kpi ${cls(eff)==='a'?'warn':cls(eff)==='r'?'bad':cls(eff)==='g'?'good':''}"><small>평균 효율(가중)</small><b>${pct(eff)}</b><em>가능수량 ${fmt(cap)}${R.some(r=>calc(r).single)?' · 단발 제외':''}</em></div>
    <div class="kpi ${ngr>0.01?'bad':ngr>0.003?'warn':''}"><small>작업불량</small><b>${fmt(ng)}</b><em>불량률 ${(ngr*100).toFixed(2)}% (${fmt(ngr*1e6)} PPM)</em></div>`;
@@ -2278,14 +2286,14 @@ function execHtml(){
   const OE=oeeOf(R), OEp=oeeOf(rptStats(pm,cu).R);
   const oeeMs=mons0.map(mo=>oeeOf(rptStats(mo,cu).R));
   const PL=planOf(month);
-  const plD=(!cu&&PL.tgt)?T.qty/PL.tgt:0, plG=(!cu&&PL.plan)?T.qty/PL.plan:0;
+  const plD=(!cu&&PL.tgt)?T.qty/PL.tgt:0;
   const kpi=`<div class="kpis exec">
     <div><small>생산수량</small><b>${fmt(T.qty)}</b><em>EA · 가동 ${T.days}일</em>${arrow(T.qty,pv.qty,1)}</div>
     ${plD?`<div><small>계획 달성률 <span class="muted" style="font-weight:400">MES 작업지시</span></small><b>${(plD*100).toFixed(1)}%</b>
       <span class="tag ${plD>=1?'g':plD>=.9?'a':'r'}">목표 ${fmt(PL.tgt)} EA ${plD>=1?'달성':'미달'}</span>
-      <em>계획 ${fmt(PL.plan)} EA 대비 진척 ${(plG*100).toFixed(1)}%</em></div>`:''}
+      <em>남은 물량 ${fmt(Math.max(0,PL.tgt-T.qty))} EA</em></div>`:''}
     <div><small>가동율</small><b>${pct(T.oper)}</b>${pill(T.oper,tgtO,1)}${arrow(+(T.oper*100).toFixed(1),+(pv.oper*100).toFixed(1),1)}</div>
-    <div><small>효율</small><b>${pct(T.eff)}</b>${pill(T.eff,tgtE,1)}${arrow(+(T.eff*100).toFixed(1),+(pv.eff*100).toFixed(1),1)}</div>
+    <div><small>효율 <span class="muted" style="font-weight:400">계획(가능수량) 대비 실적</span></small><b>${pct(T.eff)}</b>${pill(T.eff,tgtE,1)}${arrow(+(T.eff*100).toFixed(1),+(pv.eff*100).toFixed(1),1)}</div>
     <div><small>불량 PPM <span class="muted" style="font-weight:400">낮을수록 좋음</span></small><b>${fmt(Math.round(ppm))}</b>${pill(ppm,tgtP,0)}${arrow(Math.round(ppm),Math.round(pvPpm),0)}</div>
     <div><small>정지율</small><b>${pct(stopR)}</b><em>정지 ${fmt(Math.round(T.stop/60))}H / 근무 ${fmt(Math.round(T.work/60))}H</em>${arrow(+(stopR*100).toFixed(1),+(pvStopR*100).toFixed(1),0)}</div>
     <div><small>OEE 설비종합효율</small><b>${pct(OE.oee)}</b><em>시간 ${pct(OE.A)} × 성능 ${pct(OE.P)} × 양품 ${pct(OE.Q)}</em>${arrow(+(OE.oee*100).toFixed(1),+(OEp.oee*100).toFixed(1),1)}</div>
@@ -3575,16 +3583,17 @@ function planDraw(){
   const box=$('planBox'); if(!box)return;
   const mine=(S.master&&S.master.plan)||{};
   const keys=[...new Set([...Object.keys(DEF_PLAN),...Object.keys(mine),month])].sort().reverse();
-  box.innerHTML='<table><tr><th>월</th><th class=num>계획수량(EA)</th><th class=num>목표수량(EA)</th><th class=num>실적(일보)</th><th class=num>달성률</th><th class=num>진척률</th></tr>'
+  box.innerHTML='<table><tr><th>월</th><th class=num>목표수량(EA)</th><th class=num>실적(일보)</th><th class=num>달성률</th><th class=num>가능수량(계획)</th><th class=num>효율</th></tr>'
    +keys.map(mo=>{const o=planOf(mo);
      const act=S.recs.filter(r=>r.date.slice(0,7)===mo).reduce((a,r)=>a+(+r.qty||0),0);
-     const d=o.tgt?act/o.tgt*100:0, g=o.plan?act/o.plan*100:0;
+     const d=o.tgt?act/o.tgt*100:0;
+     const cap=S.recs.filter(r=>r.date.slice(0,7)===mo).reduce((a,r)=>a+calc(r).cap,0);
      return `<tr><td>${mo}</td>
-      <td class=num><input type=number value="${o.plan||''}" onchange="planSet('${mo}','plan',this.value)" style="width:110px;padding:3px 5px"></td>
-      <td class=num><input type=number value="${o.tgt||''}" onchange="planSet('${mo}','tgt',this.value)" style="width:110px;padding:3px 5px"></td>
+      <td class=num><input type=number value="${o.tgt||''}" onchange="planSet('${mo}','tgt',this.value)" style="width:112px;padding:3px 5px"></td>
       <td class=num>${act?fmt(act):'<span class=muted>-</span>'}</td>
       <td class=num>${act&&o.tgt?`<span class="tag ${d>=100?'g':d>=90?'a':'r'}">${d.toFixed(1)}%</span>`:'-'}</td>
-      <td class=num>${act&&o.plan?g.toFixed(1)+'%':'-'}</td></tr>`}).join('')+'</table>';
+      <td class=num>${cap?fmt(Math.round(cap)):'-'}</td>
+      <td class=num>${cap?`<span class="tag ${cls(act/cap)}">${(act/cap*100).toFixed(1)}%</span>`:'-'}</td></tr>`}).join('')+'</table>';
 }
 function planSet(mo,k,v){S.master.plan=S.master.plan||{};S.master.plan[mo]=Object.assign({},planOf(mo),{[k]:+v||0});commit0();planDraw();toast(mo+' 계획을 저장했습니다')}
 /* 계획정지 표준시간(분) — 2026-08 일보 94줄 회귀로 역산한 값이 기본. 기준정보에서 수정 가능 */
