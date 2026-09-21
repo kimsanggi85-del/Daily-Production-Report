@@ -3264,8 +3264,26 @@ function meName(){return (localStorage.getItem('tj_me')||'').trim()||'(이름없
 // 관리 PIN 사용 안 함 — 작업은 바로 실행되고 변경 이력에만 기록된다
 function askPin(what){return true;}
 /* ===== 설비 신뢰성 화면 (고객 감사 제출용) ===== */
+/* 목표 설정 근거를 실적 기준선으로 자동 작성 (IATF 목표 타당성 근거) */
+function rbWhy(rk){
+  const D=rbData(), T=rbTgt();
+  const run=D.R.reduce((a,r)=>a+calc(r).run,0), f=D.F.length, fm=D.F.reduce((a,x)=>a+(+x.min||0),0);
+  if(!f){toast('고장 기록이 없어 근거를 만들 수 없습니다');return}
+  const mb=run/f/60, mr=fm/f;
+  const needF=Math.max(1,Math.round(run/60/T.b)), needH=Math.round(f*T.r/60), nowH=fm/60;
+  const eB=mb>=T.b
+    ? `MTBF는 기준선(${mb.toFixed(1)}H)이 목표(${T.b}H)를 이미 상회하므로 현 수준 유지 및 차기 목표 상향을 검토함`
+    : `MTBF 목표 달성 시 연간 고장 ${f-needF}건 감소(${f}→${needF}건)가 필요함`;
+  const eR=mr<=T.r
+    ? `MTTR은 기준선(${mr.toFixed(0)}분)이 목표(${T.r}분) 이내이므로 현 수준 유지 및 차기 목표 단축을 검토함`
+    : `MTTR 목표 달성 시 연간 고장정지 ${Math.round(nowH-needH)}시간 절감(${nowH.toFixed(0)}→${needH}H)이 기대됨`;
+  const txt=`${D.y}년 실적 기준선(MTBF ${mb.toFixed(1)}H · MTTR ${mr.toFixed(0)}분 / 가동 ${(run/60).toFixed(0)}H · 고장 ${f}건 · 고장정지 ${nowH.toFixed(0)}H)에 근거하여 `
+    +`연간 목표를 MTBF ${T.b}H · MTTR ${T.r}분으로 설정함. ${eB}. ${eR}. `
+    +`근거자료 : 고장이력대장, 생산일보. 작성일 ${today()}.`;
+  relSet(rk,'why',txt); rbRender(); toast('근거를 작성했습니다 — 확인 후 수정하세요');
+}
 function relSet(rk,k,v){S.rel=S.rel||{};S.rel[rk]=S.rel[rk]||{};S.rel[rk][k]=v;S.rel[rk].ua=now();commit0()}
-function rbTgt(){const o=(S.master&&S.master.relTgt)||{};return{b:+o.b||100,r:+o.r||60}}
+function rbTgt(){const o=(S.master&&S.master.relTgt)||{};return{b:+o.b||75,r:+o.r||110}}
 function rbSet(){S.master.relTgt={b:+$('rb_tb').value||100,r:+$('rb_tr').value||60};commit0();rbRender()}
 function rbData(){
   const y=$('rb_year').value||String(new Date().getFullYear());
@@ -3330,7 +3348,16 @@ function rbRender(){
       <tr><td>고장 건수</td>${live.map(x=>`<td class=num>${x.f||'-'}</td>`).join('')}<td class=num><b>${Y.f}</b></td></tr>
       <tr><td>고장정지(H)</td>${live.map(x=>`<td class=num>${x.fm?hh(x.fm):'-'}</td>`).join('')}<td class=num><b>${hh(Y.fm)}</b></td></tr>
       <tr class=sum><td><b>MTBF(H)</b></td>${live.map(x=>`<td class=num>${x.f?hh(x.mtbf):'-'}</td>`).join('')}<td class=num><b>${Y.f?hh(Y.mtbf):'-'}</b></td></tr>
-      <tr class=sum><td><b>MTTR(분)</b></td>${live.map(x=>`<td class=num>${x.f?x.mttr.toFixed(0):'-'}</td>`).join('')}<td class=num><b>${Y.f?Y.mttr.toFixed(0):'-'}</b></td></tr></table></div>
+      <tr class=sum><td><b>MTTR(분)</b></td>${live.map(x=>`<td class=num>${x.f?x.mttr.toFixed(0):'-'}</td>`).join('')}<td class=num><b>${Y.f?Y.mttr.toFixed(0):'-'}</b></td></tr>
+      ${(()=>{const cl=v=>v>=100?'var(--green)':v>=85?'var(--amber)':'var(--red)';
+        const bd=x=>x.f?x.mtbf/60/T.b*100:null, rd=x=>x.f&&x.mttr?T.r/x.mttr*100:null;
+        const yb=Y.f?Y.mtbf/60/T.b*100:null, yr=Y.f&&Y.mttr?T.r/Y.mttr*100:null;
+        return `<tr><td>MTBF 달성률 <span class=muted style="font-size:11px">실적÷목표</span></td>
+          ${live.map(x=>{const v=bd(x);return `<td class=num>${v==null?'-':`<b style="color:${cl(v)}">${v.toFixed(0)}%</b>`}</td>`}).join('')}
+          <td class=num>${yb==null?'-':`<b style="color:${cl(yb)}">${yb.toFixed(0)}%</b>`}</td></tr>
+        <tr><td>MTTR 달성률 <span class=muted style="font-size:11px">목표÷실적</span></td>
+          ${live.map(x=>{const v=rd(x);return `<td class=num>${v==null?'-':`<b style="color:${cl(v)}">${v.toFixed(0)}%</b>`}</td>`}).join('')}
+          <td class=num>${yr==null?'-':`<b style="color:${cl(yr)}">${yr.toFixed(0)}%</b>`}</td></tr>`})()}</table></div>
     <div class="muted" style="font-size:11px;margin-top:4px">월 표본이 작아 단월 변동이 큽니다. 목표 관리는 <b>연 누계</b> 기준입니다.</div>
     <h4 style="margin:12px 0 6px">설비별 ${D.y}년 누계</h4>
     <div class="tw"><table><tr><th>설비</th><th class=num>가동(H)</th><th class=num>고장</th><th class=num>고장정지(H)</th><th class=num>MTBF(H)</th><th class=num>MTTR(분)</th><th class=num>가용률</th></tr>
@@ -3342,7 +3369,7 @@ function rbRender(){
         <td class=num>${Y.f?hh(Y.mtbf):'-'}</td><td class=num>${Y.f?Y.mttr.toFixed(0):'-'}</td><td class=num>${pct(Y.av)}</td></tr></table></div>
     <h4 style="margin:12px 0 6px">목표 설정 근거 및 개선활동</h4>
     <div class="tw"><table><tr><th style="width:22%">항목</th><th>내용</th></tr>
-      <tr><td>목표 설정 근거</td><td>${ta('why','예: 전년 실적 MTBF 85H 대비 18% 향상 목표 · 고객 요구수준 반영')}</td></tr>
+      <tr><td>목표 설정 근거 <button class="s noprint" onclick="rbWhy('${rk}')" style="font-size:10px;padding:1px 6px;margin-top:3px">실적 기준 자동작성</button></td><td>${ta('why','아래 버튼을 누르면 실적 기준선으로 근거 문장이 작성됩니다')}</td></tr>
       <tr><td>미달 원인 분석</td><td>${ta('cause','예: 43호기 노후 유압계통 반복 고장이 전체 고장의 40% 차지')}</td></tr>
       <tr><td>개선 대책</td><td>${ta('act','예: 43호기 유압펌프 예방교체 주기 6→3개월 단축, 핵심부품 재고 확보')}</td></tr>
       <tr><td>효과 확인</td><td>${ta('eff','예: 대책 적용 후 3개월 MTBF 추이 재평가')}</td></tr>
