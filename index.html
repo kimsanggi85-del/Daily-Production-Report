@@ -595,6 +595,11 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
         <div class="tw" style="max-height:60vh"><table id="tItems"></table></div>
     </div>
 
+    <div class="panel"><h3>월 생산계획 <span class="muted" style="font-weight:400;font-size:12px">MES 작업지시 기준 — 달성률 = 일보 실적 ÷ 목표수량 · 진척률 = 일보 실적 ÷ 계획수량</span></h3>
+      <p class="muted">2026년 1~8월은 MES 원본에서 집계한 값이 기본으로 들어 있습니다. 고치면 그 값이 우선합니다. 월간보고서 핵심지표에 <b>계획 달성률</b>로 표시됩니다.</p>
+      <div id="planBox" class="tw" style="max-height:44vh"></div>
+    </div>
+
     <div class="panel"><h3>계획정지 표준시간 <span class="muted" style="font-weight:400;font-size:12px">고장시간 추정에 씁니다 — 정지시간에서 이 값들을 빼고 남은 시간을 고장으로 봅니다</span></h3>
       <p class="muted">2026-08 일보 94줄에서 역산한 값이 기본입니다(평균오차 ±27분). 현장 실제와 다르면 고치세요. 0으로 두면 그 사유는 계산에서 빠집니다.</p>
       <div id="stdStopBox" class="fl" style="flex-wrap:wrap;gap:8px"></div>
@@ -2238,15 +2243,24 @@ function execHtml(){
   const arrow=(cur,prev,up)=>{ if(!isFinite(prev)||!prev) return '<em class="muted">전월 자료 없음</em>';
     const d=cur-prev, good=up?d>=0:d<=0;
     return `<em class="${good?'up':'dn'}">전월 ${d>=0?'▲':'▼'} ${fmt(Math.abs(d)>=10?Math.round(Math.abs(d)):+Math.abs(d).toFixed(1))}</em>`};
-  const pill=(v,t2,up)=>{const ok=up?v>=t2:v<=t2;return `<span class="tag ${ok?'g':'r'}">목표 ${up?'≥':'≤'} ${t2>=1?fmt(t2):Math.round(t2*100)+'%'} ${ok?'달성':'미달'}</span>`};
+  /* 달성률 — 높을수록 좋은 지표는 실적÷목표, 낮을수록 좋은 지표(PPM·MTTR)는 목표÷실적 */
+  const achv=(v,t2,up)=>{const r=up?(t2?v/t2:0):(v?t2/v:(t2?2:1));
+    return isFinite(r)?Math.min(r,9.99):9.99};
+  const pill=(v,t2,up)=>{const ok=up?v>=t2:v<=t2;const a=achv(v,t2,up);
+    return `<span class="tag ${ok?'g':'r'}">목표 ${up?'≥':'≤'} ${t2>=1?fmt(t2):Math.round(t2*100)+'%'} · 달성률 ${(a*100).toFixed(0)}%</span>`};
 
   const OE=oeeOf(R), OEp=oeeOf(rptStats(pm,cu).R);
   const oeeMs=mons0.map(mo=>oeeOf(rptStats(mo,cu).R));
+  const PL=planOf(month);
+  const plD=(!cu&&PL.tgt)?T.qty/PL.tgt:0, plG=(!cu&&PL.plan)?T.qty/PL.plan:0;
   const kpi=`<div class="kpis exec">
     <div><small>생산수량</small><b>${fmt(T.qty)}</b><em>EA · 가동 ${T.days}일</em>${arrow(T.qty,pv.qty,1)}</div>
+    ${plD?`<div><small>계획 달성률 <span class="muted" style="font-weight:400">MES 작업지시</span></small><b>${(plD*100).toFixed(1)}%</b>
+      <span class="tag ${plD>=1?'g':plD>=.9?'a':'r'}">목표 ${fmt(PL.tgt)} EA ${plD>=1?'달성':'미달'}</span>
+      <em>계획 ${fmt(PL.plan)} EA 대비 진척 ${(plG*100).toFixed(1)}%</em></div>`:''}
     <div><small>가동율</small><b>${pct(T.oper)}</b>${pill(T.oper,tgtO,1)}${arrow(+(T.oper*100).toFixed(1),+(pv.oper*100).toFixed(1),1)}</div>
     <div><small>효율</small><b>${pct(T.eff)}</b>${pill(T.eff,tgtE,1)}${arrow(+(T.eff*100).toFixed(1),+(pv.eff*100).toFixed(1),1)}</div>
-    <div><small>불량 PPM</small><b>${fmt(Math.round(ppm))}</b>${pill(ppm,tgtP,0)}${arrow(Math.round(ppm),Math.round(pvPpm),0)}</div>
+    <div><small>불량 PPM <span class="muted" style="font-weight:400">낮을수록 좋음</span></small><b>${fmt(Math.round(ppm))}</b>${pill(ppm,tgtP,0)}${arrow(Math.round(ppm),Math.round(pvPpm),0)}</div>
     <div><small>정지율</small><b>${pct(stopR)}</b><em>정지 ${fmt(Math.round(T.stop/60))}H / 근무 ${fmt(Math.round(T.work/60))}H</em>${arrow(+(stopR*100).toFixed(1),+(pvStopR*100).toFixed(1),0)}</div>
     <div><small>OEE 설비종합효율</small><b>${pct(OE.oee)}</b><em>시간 ${pct(OE.A)} × 성능 ${pct(OE.P)} × 양품 ${pct(OE.Q)}</em>${arrow(+(OE.oee*100).toFixed(1),+(OEp.oee*100).toFixed(1),1)}</div>
   </div>`;
@@ -2287,6 +2301,14 @@ function execHtml(){
     .map(([k,g])=>({k,run:g.run,f:g.f,fm:g.fm,mtbf:g.run/g.f,mttr:g.fm/g.f,av:(g.run+g.fm)?g.run/(g.run+g.fm):1}))
     .sort((a,b)=>a.mtbf-b.mtbf);
   const hh=m=>(m/60).toFixed(1);
+  // 신뢰성 지표는 설비 단위이므로 고객사 필터를 적용하지 않는다 (한 설비를 여러 고객사가 공유)
+  const relOf=L=>{let run=0,f=0,fm=0;L.forEach(r=>{run+=calc(r).run;f+=+r.fcnt||0;fm+=+r.fmin||0});
+    return{run,f,fm,mtbf:f?run/f:0,mttr:f?fm/f:0,av:(run+fm)?run/(run+fm):1}};
+  const relMs=mons.map(mo=>({mo,...relOf(S.recs.filter(r=>r.date.slice(0,7)===mo))}));
+  const relYtd=relOf(S.recs.filter(r=>r.date.slice(0,4)===month.slice(0,4)&&r.date.slice(0,7)<=month));
+  // 설비 커버리지 — 기준정보 설비 중 이번 달 일보가 있는 비율
+  const mcAll=(S.master.mcs||[]).length, mcRun=new Set(R.map(r=>r.mc)).size;
+  const mcNone=(S.master.mcs||[]).filter(m=>!R.some(r=>r.mc===m));
   // 금형교체 집계 — 일보의 금형코드 기준. 같은 날짜·설비에서 쓰인 금형 종류 수 − 1 = 교체 횟수
   const mdDay={};
   R.forEach(r=>{if(!r.mold)return;const k=r.date+'|'+r.mc;(mdDay[k]=mdDay[k]||new Set()).add(r.mold)});
@@ -2345,7 +2367,16 @@ function execHtml(){
   </div>
 
   <div class="rpt-sec pgnew">
-    <h3>4-1. 설비 신뢰성 : MTBF · MTTR <span class="muted" style="font-weight:400;font-size:12px">MTBF 평균고장간격 = 가동시간 ÷ 고장건수 · MTTR 평균수리시간 = 고장정지 ÷ 고장건수 · 일보의 설비고장 기록 기준</span></h3>
+    <h3>4-1. 설비 신뢰성 : MTBF · MTTR</h3>
+    <table style="margin-bottom:8px"><tr><th style="width:22%">지표 정의</th><th>산식 및 범위</th></tr>
+      <tr><td><b>MTBF</b> 평균고장간격</td><td>가동시간 ÷ 설비고장 건수 &nbsp;<span class="muted">가동시간 = 재적근무 − 휴식 − 정지</span></td></tr>
+      <tr><td><b>MTTR</b> 평균수리시간</td><td>고장정지시간 ÷ 설비고장 건수 &nbsp;<span class="muted">발견부터 복구 완료까지(대기 포함)</span></td></tr>
+      <tr><td><b>가용률</b></td><td>MTBF ÷ (MTBF + MTTR)</td></tr>
+      <tr><td><b>집계 대상</b></td><td>설비 고장으로 생산이 멈춘 건만. <b>계획정지 제외</b>(조회·금형점검·소재교환·측정대기·3정5행·청소), <b>금형 고장 제외</b>(별도 4-2 집계)</td></tr>
+      <tr><td><b>자료 출처</b></td><td>고장이력대장(건별 기록) → 일보 반영 · 고객사 구분 없이 설비 단위로 집계</td></tr></table>
+    ${mcNone.length?`<div style="border:1px solid var(--amber);background:rgba(255,176,32,.10);border-radius:6px;padding:7px 10px;margin-bottom:8px;font-size:12px">
+      <b style="color:var(--amber)">집계 범위 확인</b> — 등록 설비 ${mcAll}대 중 이번 달 일보가 있는 설비 ${mcRun}대. 일보 없는 설비: ${mcNone.slice(0,12).map(esc).join(', ')}${mcNone.length>12?` 외 ${mcNone.length-12}대`:''}
+      <div class="muted" style="margin-top:2px">가동 중인데 일보가 없으면 그 설비는 MTBF 집계에서 빠집니다.</div></div>`:''}
     ${relT.f?`<div class="grid g2" style="margin-bottom:8px">
       <div><table><tr><th>설비</th><th class=num>가동(H)</th><th class=num>고장<br>건수</th><th class=num>고장정지(H)</th><th class=num>MTBF(H)</th><th class=num>MTTR(H)</th><th class=num>가용률</th></tr>
       ${relL.slice(0,10).map(x=>`<tr><td>${esc(x.k)}</td><td class=num>${hh(x.run)}</td><td class=num><b>${x.f}</b></td><td class=num>${hh(x.fm)}</td><td class=num><b style="color:${x.mtbf<600?'var(--red)':x.mtbf<1800?'var(--amber)':'var(--green)'}">${hh(x.mtbf)}</b></td><td class=num><b style="color:${x.mttr>120?'var(--red)':x.mttr>60?'var(--amber)':'var(--green)'}">${hh(x.mttr)}</b></td><td class=num><span class="tag ${x.av>=.98?'g':x.av>=.95?'a':'r'}">${pct(x.av)}</span></td></tr>`).join('')}
@@ -2358,6 +2389,21 @@ function execHtml(){
     ${relL.slice(0,3).map((x,i)=>`<tr><td>${esc(x.k)} <span class=muted>MTBF ${hh(x.mtbf)}H · MTTR ${hh(x.mttr)}H</span></td><td>${ta('relD'+i,'원인과 재발방지 대책')}</td><td>${ta('relW'+i,'')}</td></tr>`).join('')}
     </table>`
     :`<p class="muted">이번 달 <b>설비고장 기록이 없습니다.</b> 일보 작성 시 <b>설비고장 건수</b>와 <b>고장정지(분)</b>를 입력하면 설비별 MTBF·MTTR이 자동으로 산출됩니다. 계획정지(조회·금형점검·소재교환 등)는 제외하고 <b>설비 고장으로 선 경우만</b> 적으십시오.</p>`}
+    ${relYtd.f?`<div class="grid g2" style="margin-top:10px">
+      <div><h4>MTBF 추이 <span class="muted" style="font-weight:400;font-size:12px">월 표본이 작아 단월 비교보다 추세와 누계로 판단합니다</span></h4>
+        ${svgCombo(relMs.map(x=>x.mo.slice(2).replace('-','.')),relMs.map(x=>Math.round(x.mtbf/60)),
+          [{v:relMs.map(x=>x.mttr?Math.min(1,x.mttr/240):0),c:C.l2}],{W:520,H:170})}
+        <div class="legend"><span><i style="background:${C.bar}"></i>MTBF(시간)</span><span><i style="background:${C.l2}"></i>MTTR(4시간=100%)</span></div></div>
+      <div><h4>${month.slice(0,4)}년 누계 <span class="muted" style="font-weight:400;font-size:12px">1월 ~ ${+month.slice(5)}월</span></h4>
+        <table><tr><th>구분</th><th class=num>이번 달</th><th class=num>연 누계</th></tr>
+        <tr><td>가동시간</td><td class=num>${hh(relT.run)}H</td><td class=num>${hh(relYtd.run)}H</td></tr>
+        <tr><td>설비고장 건수</td><td class=num>${relT.f}</td><td class=num><b>${relYtd.f}</b></td></tr>
+        <tr><td>고장정지</td><td class=num>${hh(relT.fm)}H</td><td class=num>${hh(relYtd.fm)}H</td></tr>
+        <tr class=sum><td><b>MTBF</b></td><td class=num>${relT.f?hh(relT.run/relT.f):'-'}H</td><td class=num><b>${hh(relYtd.mtbf)}H</b></td></tr>
+        <tr class=sum><td><b>MTTR</b></td><td class=num>${relT.f?hh(relT.fm/relT.f):'-'}H</td><td class=num><b>${hh(relYtd.mttr)}H</b></td></tr>
+        <tr class=sum><td><b>가용률</b></td><td class=num>${pct((relT.run+relT.fm)?relT.run/(relT.run+relT.fm):1)}</td><td class=num><b>${pct(relYtd.av)}</b></td></tr></table>
+        <div class="muted" style="font-size:11px;margin-top:4px">고장 1건 차이로 단월 MTBF가 크게 흔들립니다. 목표 관리는 <b>연 누계</b>로 하십시오.</div></div>
+    </div>`:''}
     <h3 style="margin-top:12px">4-2. 금형교체 현황 <span class="muted" style="font-weight:400;font-size:12px">일보의 금형코드 기준 · 같은 날 같은 설비에서 쓰인 금형 종류 수 − 1</span></h3>
     ${mdT.chg||mdL.length?`<div class="grid g2">
       <div><table><tr><th>설비</th><th class=num>가동일</th><th class=num>사용 금형</th><th class=num>교체 횟수</th><th class=num>일평균</th></tr>
@@ -3393,6 +3439,29 @@ function stdStopDraw(){
 }
 function stdStopSet(k,v){S.master.stdStop=S.master.stdStop||{};S.master.stdStop[k]=+v||0;commit0();stdStopDraw();toast('표준시간을 바꿨습니다')}
 function stdStopReset(){if(!confirm('계획정지 표준시간을 기본값으로 되돌립니다.'))return;delete S.master.stdStop;commit0();stdStopDraw();toast('기본값으로 되돌렸습니다')}
+/* 월 생산계획 — MES 작업지시(계획수량·목표수량). 2026-01~08은 MES 원본에서 집계한 값 */
+const DEF_PLAN={
+ '2026-01':{plan:4863861,tgt:4090405},'2026-02':{plan:3631122,tgt:2961398},
+ '2026-03':{plan:4240161,tgt:3641812},'2026-04':{plan:4748787,tgt:4272315},
+ '2026-05':{plan:4107483,tgt:3555827},'2026-06':{plan:4447413,tgt:3624371},
+ '2026-07':{plan:5183244,tgt:4719215},'2026-08':{plan:3987495,tgt:3601568}};
+const planOf=mo=>Object.assign({},DEF_PLAN[mo]||{},((S.master&&S.master.plan)||{})[mo]||{});
+function planDraw(){
+  const box=$('planBox'); if(!box)return;
+  const mine=(S.master&&S.master.plan)||{};
+  const keys=[...new Set([...Object.keys(DEF_PLAN),...Object.keys(mine),month])].sort().reverse();
+  box.innerHTML='<table><tr><th>월</th><th class=num>계획수량(EA)</th><th class=num>목표수량(EA)</th><th class=num>실적(일보)</th><th class=num>달성률</th><th class=num>진척률</th></tr>'
+   +keys.map(mo=>{const o=planOf(mo);
+     const act=S.recs.filter(r=>r.date.slice(0,7)===mo).reduce((a,r)=>a+(+r.qty||0),0);
+     const d=o.tgt?act/o.tgt*100:0, g=o.plan?act/o.plan*100:0;
+     return `<tr><td>${mo}</td>
+      <td class=num><input type=number value="${o.plan||''}" onchange="planSet('${mo}','plan',this.value)" style="width:110px;padding:3px 5px"></td>
+      <td class=num><input type=number value="${o.tgt||''}" onchange="planSet('${mo}','tgt',this.value)" style="width:110px;padding:3px 5px"></td>
+      <td class=num>${act?fmt(act):'<span class=muted>-</span>'}</td>
+      <td class=num>${act&&o.tgt?`<span class="tag ${d>=100?'g':d>=90?'a':'r'}">${d.toFixed(1)}%</span>`:'-'}</td>
+      <td class=num>${act&&o.plan?g.toFixed(1)+'%':'-'}</td></tr>`}).join('')+'</table>';
+}
+function planSet(mo,k,v){S.master.plan=S.master.plan||{};S.master.plan[mo]=Object.assign({},planOf(mo),{[k]:+v||0});commit0();planDraw();toast(mo+' 계획을 저장했습니다')}
 /* 계획정지 표준시간(분) — 2026-08 일보 94줄 회귀로 역산한 값이 기본. 기준정보에서 수정 가능 */
 const STD_STOP0={'조회':45,'소재교환':10,'측정대기':30,'금형점검':20,'관리':20,'청소':10,'3정5행':10,'스크랩비움':10,'스크랩정리':10,'박스정리':10,'크레인교육':10,'주변정리':10};
 const stdStop=()=>Object.assign({},STD_STOP0,(S.master&&S.master.stdStop)||{});
@@ -3571,7 +3640,7 @@ function renderLog(){
 }
 function mdel(t,v){S.master.mdel=S.master.mdel||{};S.master.mdel[t+'|'+v]=now();}
 function renderMaster(){
-  stdStopDraw();
+  stdStopDraw();planDraw();
   const m=S.master;
   $('tItems').innerHTML='<tr><th>고객사</th><th>품번</th><th>품명</th><th class=num>SPM 표준</th><th class=num>일보수</th><th></th></tr>'+m.items.slice().sort((a,b)=>a.cust.localeCompare(b.cust,'ko')||a.pn.localeCompare(b.pn,'ko',{numeric:true})).map(i=>{const n=S.recs.filter(r=>r.pn===i.pn).length;return `<tr><td><input value="${esc(i.cust)}" list="dlC" onchange="upItemCust('${esc(i.pn)}',this.value)" placeholder="고객사" style="min-width:110px;padding:3px 6px"></td><td><input value="${esc(i.pn)}" onchange="upItemPn('${esc(i.pn)}',this.value)" style="min-width:120px;padding:3px 6px"></td><td><input value="${esc(i.name)}" onchange="upItem('${esc(i.pn)}','name',this.value)" style="padding:3px 6px"></td><td class=num>${(()=>{const db=S.master.spmdb||[];
       const com=db.find(x=>x.pn===i.pn&&!x.mc);
