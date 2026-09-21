@@ -1427,8 +1427,11 @@ async function openMes(dateArg,quiet){
       const L=moldSeq[k]=moldSeq[k]||[];
       if(!L.length||L[L.length-1].mold!==x.mold_code)
         L.push({mold:x.mold_code,pn:x.item_code||'',at:String(x.closed_at||'').slice(11,16)});});
-  const moldTxt=code=>{const L=moldSeq[code]||[];
-    return L.length>=2?`금형교체 ${L.length-1}회(추정) ${L.map(x=>x.mold).join('→')}`:''};
+  // 그 줄의 금형이 '앞 금형에서 바뀐 뒤'인 경우에만 정지사유에 붙인다 (설비 단위로 붙이면 같은 설비 여러 줄에 중복됨)
+  const moldTxt=(code,mold)=>{const L=moldSeq[code]||[];
+    if(L.length<2||!mold)return'';
+    const i=L.findIndex(x=>x.mold===mold);
+    return i>=1?`금형교체(추정) ${L[i-1].mold}→${mold}`:''};
   const prod=led.filter(x=>x.kind==='생산입고'&&(+x.qty||0)!==0);
   const pk=new Set(prod.map(x=>(x.party||'')+'|'+x.pn));
   Object.values(cmap).forEach(x=>{
@@ -1501,7 +1504,7 @@ async function openMes(dateArg,quiet){
       stop:(stopM!=null?stopM:(noRun?(last?last.stop:0):Math.max(0,work-brk0-(runEst||run)))),noRun,runEst,overRun,
       qty:cz?(+cz.actual_qty||0):(+x.qty||0),ng,ngp,ab:bad[x.pn]||0,
       w1:(cz&&cz.worker)||(last?last.w1:'')||'',closer:(cz&&cz.worker)||'',prevW:last?last.w1:'',   // 마감한 사람 = 실제 배치자
-      sr:dtTxt[code]||stopTxt[code]||moldTxt(code)||'',dtMin:dtMin[code],molds:moldSeq[code]||[],mold:(cz&&cz.mold_code)||'',fcnt:0,fmin:0,
+      sr:dtTxt[code]||stopTxt[code]||moldTxt(code,(cz&&cz.mold_code)||'')||'',dtMin:dtMin[code],molds:moldSeq[code]||[],mold:(cz&&cz.mold_code)||'',fcnt:0,fmin:0,
       note:[badNote[x.pn]||'',cz&&cz.memo?String(cz.memo):''].filter(Boolean).join(' / '),
       ledClosed:!!(cz&&cz.fromLedger),closed:!!cz,waitClose:!cz&&(+x.qty||0)>0,mesQty:(cz&&cz.mes_qty!=null)?(+cz.mes_qty||0):(+x.qty||0),czReason:cz?(cz.reason||''):'',pending:!!x.pending,use:(upd||!dup)&&!!mc&&!x.pending,dup:!!dup,dupId:dup?dup.id:'',upd};
   });
@@ -2230,6 +2233,17 @@ function execHtml(){
     .map(([k,g])=>({k,run:g.run,f:g.f,fm:g.fm,mtbf:g.run/g.f,mttr:g.fm/g.f,av:(g.run+g.fm)?g.run/(g.run+g.fm):1}))
     .sort((a,b)=>a.mtbf-b.mtbf);
   const hh=m=>(m/60).toFixed(1);
+  // 금형교체 집계 — 일보의 금형코드 기준. 같은 날짜·설비에서 쓰인 금형 종류 수 − 1 = 교체 횟수
+  const mdDay={};
+  R.forEach(r=>{if(!r.mold)return;const k=r.date+'|'+r.mc;(mdDay[k]=mdDay[k]||new Set()).add(r.mold)});
+  const mdMc={};
+  Object.entries(mdDay).forEach(([k,set])=>{const mc=k.split('|')[1];
+    const g=mdMc[mc]=mdMc[mc]||{chg:0,days:0,molds:new Set()};
+    g.chg+=Math.max(0,set.size-1);g.days++;set.forEach(x=>g.molds.add(x))});
+  const mdL=Object.entries(mdMc).map(([k,g])=>({k,chg:g.chg,days:g.days,kinds:g.molds.size,
+    per:g.days?g.chg/g.days:0})).sort((a,b)=>b.chg-a.chg);
+  const mdT=mdL.reduce((a,x)=>({chg:a.chg+x.chg,days:a.days+x.days}),{chg:0,days:0});
+  const mdNo=R.filter(r=>!r.mold).length;
   const lossTop=Object.entries(byMc).map(([k,L])=>{
     const stop=L.reduce((a,r)=>a+(+r.stop||0),0), work=L.reduce((a,r)=>a+(+r.work||0),0);
     const spm=L.filter(r=>+r.spm).reduce((a,r)=>a+ +r.spm,0)/(L.filter(r=>+r.spm).length||1);
@@ -2288,6 +2302,17 @@ function execHtml(){
     ${relL.slice(0,3).map((x,i)=>`<tr><td>${esc(x.k)} <span class=muted>MTBF ${hh(x.mtbf)}H · MTTR ${hh(x.mttr)}H</span></td><td>${ta('relD'+i,'원인과 재발방지 대책')}</td><td>${ta('relW'+i,'')}</td></tr>`).join('')}
     </table>`
     :`<p class="muted">이번 달 <b>설비고장 기록이 없습니다.</b> 일보 작성 시 <b>설비고장 건수</b>와 <b>고장정지(분)</b>를 입력하면 설비별 MTBF·MTTR이 자동으로 산출됩니다. 계획정지(조회·금형점검·소재교환 등)는 제외하고 <b>설비 고장으로 선 경우만</b> 적으십시오.</p>`}
+    <h3 style="margin-top:12px">4-2. 금형교체 현황 <span class="muted" style="font-weight:400;font-size:12px">일보의 금형코드 기준 · 같은 날 같은 설비에서 쓰인 금형 종류 수 − 1</span></h3>
+    ${mdT.chg||mdL.length?`<div class="grid g2">
+      <div><table><tr><th>설비</th><th class=num>가동일</th><th class=num>사용 금형</th><th class=num>교체 횟수</th><th class=num>일평균</th></tr>
+      ${mdL.slice(0,10).map(x=>`<tr><td>${esc(x.k)}</td><td class=num>${x.days}</td><td class=num>${x.kinds}</td><td class=num><b style="color:${x.per>=1?'var(--red)':x.per>=.5?'var(--amber)':'inherit'}">${x.chg}</b></td><td class=num>${x.per.toFixed(2)}</td></tr>`).join('')}
+      <tr class=sum><td>합계</td><td class=num>${mdT.days}</td><td class=num></td><td class=num>${mdT.chg}</td><td class=num>${mdT.days?(mdT.chg/mdT.days).toFixed(2):'0.00'}</td></tr></table>
+      ${mdNo?`<div class="muted" style="font-size:11px;margin-top:4px">금형코드가 비어 있는 일보 ${mdNo}건은 집계에서 빠졌습니다 — 데이터 화면의 <b>금형코드 채우기</b>로 보완하세요</div>`:''}</div>
+      <div>${svgVBars(mdL.slice(0,8).map(x=>({l:x.k.split(' ')[0],v:x.chg,txt:x.chg+'회',c:C.l2})),{W:470,H:150,rot:0,B:30})}
+      <div class="legend"><span><i style="background:${C.l2}"></i>금형교체 횟수</span></div>
+      <div class="muted" style="font-size:11px;margin-top:6px">교체가 잦은 설비는 준비교체(段取り) 시간이 가동율을 깎습니다. 상위 설비부터 교체 표준작업·금형 사전준비를 점검하십시오.</div></div>
+    </div>`
+    :`<p class="muted">이번 달 일보에 <b>금형코드가 기록되지 않았습니다.</b> 누락일보콜로 저장하면 자동으로 들어가며, 기존 일보는 데이터 화면의 <b>금형코드 채우기</b>로 보완할 수 있습니다.</p>`}
   </div>
 
   <div class="rpt-sec pgnew">
