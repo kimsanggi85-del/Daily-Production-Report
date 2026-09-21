@@ -595,6 +595,12 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
         <div class="tw" style="max-height:60vh"><table id="tItems"></table></div>
     </div>
 
+    <div class="panel"><h3>계획정지 표준시간 <span class="muted" style="font-weight:400;font-size:12px">고장시간 추정에 씁니다 — 정지시간에서 이 값들을 빼고 남은 시간을 고장으로 봅니다</span></h3>
+      <p class="muted">2026-08 일보 94줄에서 역산한 값이 기본입니다(평균오차 ±27분). 현장 실제와 다르면 고치세요. 0으로 두면 그 사유는 계산에서 빠집니다.</p>
+      <div id="stdStopBox" class="fl" style="flex-wrap:wrap;gap:8px"></div>
+      <div class="fl" style="margin-top:8px"><button class="s" onclick="stdStopReset()">기본값으로</button></div>
+    </div>
+
     <div class="grid g2">
       <div>
         <div class="panel"><h3>설비 목록</h3>
@@ -3318,7 +3324,14 @@ function flImport(){
 function flImpSet(i,k,v){const r=FLIMP[i];if(!r)return;
   r[k]=(k==='min')?(+v||0):(k==='on'?!!v:v);
   if(k==='min'&&+v>0)r.on=true;
+  if(k==='on'&&r.on&&!r.min){const e=failEst(r.sr,r.stop);r.min=e.est;r.auto=true}   // 체크하면 계획정지를 뺀 추정값을 채운다
+  if(k==='min')r.auto=false;
   drawFlImp($('fi_mo').textContent);}
+function flImpTgl(i){const r=FLIMP[i];if(!r)return;flImpSet(i,'on',!r.on)}
+function flImpAll(v){const mo=$('fi_mo').textContent;
+  FLIMP.forEach(r=>{if(FLIMPKD&&r.kd!==FLIMPKD)return;
+    r.on=!!v; if(v&&!r.min){const e=failEst(r.sr,r.stop);r.min=e.est;r.auto=true} });
+  drawFlImp(mo);}
 function flImpKd(v){FLIMPKD=v;drawFlImp($('fi_mo').textContent)}
 function drawFlImp(mo){
   const L=FLIMP.filter(r=>!FLIMPKD||r.kd===FLIMPKD);
@@ -3335,17 +3348,19 @@ function drawFlImp(mo){
     <span class="tag">후보 ${FLIMP.length}건</span>
     <span class="tag r">설비 ${FLIMP.filter(r=>r.kd==='설비').length}</span>
     <span class="tag a">금형 ${FLIMP.filter(r=>r.kd==='금형').length}</span>
-    <span class="tag ${ready.length?'g':''}">등록 대상 ${ready.length}건</span></div>
-  <p class="muted" style="margin-top:0">일보 정지사유에서 고장으로 보이는 날을 뽑았습니다. <b>정지시간 중 고장으로 선 시간(분)만</b> 적으면 등록 대상이 됩니다. 현상은 비워두면 정지사유가 그대로 들어갑니다. 등록 후 대장에서 원인·조치·재발방지를 채우세요.</p>
-  <div class="tw" style="max-height:56vh"><table><tr><th></th><th>일자</th><th>설비</th><th>구분</th><th class=num>일보<br>정지</th><th>정지사유 (일보)</th><th>고장<br>정지(분)</th><th>현상 (비우면 정지사유)</th></tr>
-  ${L.length?L.map(r=>{const i=FLIMP.indexOf(r);return `<tr${r.on&&r.min>0?' style="background:rgba(60,190,120,.10)"':''}>
-    <td><input type=checkbox ${r.on?'checked':''} onchange="flImpSet(${i},'on',this.checked)"></td>
+    <span class="tag ${ready.length?'g':''}">등록 대상 ${ready.length}건</span>
+    ${FLIMP.some(r=>r.auto&&r.on)?`<span class="tag a">추정값 그대로인 줄 ${FLIMP.filter(r=>r.auto&&r.on).length}건 — 확인 필요</span>`:''}
+    <button class="s" onclick="flImpAll(true)">전체 선택</button><button class="s" onclick="flImpAll(false)">전체 해제</button></div>
+  <p class="muted" style="margin-top:0">일보 정지사유에서 고장으로 보이는 날을 뽑았습니다. <b>줄을 클릭하면 선택</b>되고, 정지시간에서 <b>계획정지 표준시간(조회·소재교환·금형점검 등)을 뺀 값</b>이 고장정지에 추정으로 채워집니다. <b style="color:var(--amber)">추정 오차는 ±25분 수준</b>이니 반드시 확인하고 고치세요. 표준시간은 기준정보에서 바꿀 수 있습니다. 현상은 비워두면 정지사유가 그대로 들어갑니다. 등록 후 대장에서 원인·조치·재발방지를 채우세요.</p>
+  <div class="tw" style="max-height:56vh"><table><tr><th><input type=checkbox ${L.length&&L.every(r=>r.on)?'checked':''} onclick="flImpAll(this.checked)" title="전체 선택"></th><th>일자</th><th>설비</th><th>구분</th><th class=num>일보<br>정지</th><th>정지사유 (일보)</th><th>고장<br>정지(분)</th><th>현상 (비우면 정지사유)</th></tr>
+  ${L.length?L.map(r=>{const i=FLIMP.indexOf(r);return `<tr onclick="flImpTgl(${i})" style="cursor:pointer${r.on&&r.min>0?';background:rgba(60,190,120,.10)':''}">
+    <td><input type=checkbox ${r.on?'checked':''} onclick="event.stopPropagation();flImpSet(${i},'on',this.checked)"></td>
     <td>${esc(r.date.slice(5))}</td><td>${esc(r.mc)}</td>
-    <td><select onchange="flImpSet(${i},'kd',this.value)" style="width:78px;padding:3px 4px"><option value="설비"${r.kd==='설비'?' selected':''}>설비</option><option value="금형"${r.kd==='금형'?' selected':''}>금형</option></select></td>
+    <td onclick="event.stopPropagation()"><select onchange="flImpSet(${i},'kd',this.value)" style="width:78px;padding:3px 4px"><option value="설비"${r.kd==='설비'?' selected':''}>설비</option><option value="금형"${r.kd==='금형'?' selected':''}>금형</option></select></td>
     <td class=num>${r.stop}</td>
     <td style="font-size:12px;max-width:300px">${esc(r.sr)}${r.note?`<div class=muted style="font-size:11px">${esc(r.note)}</div>`:''}</td>
-    <td><input type=number min=0 max=${r.stop} value="${r.min||''}" onchange="flImpSet(${i},'min',this.value)" style="width:64px;padding:3px 5px${r.min>r.stop?';border-color:var(--red)':''}" placeholder="분"></td>
-    <td><input value="${esc(r.sym)}" onchange="flImpSet(${i},'sym',this.value)" style="min-width:190px;padding:3px 5px" placeholder="${esc(r.sr.slice(0,28))}"></td></tr>`}).join('')
+    <td onclick="event.stopPropagation()">${(()=>{const e=failEst(r.sr,r.stop);return `<input type=number min=0 max=${r.stop} value="${r.min||''}" onchange="flImpSet(${i},'min',this.value)" style="width:64px;padding:3px 5px${r.min>r.stop?';border-color:var(--red)':''}" placeholder="분" title="정지 ${r.stop}분 − 계획 ${e.plan}분">${r.auto?`<div style="font-size:10px;color:var(--amber)">추정 (계획 ${e.plan}분 제외)</div>`:''}`})()}</td>
+    <td onclick="event.stopPropagation()"><input value="${esc(r.sym)}" onchange="flImpSet(${i},'sym',this.value)" style="min-width:190px;padding:3px 5px" placeholder="${esc(r.sr.slice(0,28))}"></td></tr>`}).join('')
     :'<tr><td colspan=8 class=empty>해당 구분의 후보가 없습니다</td></tr>'}</table></div>
   <div class="fl" style="margin-top:12px"><button class="p" onclick="flImpSave()" ${ready.length?'':'disabled'}>${ready.length}건 대장에 등록</button>
     <span class="grow"></span><span class="muted" style="font-size:12px">고장정지(분)를 적은 줄만 등록됩니다</span></div>`;
@@ -3369,6 +3384,31 @@ function flImpSave(){
 }
 /* ===== 설비고장 소급 입력 — 지난달 일보에 고장건수·고장정지를 채워 MTBF/MTTR을 산출한다 ===== */
 const FAIL_KW=['설비이상','고장','파손','수리','오작동','에러','멈춤','막힘','풀림','떨어짐','교체'];
+function stdStopDraw(){
+  const box=$('stdStopBox'); if(!box)return;
+  const T=stdStop();
+  box.innerHTML=Object.keys(STD_STOP0).map(k=>
+    `<label style="display:inline-flex;align-items:center;gap:4px;font-size:12px">${esc(k)}
+     <input type=number min=0 value="${T[k]}" onchange="stdStopSet('${esc(k)}',this.value)" style="width:62px;padding:3px 5px">분</label>`).join('');
+}
+function stdStopSet(k,v){S.master.stdStop=S.master.stdStop||{};S.master.stdStop[k]=+v||0;commit0();stdStopDraw();toast('표준시간을 바꿨습니다')}
+function stdStopReset(){if(!confirm('계획정지 표준시간을 기본값으로 되돌립니다.'))return;delete S.master.stdStop;commit0();stdStopDraw();toast('기본값으로 되돌렸습니다')}
+/* 계획정지 표준시간(분) — 2026-08 일보 94줄 회귀로 역산한 값이 기본. 기준정보에서 수정 가능 */
+const STD_STOP0={'조회':45,'소재교환':10,'측정대기':30,'금형점검':20,'관리':20,'청소':10,'3정5행':10,'스크랩비움':10,'스크랩정리':10,'박스정리':10,'크레인교육':10,'주변정리':10};
+const stdStop=()=>Object.assign({},STD_STOP0,(S.master&&S.master.stdStop)||{});
+/* 정지사유에서 계획정지 몫을 빼고 고장시간을 추정한다 (N회 표기 반영) */
+function failEst(sr,stop){
+  const T=stdStop(); let plan=0; const hit=[];
+  Object.entries(T).forEach(([k,m])=>{
+    if(!m)return;
+    let n=(String(sr).match(new RegExp(k,'g'))||[]).length;
+    if(!n)return;
+    const c=String(sr).match(new RegExp(k+'\\s*(\\d+)\\s*회'));
+    if(c)n=Math.max(n,+c[1]);
+    plan+=n*m; hit.push(`${k}${n>1?'×'+n:''} ${n*m}분`);
+  });
+  return{plan:Math.round(plan),est:Math.max(0,Math.round((+stop||0)-plan)),hit};
+}
 const FAIL_EQ=['설비이상','언코일러','모터','유압','센서','오작동','막힘','볼트','쏠림','체인','컨베이어','전장','릴레이','에어','스크랩'];
 const FAIL_MD=['금형수리','금형파손','금형셋팅','펀치','다이','블랭킹','리스트라이킹','핑거','밴딩','피어싱','연마','하프','금형조정'];
 const flKind=t=>{const e=FAIL_EQ.some(k=>t.includes(k)),m=FAIL_MD.some(k=>t.includes(k));
@@ -3531,6 +3571,7 @@ function renderLog(){
 }
 function mdel(t,v){S.master.mdel=S.master.mdel||{};S.master.mdel[t+'|'+v]=now();}
 function renderMaster(){
+  stdStopDraw();
   const m=S.master;
   $('tItems').innerHTML='<tr><th>고객사</th><th>품번</th><th>품명</th><th class=num>SPM 표준</th><th class=num>일보수</th><th></th></tr>'+m.items.slice().sort((a,b)=>a.cust.localeCompare(b.cust,'ko')||a.pn.localeCompare(b.pn,'ko',{numeric:true})).map(i=>{const n=S.recs.filter(r=>r.pn===i.pn).length;return `<tr><td><input value="${esc(i.cust)}" list="dlC" onchange="upItemCust('${esc(i.pn)}',this.value)" placeholder="고객사" style="min-width:110px;padding:3px 6px"></td><td><input value="${esc(i.pn)}" onchange="upItemPn('${esc(i.pn)}',this.value)" style="min-width:120px;padding:3px 6px"></td><td><input value="${esc(i.name)}" onchange="upItem('${esc(i.pn)}','name',this.value)" style="padding:3px 6px"></td><td class=num>${(()=>{const db=S.master.spmdb||[];
       const com=db.find(x=>x.pn===i.pn&&!x.mc);
