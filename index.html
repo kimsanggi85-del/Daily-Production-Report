@@ -380,6 +380,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
       <a class="act pri" data-pg="entry" data-fn="openMes()"><i>📥</i>누락일보콜</a>
       <a class="act" data-pg="entry" data-fn="syncClose()"><i>🔄</i>실제수량갱신</a>
       <a class="act" data-pg="entry" data-fn="mesDiag()"><i>🩺</i>연결 점검</a>
+      <a class="act" data-fn="go('fail')"><i>⚠</i>고장이력대장</a>
       <a class="act" data-fn="go('entry')"><i>➕</i>오늘 일보 입력</a>
     </div>
   </div></div>
@@ -432,7 +433,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
   <div class="top">
     <h2 id="title">생산일보 입력 · 이력</h2>
     <div class="fl" id="topMes" style="display:none;flex:1;gap:6px">
-      <button class="p" onclick="openMes()" title="일보가 없는 가장 최근 날의 MES 자료를 읽어 일보를 만들어 줍니다 (날짜는 창에서 바꿀 수 있습니다)"><span class="lbl-long">누락일보콜</span><span class="lbl-short">일보콜</span></button><button onclick="syncClose()" title="이미 저장된 일보의 실적을 현장 마감 수량(실제양품)으로 한 번에 맞춥니다"><span class="lbl-long">실제수량갱신</span><span class="lbl-short">수량</span></button><button class="s" onclick="weekClose()" title="지난 한 주 실적을 정리하고 개선활동 항목을 뽑아 줍니다"><span class="lbl-long">주간 마감</span><span class="lbl-short">주간</span></button><button class="s" onclick="moldHist('300')" title="호기별 금형교체 이력을 마감 자료에서 뽑아 줍니다"><span class="lbl-long">금형교체 이력</span><span class="lbl-short">금형</span></button><button class="s" onclick="mesDiag()"><span class="lbl-long">연결 점검</span><span class="lbl-short">점검</span></button>
+      <button class="p" onclick="openMes()" title="일보가 없는 가장 최근 날의 MES 자료를 읽어 일보를 만들어 줍니다 (날짜는 창에서 바꿀 수 있습니다)"><span class="lbl-long">누락일보콜</span><span class="lbl-short">일보콜</span></button><button onclick="syncClose()" title="이미 저장된 일보의 실적을 현장 마감 수량(실제양품)으로 한 번에 맞춥니다"><span class="lbl-long">실제수량갱신</span><span class="lbl-short">수량</span></button><button class="s" onclick="weekClose()" title="지난 한 주 실적을 정리하고 개선활동 항목을 뽑아 줍니다"><span class="lbl-long">주간 마감</span><span class="lbl-short">주간</span></button><button class="s" onclick="moldHist('300')" title="호기별 금형교체 이력을 마감 자료에서 뽑아 줍니다"><span class="lbl-long">금형교체 이력</span><span class="lbl-short">금형</span></button><button class="s" onclick="mesDiag()"><span class="lbl-long">연결 점검</span><span class="lbl-short">점검</span></button><button class="s" onclick="go('fail')" title="설비·금형 고장이력대장 — MTBF·MTTR"><span class="lbl-long">고장이력대장</span><span class="lbl-short">고장</span></button>
     </div>
     <div class="mon"><button onclick="mv(-1)">‹</button><b id="monLbl"></b><button onclick="mv(1)">›</button></div>
     <button id="btnToday" onclick="go('entry')" class="p">+ 오늘 일보 입력</button>
@@ -986,13 +987,13 @@ async function push(manual){
 
 /* ===== 공통 UI ===== */
 function toast(m){const t=$('toast');t.textContent=m;t.style.display='block';clearTimeout(t._t);t._t=setTimeout(()=>t.style.display='none',1800)}
-const PT_G={entry:'rep',dash:'view',month:'view',daily:'view',report:'rpt',master:'cfg',data:'cfg',help:'cfg'};
+const PT_G={entry:'rep',dash:'view',month:'view',daily:'view',report:'rpt',master:'cfg',data:'cfg',fail:'cfg',help:'cfg'};
 function go(p){pg=p;document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('on',a.dataset.pg===p));
   document.querySelectorAll('#pcTop .navitem').forEach(n=>n.classList.toggle('on',n.dataset.g===PT_G[p]));
   document.querySelectorAll('#pcTop .mega a.scr').forEach(a=>a.classList.toggle('on',a.dataset.pg===p));
   document.querySelectorAll('#pcTop .navitem.open').forEach(n=>n.classList.remove('open'));document.querySelectorAll('.pg').forEach(s=>s.classList.toggle('on',s.id==='pg-'+p));
-  $('title').textContent={dash:'현황판',entry:'생산일보 입력 · 이력',month:'월간 집계',daily:'품목별 일별표',report:'월간 보고서',master:'기준정보',data:'데이터 관리',help:'사용안내'}[p];
-  const mt=document.getElementById('mTtl'); if(mt)mt.textContent={dash:'현황판',entry:'생산일보',month:'월간 집계',daily:'품목별 일별표',report:'월간 보고서',master:'기준정보',data:'데이터 관리',help:'사용안내'}[p]||'생산일보';
+  $('title').textContent={dash:'현황판',entry:'생산일보 입력 · 이력',month:'월간 집계',daily:'품목별 일별표',report:'월간 보고서',master:'기준정보',data:'데이터 관리',fail:'고장이력대장',help:'사용안내'}[p];
+  const mt=document.getElementById('mTtl'); if(mt)mt.textContent={dash:'현황판',entry:'생산일보',month:'월간 집계',daily:'품목별 일별표',report:'월간 보고서',master:'기준정보',data:'데이터 관리',fail:'고장이력대장',help:'사용안내'}[p]||'생산일보';
   const _e=(p==='entry');
   $('title').style.display=_e?'none':'';
   if($('topMes'))$('topMes').style.display=_e?'flex':'none';
