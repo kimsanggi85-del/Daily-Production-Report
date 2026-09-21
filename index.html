@@ -402,6 +402,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
   <div class="navitem" data-g="cfg"><button type="button">기준정보 ▾</button><div class="mega">
     <div class="mega-col">
       <a class="scr" data-pg="master"><i>⚙</i>기준정보<em>MASTER</em></a>
+      <a class="scr" data-pg="fail"><i>⚠</i>고장이력<em>BREAKDOWN</em></a>
       <a class="scr" data-pg="data"><i>⇅</i>데이터 관리<em>DATA</em></a>
       <a class="scr" data-pg="help"><i>?</i>사용안내<em>HELP</em></a>
     </div>
@@ -422,6 +423,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
   <a data-pg="daily"><i>▤</i>품목별 일별표</a>
   <a data-pg="report"><i>▣</i>월간 보고서</a>
   <a data-pg="master"><i>⚙</i>기준정보</a>
+  <a data-pg="fail"><i>⚠</i>고장이력대장</a>
   <a data-pg="data"><i>⇅</i>데이터 관리</a>
   <a data-pg="help"><i>?</i>사용안내</a>
   <div class="foot"><span id="sync">저장 상태 확인 중</span><br><span id="cnt"></span><br><span id="ver1"></span></div>
@@ -638,6 +640,21 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
   </section>
 
   <!-- 데이터 -->
+  <section class="pg" id="pg-fail">
+    <div class="top"><h2>고장이력대장 <span class="muted" style="font-size:12px;font-weight:400">설비·금형 고장 한 건당 한 줄 · IATF 8.5.1.5 TPM 기록</span></h2></div>
+    <div class="fl" style="margin-bottom:10px;flex-wrap:wrap">
+      <select id="fl_mo" onchange="flRender()" style="width:170px"></select>
+      <select id="fl_mc" onchange="flRender()" style="width:150px"></select>
+      <select id="fl_kind" onchange="flRender()" style="width:120px"><option value="">구분 전체</option><option value="설비">설비</option><option value="금형">금형</option></select>
+      <input id="fl_q" oninput="flRender()" placeholder="검색 (현상·원인·조치·부품)" class="grow">
+      <button class="p" onclick="flForm()">＋ 고장 등록</button>
+      <button class="s" onclick="flCopy()">표 복사</button>
+    </div>
+    <div id="fl_kpi" class="kpis"></div>
+    <div id="fl_warn" class="muted" style="margin:6px 0"></div>
+    <div class="tw"><table id="tFail"></table></div>
+    <p class="muted" style="font-size:12px;margin-top:8px">등록하면 같은 날짜·설비의 <b>일보에 고장건수·고장정지가 자동 반영</b>됩니다(설비 구분만). 금형 수리는 월간보고서 금형 항목으로 집계되며 설비 MTBF에는 들어가지 않습니다.</p>
+  </section>
   <section class="pg" id="pg-data">
     <div class="grid g2">
       <div class="panel"><h3>엑셀 일보 가져오기</h3>
@@ -650,6 +667,10 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
         <div class="fl"><button id="btnAutoEntry" onclick="setAutoEntry(!autoEntryOn())"></button>
           <button onclick="autoEntry(true)">지금 한 번 실행</button></div>
         <div id="autoEntryMsg" class="muted" style="margin-top:8px"></div>
+      </div>
+      <div class="panel"><h3>설비고장 소급 입력 (MTBF · MTTR)</h3>
+        <p class="muted">지난달 일보에 <b>설비고장 건수·고장정지(분)</b>를 뒤늦게 채웁니다. 정지사유에 고장으로 보이는 말이 든 줄만 먼저 보여주므로 전수 확인할 필요가 없습니다. 저장하면 월간보고서의 MTBF·MTTR이 바로 나옵니다.</p>
+        <button class="p" onclick="failOpen()">월 선택해서 채우기</button>
       </div>
       <div class="panel"><h3>일보 금형코드 채우기</h3>
         <p class="muted">저장된 일보에 <b>금형코드</b>를 채웁니다. 마감 자료(production_close)의 mold_code를 <b>날짜·설비·품번</b>으로 연결하므로 한 줄에 그 줄의 금형이 정확히 들어갑니다. 이미 값이 있는 줄은 건드리지 않습니다.</p>
@@ -774,7 +795,7 @@ const PN_FAM={'36 심팩300':{'1106':'IW/OW-BDA-1106-2','1113':'IW/OW-BDA-1113-2
 const PN_NAME={"IW/OW-BDA-1106-2":"Raceway 1106 CA/CB","IW/OW-BDA-1106-3":"Raceway 1106 CA/CB","IW/OW-BDA-1113-1":"Raceway 1113-1","IW/OW-BDA-1113-2":"Raceway 1113-2","IW/OW-BDA-1159B":"Raceway 1159B/C","IW/OW-BDA-1179-1":"Raceway 1179-1","IW/OW-BDA-1179-2":"Raceway 1179-2","IW/OW-BDA-1179-3":"Raceway 1179-3"};
 
 /* ===== 상태 ===== */
-let S={recs:[],del:{},master:null,seedVer:'',ua:''};
+let S={recs:[],del:{},master:null,seedVer:'',ua:'',fails:[]};
 let month=new Date().toISOString().slice(0,7);
 let editId=null, pg='entry', sortKey='date', sortDir=-1;
 const $=id=>document.getElementById(id);
@@ -803,6 +824,7 @@ function load(){
   if(!S.master.mesMc)S.master.mesMc=Object.assign({},DEF_MESMC);
   if(!S.master.mesPn)S.master.mesPn=Object.assign({},DEF_MESPN);
   if(!S.del)S.del={};
+  if(!Array.isArray(S.fails))S.fails=[];
   if(S.seedVer!==SEED_VER){
     const byId=new Map(S.recs.map(r=>[r.id,r]));
     SEED.forEach(r=>{if(S.del[r.id])return;const e=byId.get(r.id);if(!e)S.recs.push(r);else if(e.brk===undefined)e.brk=r.brk});
@@ -904,6 +926,9 @@ function mergeIn(srv){
   Object.assign(S.del,srv.del||{});
   srv.recs.forEach(r=>{if(S.del[r.id])return;const l=map.get(r.id);if(!l||(r.ua||'')>=(l.ua||''))map.set(r.id,r)});
   S.recs=[...map.values()].filter(r=>!S.del[r.id]);
+  if(srv.fails){const fm=new Map((S.fails||[]).map(f=>[f.id,f]));
+    srv.fails.forEach(f=>{if(S.del[f.id])return;const l=fm.get(f.id);if(!l||(f.ua||'')>=(l.ua||''))fm.set(f.id,f)});
+    S.fails=[...fm.values()].filter(f=>!S.del[f.id])}
   if(srv.mig){S.mig=Object.assign(S.mig||{},srv.mig)}
   if(srv.log){const k=new Set((S.log||[]).map(x=>x.t+'|'+x.by+'|'+x.act));
     S.log=[...(S.log||[]),...srv.log.filter(x=>!k.has(x.t+'|'+x.by+'|'+x.act))].sort((a,b)=>b.t.localeCompare(a.t)).slice(0,300)}
@@ -952,7 +977,7 @@ function schedulePush(){clearTimeout(pushT);pushT=setTimeout(()=>push(),800);}
 async function push(manual){
   setSync('busy','서버에 올리는 중');
   try{
-    const body=[{key:KV_KEY,value:{recs:S.recs,del:S.del,master:S.master,rpt:S.rpt||{},mig:S.mig||{},log:S.log||[],appVer:(S.appVer&&vNum(S.appVer)>vNum(APP_VER)?S.appVer:APP_VER),ua:S.ua},updated_at:now()}];
+    const body=[{key:KV_KEY,value:{recs:S.recs,del:S.del,master:S.master,rpt:S.rpt||{},mig:S.mig||{},log:S.log||[],fails:S.fails||[],appVer:(S.appVer&&vNum(S.appVer)>vNum(APP_VER)?S.appVer:APP_VER),ua:S.ua},updated_at:now()}];
     const r=await fetch(SB_URL+'/rest/v1/kv_store?on_conflict=key',{method:'POST',headers:{...hdr,'Prefer':'resolution=merge-duplicates'},body:JSON.stringify(body)});
     if(!r.ok)throw new Error(r.status);
     setSync('ok','서버 연결됨');if(manual)toast('서버에 올렸습니다');
@@ -1020,7 +1045,7 @@ function overMsg(r){const c=calc(r);if(!(c.eff>1))return '';
 
 function renderAll(){
   $('monLbl').textContent=month.replace('-','년 ')+'월';
-  ({dash:renderDash,entry:renderEntry,month:renderMonth,daily:renderDaily,report:renderReport,master:renderMaster,data:renderData,help:()=>{}})[pg]();
+  ({dash:renderDash,entry:renderEntry,month:renderMonth,daily:renderDaily,report:renderReport,master:renderMaster,data:renderData,fail:flRender,help:()=>{}})[pg]();
 }
 
 /* ===== 현황판 ===== */
@@ -2265,6 +2290,8 @@ function execHtml(){
     per:g.days?g.chg/g.days:0})).sort((a,b)=>b.chg-a.chg);
   const mdT=mdL.reduce((a,x)=>({chg:a.chg+x.chg,days:a.days+x.days}),{chg:0,days:0});
   const mdNo=R.filter(r=>!r.mold).length;
+  const mdFix=(S.fails||[]).filter(f=>f.date.slice(0,7)===month&&f.kind==='금형');
+  const mdFixMin=mdFix.reduce((a,f)=>a+(+f.min||0),0);
   const lossTop=Object.entries(byMc).map(([k,L])=>{
     const stop=L.reduce((a,r)=>a+(+r.stop||0),0), work=L.reduce((a,r)=>a+(+r.work||0),0);
     const spm=L.filter(r=>+r.spm).reduce((a,r)=>a+ +r.spm,0)/(L.filter(r=>+r.spm).length||1);
@@ -2332,6 +2359,10 @@ function execHtml(){
       <div>${svgVBars(mdL.slice(0,8).map(x=>({l:x.k.split(' ')[0],v:x.chg,txt:x.chg+'회',c:C.l2})),{W:470,H:150,rot:0,B:30})}
       <div class="legend"><span><i style="background:${C.l2}"></i>금형교체 횟수</span></div>
       <div class="muted" style="font-size:11px;margin-top:6px">교체가 잦은 설비는 준비교체(段取り) 시간이 가동율을 깎습니다. 상위 설비부터 교체 표준작업·금형 사전준비를 점검하십시오.</div></div>
+      ${mdFix.length?`<table style="margin-top:8px"><tr><th colspan=4>금형 수리 (고장이력대장)</th></tr>
+      <tr><th>일자</th><th>설비 · 금형</th><th class=num>정지(분)</th><th>현상 / 조치</th></tr>
+      ${mdFix.slice(0,8).map(f=>`<tr><td>${esc(f.date.slice(5))}</td><td>${esc(f.mc)}${f.mold?`<div class=muted style="font-size:11px">${esc(f.mold)}</div>`:''}</td><td class=num>${f.min}</td><td style="font-size:12px">${esc(f.sym)}${f.act?`<div class=muted style="font-size:11px">${esc(f.act)}</div>`:''}</td></tr>`).join('')}
+      <tr class=sum><td>합계</td><td>${mdFix.length}건</td><td class=num>${mdFixMin}</td><td class=muted>${(mdFixMin/60).toFixed(1)}H</td></tr></table>`:''}
     </div>`
     :`<p class="muted">이번 달 일보에 <b>금형코드가 기록되지 않았습니다.</b> 누락일보콜로 저장하면 자동으로 들어가며, 기존 일보는 데이터 화면의 <b>금형코드 채우기</b>로 보완할 수 있습니다.</p>`}
   </div>
@@ -3144,6 +3175,193 @@ function changeMe(){const v=prompt('이름을 입력하세요 (변경 이력에 
 function meName(){return (localStorage.getItem('tj_me')||'').trim()||'(이름없음)';}
 // 관리 PIN 사용 안 함 — 작업은 바로 실행되고 변경 이력에만 기록된다
 function askPin(what){return true;}
+/* ===== 고장이력대장 ===== */
+let FLEDIT=null;
+function flMin(d,t1,t2){
+  if(!t1||!t2)return 0;
+  const a=new Date(d+'T'+t1+':00+09:00'); let b=new Date(d+'T'+t2+':00+09:00');
+  if(isNaN(a)||isNaN(b))return 0;
+  if(b<a)b=new Date(b.getTime()+864e5);                 // 자정을 넘긴 경우
+  return Math.max(0,Math.round((b-a)/60000));
+}
+/* 대장 → 일보 반영. 같은 날짜·설비의 '설비' 고장만 합산해 대표 줄 하나에 싣는다 (보고서 중복 합산 방지) */
+function flSync(date,mc){
+  const L=(S.fails||[]).filter(f=>f.date===date&&f.mc===mc&&f.kind==='설비');
+  const cnt=L.length, min=L.reduce((a,f)=>a+(+f.min||0),0);
+  const rows=S.recs.filter(r=>r.date===date&&r.mc===mc);
+  if(!rows.length)return false;
+  const main=rows.slice().sort((a,b)=>(+b.qty||0)-(+a.qty||0))[0];
+  rows.forEach(r=>{const c=(r===main)?cnt:0, m=(r===main)?min:0;
+    if((+r.fcnt||0)!==c||(+r.fmin||0)!==m){r.fcnt=c;r.fmin=m;r.ua=now()}});
+  return true;
+}
+function flForm(id){
+  const f=id?(S.fails||[]).find(x=>x.id===id):null;
+  FLEDIT=id||null;
+  const mcs=S.master.mcs.slice().sort((a,b)=>a.localeCompare(b,'ko',{numeric:true}));
+  const opt=(L,c)=>'<option value=""></option>'+L.map(v=>`<option value="${esc(v)}"${v===c?' selected':''}>${esc(v)}</option>`).join('');
+  const v=k=>esc(f?(f[k]||''):'');
+  $('modal').innerHTML=`<div class="fl" style="margin-bottom:10px"><h2 style="margin:0">${f?'고장 수정':'고장 등록'}</h2><span style="flex:1"></span>${f?`<button class="s d" onclick="flDel('${f.id}')">삭제</button>`:''}<button onclick="closeMask()">닫기</button></div>
+  <div class="grid g3">
+    <div><label>발생일자</label><input type="date" id="fx_date" value="${f?esc(f.date):today()}"></div>
+    <div><label>발생시각</label><input type="time" id="fx_t1" value="${v('t1')}" onchange="flCalc()"></div>
+    <div><label>복구시각</label><input type="time" id="fx_t2" value="${v('t2')}" onchange="flCalc()"></div>
+    <div><label>설비</label><select id="fx_mc">${opt(mcs,f?f.mc:'')}</select></div>
+    <div><label>구분</label><select id="fx_kind"><option value="설비"${f&&f.kind==='설비'?' selected':''}>설비 (MTBF 반영)</option><option value="금형"${f&&f.kind==='금형'?' selected':''}>금형 (별도 집계)</option></select></div>
+    <div><label>금형코드 <span class="muted" style="font-weight:400">금형 고장 시</span></label><input id="fx_mold" list="dlMold" value="${v('mold')}" placeholder="예: 19RDA613A"></div>
+    <div class="c3"><label>현상 (무엇이 어떻게)</label><input id="fx_sym" value="${v('sym')}" placeholder="예: 언코일러가 소재를 풀지 못하고 멈춤"></div>
+    <div class="c3"><label>원인</label><input id="fx_cause" value="${v('cause')}" placeholder="예: 구동 릴레이 접점 소손"></div>
+    <div class="c3"><label>조치내용</label><input id="fx_act" value="${v('act')}" placeholder="예: 릴레이 교체 후 시운전 확인"></div>
+    <div><label>교체부품</label><input id="fx_part" value="${v('part')}" placeholder="예: MY4N 릴레이 1EA"></div>
+    <div><label>조치자</label><input id="fx_by" list="dlW" value="${v('by')}"></div>
+    <div><label>정지시간(분)</label><input type="number" id="fx_min" value="${f?(f.min||''):''}" placeholder="시각 입력 시 자동"></div>
+    <div class="c3"><label>재발방지 대책</label><input id="fx_prev" value="${v('prev')}" placeholder="예: 릴레이 6개월 주기 예방교체 항목 추가"></div>
+  </div>
+  <div id="fx_msg" class="muted" style="margin-top:8px"></div>
+  <div class="fl" style="margin-top:10px"><button class="p" onclick="flSave()">저장</button><span class="grow"></span><span class="muted" style="font-size:12px">저장하면 같은 날짜·설비 일보에 자동 반영됩니다</span></div>`;
+  $('mask').classList.add('on');
+}
+function flCalc(){const m=flMin($('fx_date').value,$('fx_t1').value,$('fx_t2').value);
+  if(m)$('fx_min').value=m;
+  $('fx_msg').textContent=m?`정지시간 ${m}분 (${(m/60).toFixed(1)}H)`:'';}
+function flSave(){
+  const d=$('fx_date').value, mc=$('fx_mc').value;
+  const miss=[];if(!d)miss.push('발생일자');if(!mc)miss.push('설비');
+  const min=+$('fx_min').value||flMin(d,$('fx_t1').value,$('fx_t2').value);
+  if(!min)miss.push('정지시간 (또는 발생·복구시각)');
+  if(!$('fx_sym').value.trim())miss.push('현상');
+  if(miss.length){$('fx_msg').textContent='입력 필요: '+miss.join(', ');$('fx_msg').style.color='var(--red)';return}
+  const o={id:FLEDIT||uid(),date:d,mc,kind:$('fx_kind').value||'설비',t1:$('fx_t1').value,t2:$('fx_t2').value,min,
+    mold:$('fx_mold').value.trim(),sym:$('fx_sym').value.trim(),cause:$('fx_cause').value.trim(),
+    act:$('fx_act').value.trim(),part:$('fx_part').value.trim(),by:$('fx_by').value.trim()||localStorage.getItem('tj_me')||'',
+    prev:$('fx_prev').value.trim(),ua:now()};
+  S.fails=S.fails||[];
+  const i=S.fails.findIndex(x=>x.id===o.id);
+  if(i>=0)S.fails[i]=o; else S.fails.push(o);
+  const ok=flSync(d,mc);
+  logAdd(FLEDIT?'고장이력 수정':'고장이력 등록',`${d} ${mc} ${o.kind} ${min}분 · ${o.sym.slice(0,40)}`);
+  commit();closeMask();
+  toast(`저장했습니다${ok?' · 일보에 반영됨':' · 해당 일보가 없어 일보 반영은 건너뜀'}`);
+}
+function flDel(id){
+  const f=(S.fails||[]).find(x=>x.id===id);if(!f)return;
+  if(!confirm(`이 고장 기록을 지웁니다.\n\n${f.date} ${f.mc} · ${f.sym}\n\n계속할까요?`))return;
+  S.del[id]=now();
+  S.fails=S.fails.filter(x=>x.id!==id);
+  flSync(f.date,f.mc);
+  logAdd('고장이력 삭제',`${f.date} ${f.mc} · ${f.sym.slice(0,40)}`);
+  commit();closeMask();toast('삭제했습니다');
+}
+function flList(){
+  const mo=$('fl_mo').value, mc=$('fl_mc').value, kd=$('fl_kind').value, q=$('fl_q').value.trim().toLowerCase();
+  return (S.fails||[]).filter(f=>(!mo||f.date.slice(0,7)===mo)&&(!mc||f.mc===mc)&&(!kd||f.kind===kd)
+    &&(!q||((f.sym+' '+f.cause+' '+f.act+' '+f.part+' '+(f.mold||'')).toLowerCase().includes(q))))
+    .sort((a,b)=>(b.date+b.t1).localeCompare(a.date+a.t1));
+}
+function flRender(){
+  if(!$('tFail'))return;
+  const ms={};(S.fails||[]).forEach(f=>{ms[f.date.slice(0,7)]=(ms[f.date.slice(0,7)]||0)+1});
+  const keys=Object.keys(ms).sort().reverse();
+  const cur=$('fl_mo').value;
+  $('fl_mo').innerHTML='<option value="">전체 기간</option>'+keys.map(k=>`<option value="${k}">${k.replace('-','년 ')}월 (${ms[k]}건)</option>`).join('');
+  $('fl_mo').value=[...$('fl_mo').options].some(o=>o.value===cur)?cur:(keys.includes(month)?month:'');
+  opts($('fl_mc'),S.master.mcs.slice().sort((a,b)=>a.localeCompare(b,'ko',{numeric:true})),$('fl_mc').value,'설비 전체');
+  const L=flList(), mo=$('fl_mo').value;
+  const eq=L.filter(f=>f.kind==='설비'), md=L.filter(f=>f.kind==='금형');
+  const fm=eq.reduce((a,f)=>a+(+f.min||0),0);
+  const run=S.recs.filter(r=>(!mo||r.date.slice(0,7)===mo)&&(!$('fl_mc').value||r.mc===$('fl_mc').value))
+    .reduce((a,r)=>a+calc(r).run,0);
+  const hh=x=>(x/60).toFixed(1);
+  $('fl_kpi').innerHTML=`<div class="kpi"><small>설비 고장</small><b>${eq.length}</b><em>건 · 정지 ${hh(fm)}H</em></div>
+    <div class="kpi"><small>MTBF 평균고장간격</small><b>${eq.length?hh(run/eq.length):'-'}</b><em>시간 · 가동 ${hh(run)}H 기준</em></div>
+    <div class="kpi ${eq.length&&fm/eq.length>120?'bad':''}"><small>MTTR 평균수리시간</small><b>${eq.length?hh(fm/eq.length):'-'}</b><em>시간</em></div>
+    <div class="kpi"><small>금형 수리</small><b>${md.length}</b><em>건 · 정지 ${hh(md.reduce((a,f)=>a+(+f.min||0),0))}H</em></div>`;
+  const noPrev=L.filter(f=>!f.prev).length;
+  const noRec=L.filter(f=>!S.recs.some(r=>r.date===f.date&&r.mc===f.mc)).length;
+  $('fl_warn').innerHTML=[noPrev?`<span class="tag a">재발방지 미작성 ${noPrev}건</span>`:'',
+    noRec?`<span class="tag r">해당 일보 없음 ${noRec}건 — 일보 반영 안 됨</span>`:''].filter(Boolean).join(' ');
+  $('tFail').innerHTML='<tr><th>발생</th><th>복구</th><th class=num>정지(분)</th><th>설비</th><th>구분</th><th>현상</th><th>원인</th><th>조치 / 부품</th><th>조치자</th><th>재발방지</th><th></th></tr>'
+    +(L.length?L.map(f=>`<tr onclick="flForm('${f.id}')" style="cursor:pointer">
+      <td>${esc(f.date.slice(5))} ${esc(f.t1||'')}</td><td>${esc(f.t2||'')}</td>
+      <td class=num><b>${f.min}</b></td><td>${esc(f.mc)}</td>
+      <td><span class="tag ${f.kind==='설비'?'r':'a'}">${esc(f.kind)}</span>${f.mold?`<div class=muted style="font-size:11px">${esc(f.mold)}</div>`:''}</td>
+      <td>${esc(f.sym)}</td><td class=muted>${esc(f.cause)}</td>
+      <td>${esc(f.act)}${f.part?`<div class=muted style="font-size:11px">${esc(f.part)}</div>`:''}</td>
+      <td>${esc(f.by)}</td><td class="${f.prev?'':'muted'}">${esc(f.prev)||'<span style="color:var(--amber)">미작성</span>'}</td>
+      <td><button class="s" onclick="event.stopPropagation();flForm('${f.id}')">수정</button></td></tr>`).join('')
+      :'<tr><td colspan=11 class=empty>등록된 고장이 없습니다 — 오른쪽 위 [＋ 고장 등록]</td></tr>');
+}
+function flCopy(){
+  const L=flList();
+  const t=['발생일자\tetc'.replace('etc','발생시각\t복구시각\t정지(분)\t설비\t구분\t금형코드\t현상\t원인\t조치내용\t교체부품\t조치자\t재발방지')]
+    .concat(L.map(f=>[f.date,f.t1||'',f.t2||'',f.min,f.mc,f.kind,f.mold||'',f.sym,f.cause,f.act,f.part,f.by,f.prev].join('\t'))).join('\n');
+  try{navigator.clipboard.writeText(t);toast('클립보드에 복사했습니다')}catch(e){alert(t)}
+}
+/* ===== 설비고장 소급 입력 — 지난달 일보에 고장건수·고장정지를 채워 MTBF/MTTR을 산출한다 ===== */
+const FAIL_KW=['설비이상','고장','파손','수리','오작동','에러','멈춤','막힘','풀림','떨어짐','교체'];
+const FAIL_EQ=['설비이상','언코일러','모터','유압','센서','오작동','막힘','볼트','쏠림','체인','컨베이어','전장','릴레이','에어','스크랩'];
+const FAIL_MD=['금형수리','금형파손','금형셋팅','펀치','다이','블랭킹','리스트라이킹','핑거','밴딩','피어싱','연마','하프','금형조정'];
+const flKind=t=>{const e=FAIL_EQ.some(k=>t.includes(k)),m=FAIL_MD.some(k=>t.includes(k));
+  return e&&m?'혼합':e?'설비':m?'금형':'';};
+let FAILROWS=[],FAILALL=false,FAILMO='',FAILKD='';
+function failOpen(mo){
+  const m=(mo||prompt('설비고장을 채울 월 (YYYY-MM)',month||today().slice(0,7))||'').trim();
+  if(!/^\d{4}-\d{2}$/.test(m)){if(mo===undefined)return;toast('YYYY-MM 형식으로 입력하세요');return}
+  FAILMO=m;
+  FAILROWS=S.recs.filter(r=>r.date.slice(0,7)===m).sort((a,b)=>a.date.localeCompare(b.date)||String(a.mc).localeCompare(String(b.mc),'ko',{numeric:true}))
+    .map(r=>({id:r.id,date:r.date,mc:r.mc,pn:r.pn,stop:+r.stop||0,sr:r.sr||'',note:r.note||'',
+      run:calc(r).run,fcnt:+r.fcnt||0,fmin:+r.fmin||0,
+      susp:FAIL_KW.some(k=>((r.sr||'')+(r.note||'')).includes(k)),
+      kd:flKind((r.sr||'')+' '+(r.note||''))}));
+  if(!FAILROWS.length){toast(m+' 일보가 없습니다');return}
+  $('mask').classList.add('on');drawFail();
+}
+function failSet(i,k,v){const r=FAILROWS[i];if(!r)return;r[k]=+v||0;drawFail()}
+function failAll(v){FAILALL=!!v;drawFail()}
+function failKd(v){FAILKD=v;drawFail()}
+function drawFail(){
+  const L=FAILROWS.filter(r=>(FAILALL||r.susp||r.fcnt)&&(!FAILKD||r.kd===FAILKD));
+  const KC={'설비':'r','금형':'a','혼합':''};
+  const f=FAILROWS.filter(r=>r.fcnt>0);
+  const run=FAILROWS.reduce((a,r)=>a+r.run,0);
+  const fc=f.reduce((a,r)=>a+r.fcnt,0), fm=f.reduce((a,r)=>a+r.fmin,0);
+  const hh=x=>(x/60).toFixed(1);
+  const bad=FAILROWS.filter(r=>r.fmin>r.stop||(r.fcnt>0&&r.fmin===0));
+  const rows=L.map(r=>`<tr${r.fcnt?' style="background:rgba(255,176,32,.08)"':''}>
+    <td>${esc(r.date.slice(5))}</td><td>${esc(r.mc)}<div>${r.kd?`<span class="tag ${KC[r.kd]}">${r.kd}</span>`:''}</div></td><td class=muted style="font-size:11px">${esc(r.pn)}</td>
+    <td class=num>${r.stop}</td>
+    <td style="font-size:12px;max-width:340px">${esc(r.sr).replace(new RegExp('('+FAIL_KW.join('|')+')','g'),'<b style="color:var(--amber)">$1</b>')}${r.note?`<div class=muted style="font-size:11px">${esc(r.note)}</div>`:''}</td>
+    <td><input type=number min=0 value="${r.fcnt||''}" onchange="failSet(${FAILROWS.indexOf(r)},'fcnt',this.value)" style="width:52px;padding:3px 5px" placeholder="0"></td>
+    <td><input type=number min=0 value="${r.fmin||''}" onchange="failSet(${FAILROWS.indexOf(r)},'fmin',this.value)" style="width:64px;padding:3px 5px${r.fmin>r.stop?';border-color:var(--red)':''}" placeholder="분"></td></tr>`).join('');
+  $('modal').innerHTML=`<div class="fl" style="margin-bottom:10px">
+    <h2 style="margin:0">설비고장 소급 입력 · ${FAILMO}</h2>
+    <select onchange="failKd(this.value)" style="width:140px"><option value="">구분 전체</option><option value="설비"${FAILKD==='설비'?' selected':''}>설비 계열만</option><option value="금형"${FAILKD==='금형'?' selected':''}>금형 계열만</option><option value="혼합"${FAILKD==='혼합'?' selected':''}>혼합</option></select>
+    <label class="fl" style="gap:4px;font-size:12px"><input type=checkbox ${FAILALL?'checked':''} onchange="failAll(this.checked)" style="width:auto"> 전체 줄 보기</label>
+    <span style="flex:1"></span><button onclick="closeMask()">닫기</button></div>
+  <div class="fl" style="margin-bottom:8px;flex-wrap:wrap">
+    <span class="tag">일보 ${FAILROWS.length}줄 · 의심 ${FAILROWS.filter(r=>r.susp).length}줄</span>
+    <span class="tag r">설비 계열 ${FAILROWS.filter(r=>r.kd==='설비').length}</span>
+    <span class="tag a">금형 계열 ${FAILROWS.filter(r=>r.kd==='금형').length}</span>
+    <span class="tag">혼합 ${FAILROWS.filter(r=>r.kd==='혼합').length}</span>
+    <span class="tag ${fc?'a':''}">입력된 고장 ${fc}건 · ${hh(fm)}H</span>
+    ${fc?`<span class="tag g">MTBF ${hh(run/fc)}H · MTTR ${hh(fm/fc)}H</span>`:''}
+    ${bad.length?`<span class="tag r">입력 오류 ${bad.length}줄</span>`:''}</div>
+  <p class="muted" style="margin-top:0">정지사유에 고장으로 보이는 말이 든 줄만 먼저 보여줍니다. 그 줄의 <b>정지시간 중 설비 고장으로 선 시간</b>만 떼어 적으세요. 계획정지(조회·금형점검·소재교환·측정대기)는 빼고, <b>금형 파손은 설비고장이 아닙니다.</b></p>
+  <div class="tw" style="max-height:56vh"><table><tr><th>일자</th><th>설비</th><th>품번</th><th class=num>정지(분)</th><th>정지사유</th><th>고장<br>건수</th><th>고장정지<br>(분)</th></tr>
+  ${rows||'<tr><td colspan=7 class=empty>해당 줄이 없습니다</td></tr>'}</table></div>
+  <div class="fl" style="margin-top:12px"><button class="p" onclick="failSave()" ${bad.length?'disabled':''}>저장</button>
+    ${bad.length?`<span class="muted" style="color:var(--red)">고장정지가 정지시간보다 크거나, 건수만 적고 시간이 빈 줄이 있습니다</span>`:'<span class="muted">저장하면 월간보고서 4-1 설비 신뢰성에 반영됩니다</span>'}</div>`;
+}
+function failSave(){
+  let n=0;
+  FAILROWS.forEach(r=>{const o=S.recs.find(x=>x.id===r.id);if(!o)return;
+    if((+o.fcnt||0)===r.fcnt&&(+o.fmin||0)===r.fmin)return;
+    o.fcnt=r.fcnt;o.fmin=r.fmin;o.ua=now();n++});
+  if(!n){toast('바뀐 내용이 없습니다');return}
+  logAdd('설비고장 소급 입력',`${FAILMO} · ${n}줄`);
+  commit();renderAll();closeMask();
+  toast(`${n}줄을 저장했습니다`);
+}
 /* 저장된 일보에 금형코드를 채운다 (마감 자료의 mold_code를 날짜·설비·품번으로 연결) */
 async function applyMold(){
   const from=(prompt('금형코드를 채울 시작일 (YYYY-MM-DD)',MES_FROM)||'').trim();
