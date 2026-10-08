@@ -1949,7 +1949,7 @@ function closeMsg(d,n,w){
   Object.entries(by).sort((a,b)=>b[1].t-a[1].t).forEach(([c,g],k)=>{
     if(k)out.push('');
     out.push(`[${c}] ${fm(g.t)} EA`);
-    Object.entries(g.p).sort((a,b)=>b[1]-a[1]).forEach(([p,q])=>out.push(`· ${p} ${fm(q)}`));
+    Object.entries(g.p).filter(([,q])=>q>0).sort((a,b)=>b[1]-a[1]).forEach(([p,q])=>out.push(`· ${p} ${fm(q)}`));
   });
   let msg=out.join('\n');if(msg.length>3500)msg=msg.slice(0,3500)+'\n…';
   const dw='일월화수목금토'[new Date(d+'T00:00:00').getDay()];
