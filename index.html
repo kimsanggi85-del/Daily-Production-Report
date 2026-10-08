@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v20.0 · 태진다이텍</title>
+<title>생산일보 통합관리 v20.1 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -808,7 +808,7 @@ const SEED_MASTER={"mcs":["01 쌍용200","02 심팩200","03 심팩150","04 심�
 const DEF_MESMC={'003':'34 심팩250','004':'03 심팩150','005':'28 국일250','007':'01 쌍용200','008':'02 심팩200','009':'04 심팩150','010':'05 심팩110','011':'06 심팩110','013':'30 국일160','014':'31 심팩150','015':'32 심팩200','017':'35 심팩250','018':'37 국일200','019':'38 국일250','020':'39 국일250','021':'40 심팩200','022':'41 국일200','024':'46 심팩300','025':'47 심팩300','001':'36 심팩300','002':'45 심팩300','026':'48 심팩300','027':'49 심팩300','006':'43 화일800','043':'43 화일800'};
 // MES 품번 → 앱 품번 (표기가 다른 것만)
 const DEF_MESPN={'54610-D3501-(BK)':'54610-D3501','1958-365-2(2호)':'1958-365-2','AT3037-GC-00':'AT3037-GC-01','IW/OW-BDA-1159B':'IW/OW BDA 1159B'};
-const APP_VER='20.0';        // 서버에 기록해 두고, 옛 파일이 열리면 한 번 새로고침시킨다
+const APP_VER='20.1';        // 서버에 기록해 두고, 옛 파일이 열리면 한 번 새로고침시킨다
 const SPM_COMMON_ONLY=true;   // 공통값(설비 미지정)만 기준으로 쓴다
 const MES_FROM='2026-09-01'; // 8월까지 실적은 손대지 않음
 /* 근무 기준 — 08:00~19:00, 수요일·토요일 08:00~17:00
@@ -1940,26 +1940,16 @@ const CLOSE_SRC='생산일보';
 /* ===== 일보 마감 알림 (ntfy · 다른 앱과 같은 토픽) ===== */
 const NTFY_TOPIC='taejincall';
 function closeMsg(d,n,w){
-  w=w||{};
+  // 알림은 고객사별 생산수량만 보낸다
   const L=S.recs.filter(r=>r.date===d);
   const fm=x=>Math.round(x).toLocaleString('ko-KR');
-  let qty=0,ng=0,stop=0,run=0,net=0,cap=0;
-  L.forEach(r=>{const c=calc(r);qty+=+r.qty||0;ng+=(+r.ng||0)+(+r.ngp||0);stop+=+r.stop||0;run+=c.run;net+=c.net;cap+=c.cap});
-  const pct=x=>isFinite(x)?(x*100).toFixed(1)+'%':'-';
+  const by={};let tot=0;
+  L.forEach(r=>{const c=r.cust||'고객사 미지정';by[c]=(by[c]||0)+(+r.qty||0);tot+=(+r.qty||0)});
+  const rows=Object.entries(by).sort((a,b)=>b[1]-a[1]).map(([c,q])=>`${c} ${fm(q)} EA`);
+  const msg=[...rows,'──────────',`합계 ${fm(tot)} EA`].join('\n');
   const dw='일월화수목금토'[new Date(d+'T00:00:00').getDay()];
-  const mcs=new Set(L.map(r=>r.mc)).size;
-  const rows=L.slice().sort((a,b)=>String(a.mc).localeCompare(String(b.mc),'ko',{numeric:true}))
-    .map(r=>`· ${r.mc} ${r.pn} ${fm(+r.qty||0)}${(+r.ng||0)+(+r.ngp||0)?` (불량 ${fm((+r.ng||0)+(+r.ngp||0))})`:''}${+r.stop?` 정지 ${r.stop}분`:''}`);
-  const MAX=25;
-  const lines=[`저장 ${n}건 · 일보 ${L.length}줄 · 설비 ${mcs}대`,
-    `생산 ${fm(qty)} EA · 불량 ${fm(ng)} EA`,
-    `가동율 ${pct(net?run/net:NaN)} · 효율 ${pct(cap?qty/cap:NaN)} · 정지 ${fm(stop)}분`,
-    '──────────',...rows.slice(0,MAX),rows.length>MAX?`… 외 ${rows.length-MAX}줄`:''];
-  const warn=[w.pend?`생산마감 미완료 ${w.pend}줄`:'',w.wait?`실제양품 미입력 ${w.wait}줄`:'',w.skipped?`SPM 없어 제외 ${w.skipped}건`:''].filter(Boolean);
-  if(warn.length)lines.push('⚠ '+warn.join(' · '));
-  const me=localStorage.getItem('tj_me')||'';if(me)lines.push('마감자: '+me);
-  let msg=lines.filter(Boolean).join('\n');if(msg.length>3500)msg=msg.slice(0,3500)+'\n…';
-  const tg=shiftTag(d);return{title:`생산일보 마감 ${d.slice(5).replace('-','/')}(${dw})${/특근/.test(tg)?' · '+tg:''}`,msg,warn:warn.length};
+  const tg=shiftTag(d);
+  return{title:`생산일보 마감 ${d.slice(5).replace('-','/')}(${dw})${/특근/.test(tg)?' · '+tg:''}`,msg,warn:0};
 }
 async function notifyClose(d,n,w){
   try{
