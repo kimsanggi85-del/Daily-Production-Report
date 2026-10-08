@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v19.7 · 태진다이텍</title>
+<title>생산일보 통합관리 v19.8 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -461,7 +461,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
     <div class="panel" id="mesPanel">
       <div class="fl">
         <select id="h_range" style="min-width:150px"></select>
-        <input type="date" id="h_day" title="일보콜 날짜 (기본 오늘) · 고르면 그날 일보만 표시" style="width:150px">
+        <span class="fl" style="gap:4px;flex-wrap:nowrap"><input type="date" id="h_day" title="시작일 · 일보콜 날짜 (기본 오늘)" style="width:150px"><span class="muted">~</span><input type="date" id="h_day2" title="종료일 (비우면 시작일 하루만)" style="width:150px"></span>
         <input type="date" id="h_from" style="display:none"><input type="date" id="h_to" style="display:none">
         <select id="h_cust"><option value="">고객사 전체</option></select>
         <select id="h_mc"><option value="">설비 전체</option></select>
@@ -808,7 +808,7 @@ const SEED_MASTER={"mcs":["01 쌍용200","02 심팩200","03 심팩150","04 심�
 const DEF_MESMC={'003':'34 심팩250','004':'03 심팩150','005':'28 국일250','007':'01 쌍용200','008':'02 심팩200','009':'04 심팩150','010':'05 심팩110','011':'06 심팩110','013':'30 국일160','014':'31 심팩150','015':'32 심팩200','017':'35 심팩250','018':'37 국일200','019':'38 국일250','020':'39 국일250','021':'40 심팩200','022':'41 국일200','024':'46 심팩300','025':'47 심팩300','001':'36 심팩300','002':'45 심팩300','026':'48 심팩300','027':'49 심팩300','006':'43 화일800','043':'43 화일800'};
 // MES 품번 → 앱 품번 (표기가 다른 것만)
 const DEF_MESPN={'54610-D3501-(BK)':'54610-D3501','1958-365-2(2호)':'1958-365-2','AT3037-GC-00':'AT3037-GC-01','IW/OW-BDA-1159B':'IW/OW BDA 1159B'};
-const APP_VER='19.7';        // 서버에 기록해 두고, 옛 파일이 열리면 한 번 새로고침시킨다
+const APP_VER='19.8';        // 서버에 기록해 두고, 옛 파일이 열리면 한 번 새로고침시킨다
 const SPM_COMMON_ONLY=true;   // 공통값(설비 미지정)만 기준으로 쓴다
 const MES_FROM='2026-09-01'; // 8월까지 실적은 손대지 않음
 /* 근무 기준 — 08:00~19:00, 수요일 08:00~17:00
@@ -1371,7 +1371,7 @@ async function openMes(dateArg,quiet){
   // 날짜를 안 넘기면 오늘이 아니라 '일보 없는 가장 최근 날'로 연다 (입력화면에서 지난 날짜를 고른 경우엔 그 날짜)
   const d=dateArg||($('h_day')&&$('h_day').value)||today();
   if(d<MES_FROM){if(!quiet)toast(MES_FROM.slice(0,7)+'월부터 MES 연동을 씁니다. 그 이전은 기존 자료를 그대로 두세요');return}
-  MESDATE=d;if($('h_day'))$('h_day').value=d;
+  MESDATE=d;if($('h_day')){$('h_day').value=d;if(!$('h_day2').value||$('h_day2').value<d)$('h_day2').value=d}
   if(!quiet){$('modal').innerHTML='<h2>일보콜</h2><p class="muted">'+d+' 자료를 읽는 중…</p>';
     $('mask').classList.add('on');}
   let led=[],use=[],dt=[],clo=[];
@@ -1777,7 +1777,7 @@ function dataMonths(){const c={};S.recs.forEach(r=>{const m=r.date.slice(0,7);c[
 function histList(){
   const rg=$('h_range').value;let L=S.recs;
   if(rg.startsWith('m:')){const mo=rg.slice(2);L=L.filter(r=>r.date.slice(0,7)===mo)}
-  else if(rg==='d'){const dd=$('h_day').value;if(dd)L=L.filter(r=>r.date===dd)}
+  else if(rg==='d'){let f=$('h_day').value,t=$('h_day2').value||f;if(f&&t&&t<f)[f,t]=[t,f];L=L.filter(r=>(!f||r.date>=f)&&(!t||r.date<=t))}
   else if(rg==='r'){const f=$('h_from').value,t=$('h_to').value;L=L.filter(r=>(!f||r.date>=f)&&(!t||r.date<=t))}
   const cu=$('h_cust').value,mc=$('h_mc').value,pn=$('h_pn').value,w=$('h_w').value,q=$('h_q').value.trim().toLowerCase();
   return L.filter(r=>(!cu||r.cust===cu)&&(!mc||r.mc===mc)&&(!pn||r.pn===pn)&&(!w||workers(r).includes(w))&&(!q||(r.name+' '+r.sr+' '+r.note+' '+r.pn).toLowerCase().includes(q)));
@@ -1789,7 +1789,7 @@ function renderHist(){
   opts($('h_pn'),m.items.map(i=>i.pn),$('h_pn').value,'품번 전체');
   opts($('h_w'),m.workers,$('h_w').value,'작업자 전체');
   const dm=dataMonths();const cur=$('h_range').value;
-  $('h_range').innerHTML='<option value="all">전체 기간</option><option value="d">일자 지정</option><option value="r">기간 지정</option>'
+  $('h_range').innerHTML='<option value="all">전체 기간</option><option value="d">날짜 지정</option>'
     +(dm.length?'<optgroup label="월별">'+dm.map(([m,n])=>`<option value="m:${m}">${m.replace('-','년 ')}월 (${n}건)</option>`).join('')+'</optgroup>':'');
   const vals=[...$('h_range').options].map(o=>o.value);
   $('h_range').value=vals.includes(cur)?cur:(dm.length?'m:'+dm[0][0]:'all');
@@ -1814,9 +1814,10 @@ function renderHist(){
 }
 function sortBy(k){if(sortKey===k)sortDir*=-1;else{sortKey=k;sortDir=k==='date'?-1:1}renderHist();}
 ['h_range','h_from','h_to','h_cust','h_mc','h_pn','h_w'].forEach(id=>$(id).addEventListener('change',renderHist));
-$('h_day').value=today();$('h_day').addEventListener('change',()=>{if($('h_day').value)$('h_range').value='d';renderHist()});
+$('h_day').value=$('h_day2').value=today();
+['h_day','h_day2'].forEach(id=>$(id).addEventListener('change',()=>{const a=$('h_day'),b=$('h_day2');if(a.value&&b.value&&b.value<a.value)b.value=a.value;if(a.value||b.value)$('h_range').value='d';renderHist()}));
 // 날짜가 바뀐 채로 켜 두면 다음 날 화면 복귀 시 오늘로 맞춤 (사용자가 다른 날을 고른 경우는 유지)
-(()=>{let last=today();document.addEventListener('visibilitychange',()=>{if(document.hidden)return;const t=today();if(t!==last){if($('h_day').value===last)$('h_day').value=t;last=t}})})();
+(()=>{let last=today();document.addEventListener('visibilitychange',()=>{if(document.hidden)return;const t=today();if(t!==last){['h_day','h_day2'].forEach(id=>{if($(id).value===last)$(id).value=t});last=t}})})();
 $('sp_q').addEventListener('input',renderSpm);
 $('h_q').addEventListener('input',renderHist);
 function histRows(L){return L.map(r=>{const c=calc(r);return{'생산일자':r.date.replace(/-/g,''),'설비명':r.mc,'공정명':r.proc,'고객사':r.cust,'품명':r.name,'품번':r.pn,'작업자1':r.w1||'','작업자2':r.w2||'','작업자3':r.w3||'','작업자4':r.w4||'','SPM':r.spm,'근무시간':r.work,'정지시간':r.stop,'휴식시간':r.brk||0,'가동시간':c.run,'가능수량':c.cap,'실적수량':r.qty,'MES원값':r.mes||'','조정수량':(r.mes?(+r.qty-+r.mes):''),'실적출처':r.src||'','가동율(%)':+(c.oper*100).toFixed(2),'효율(%)':+(c.eff*100).toFixed(2),'작업불량수량':r.ng||0,'시타발·검사폐기':r.ngp||0,'정지사유':r.sr,'특기사항':r.note,'금형코드':r.mold||'','설비고장건수':r.fcnt||0,'고장정지시간':r.fmin||0,'생등':r.reg??1}})}
@@ -1883,7 +1884,7 @@ function renderHist(){
   opts($('h_pn'),m.items.map(i=>i.pn),$('h_pn').value,'품번 전체');
   opts($('h_w'),m.workers,$('h_w').value,'작업자 전체');
   const dm=dataMonths();const cur=$('h_range').value;
-  $('h_range').innerHTML='<option value="all">전체 기간</option><option value="d">일자 지정</option><option value="r">기간 지정</option>'
+  $('h_range').innerHTML='<option value="all">전체 기간</option><option value="d">날짜 지정</option>'
     +(dm.length?'<optgroup label="월별">'+dm.map(([m,n])=>`<option value="m:${m}">${m.replace('-','년 ')}월 (${n}건)</option>`).join('')+'</optgroup>':'');
   const vals=[...$('h_range').options].map(o=>o.value);
   $('h_range').value=vals.includes(cur)?cur:(dm.length?'m:'+dm[0][0]:'all');
