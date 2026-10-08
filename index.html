@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v19.9 · 태진다이텍</title>
+<title>생산일보 통합관리 v20.0 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -604,7 +604,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
     </div>
 
     <div class="panel"><h3>마감시각 → 근무시간 <span class="muted" style="font-weight:400;font-size:12px">작업자가 생산마감을 누른 시각으로 근무시간(잔업·조퇴)을 잡습니다</span></h3>
-      <p class="muted">근무시간 = (마감시각 + 보정) − 출근시각, 10분 단위. <b>표준 퇴근시각 ±허용오차 이내면 표준 근무시간</b>(평일 660분 · 수요일·토요일 540분)을 그대로 씁니다. 그 밖은 실제값으로 잡고 일보콜 화면에 확인 알람이 뜹니다.</p>
+      <p class="muted">근무시간 = (마감시각 + 보정) − 출근시각, 10분 단위. <b>표준 퇴근시각 ±허용오차 이내면 표준 근무시간</b>(평일 660분 · 수요일·토요일·공휴일 특근 540분)을 그대로 씁니다. 그 밖은 실제값으로 잡고 일보콜 화면에 확인 알람이 뜹니다.</p>
       <div class="fl" style="flex-wrap:wrap;gap:10px">
         <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px">마감시각 보정
           <input type=number id="cc_pad" onchange="closeSet()" style="width:70px;padding:3px 5px">분
@@ -808,15 +808,25 @@ const SEED_MASTER={"mcs":["01 쌍용200","02 심팩200","03 심팩150","04 심�
 const DEF_MESMC={'003':'34 심팩250','004':'03 심팩150','005':'28 국일250','007':'01 쌍용200','008':'02 심팩200','009':'04 심팩150','010':'05 심팩110','011':'06 심팩110','013':'30 국일160','014':'31 심팩150','015':'32 심팩200','017':'35 심팩250','018':'37 국일200','019':'38 국일250','020':'39 국일250','021':'40 심팩200','022':'41 국일200','024':'46 심팩300','025':'47 심팩300','001':'36 심팩300','002':'45 심팩300','026':'48 심팩300','027':'49 심팩300','006':'43 화일800','043':'43 화일800'};
 // MES 품번 → 앱 품번 (표기가 다른 것만)
 const DEF_MESPN={'54610-D3501-(BK)':'54610-D3501','1958-365-2(2호)':'1958-365-2','AT3037-GC-00':'AT3037-GC-01','IW/OW-BDA-1159B':'IW/OW BDA 1159B'};
-const APP_VER='19.9';        // 서버에 기록해 두고, 옛 파일이 열리면 한 번 새로고침시킨다
+const APP_VER='20.0';        // 서버에 기록해 두고, 옛 파일이 열리면 한 번 새로고침시킨다
 const SPM_COMMON_ONLY=true;   // 공통값(설비 미지정)만 기준으로 쓴다
 const MES_FROM='2026-09-01'; // 8월까지 실적은 손대지 않음
 /* 근무 기준 — 08:00~19:00, 수요일·토요일 08:00~17:00
    휴식: 10:00·15:00·17:00 각 10분 + 12:00~13:00 60분 (수요일·토요일은 17:00 휴식 제외) */
 const SHIFT={base:{on:'08:00',off:'19:00',span:660,brk:90,net:570},
              wed :{on:'08:00',off:'17:00',span:540,brk:80,net:460},
-             sat :{on:'08:00',off:'17:00',span:540,brk:80,net:460}};
-function shiftOf(d){const w=new Date(d+'T00:00:00').getDay();return w===3?SHIFT.wed:w===6?SHIFT.sat:SHIFT.base}
+             sat :{on:'08:00',off:'17:00',span:540,brk:80,net:460},
+             hol :{on:'08:00',off:'17:00',span:540,brk:80,net:460}};
+/* 2026 법정공휴일·대체공휴일·명절·선거일 — 출근하면 특근(토요일과 같은 08:00~17:00)으로 계산 */
+const HOLI={'2026-01-01':'신정','2026-02-16':'설날 연휴','2026-02-17':'설날','2026-02-18':'설날 연휴',
+  '2026-03-01':'삼일절','2026-03-02':'대체공휴일(삼일절)','2026-05-01':'근로자의 날','2026-05-05':'어린이날',
+  '2026-05-24':'부처님오신날','2026-05-25':'대체공휴일(부처님오신날)','2026-06-03':'지방선거','2026-06-06':'현충일',
+  '2026-07-17':'제헌절','2026-08-15':'광복절','2026-08-17':'대체공휴일(광복절)',
+  '2026-09-24':'추석 연휴','2026-09-25':'추석','2026-09-26':'추석 연휴',
+  '2026-10-03':'개천절','2026-10-05':'대체공휴일(개천절)','2026-10-09':'한글날','2026-12-25':'성탄절'};
+function holiName(d){return HOLI[d]||''}
+function shiftOf(d){if(HOLI[d])return SHIFT.hol;const w=new Date(d+'T00:00:00').getDay();return w===3?SHIFT.wed:w===6?SHIFT.sat:SHIFT.base}
+function shiftTag(d){const h=holiName(d);if(h)return '공휴일 특근 · '+h;const w=new Date(d+'T00:00:00').getDay();return w===6?'토요일 특근':w===3?'수요일':''}
 function stdWork(d){return shiftOf(d).span}   // 재적 근무(분)
 function stdBrk(d){return shiftOf(d).brk}     // 휴식(분)
 /* 작업자 마감시각 → 재적 근무시간 역산 (잔업·조퇴 반영). 믿기 어려운 값은 0을 돌려 표준값을 쓰게 한다 */
@@ -1311,7 +1321,7 @@ $('f_date').addEventListener('change',()=>{
   const sh=shiftOf(d);
   if(!editId){$('f_work').value=sh.span;$('f_brk').value=sh.brk;readout()}
   const el=$('shiftInfo');
-  if(el)el.textContent=`${sh.on}~${sh.off} = ${sh.span}분 · 휴식 ${sh.brk}분 → 실근무 ${sh.net}분`+(sh===SHIFT.wed?' (수요일)':sh===SHIFT.sat?' (토요일 특근)':'');
+  if(el)el.textContent=`${sh.on}~${sh.off} = ${sh.span}분 · 휴식 ${sh.brk}분 → 실근무 ${sh.net}분`+(shiftTag(d)?' ('+shiftTag(d)+')':'');
 });
 $('f_auto').addEventListener('change',autoRun);
 $('f_stop').addEventListener('input',()=>{$('f_auto').checked=false});
@@ -1344,14 +1354,14 @@ function mapPn(code,mc,d,allowLast){
   return '';
 }
 let MESROWS=[],MESDIAG={},MESCLO=[],MESDATE='';
-/* 최근 14일 중 일보가 없는 날 (일요일 제외) */
+/* 최근 14일 중 일보가 없는 날 (일요일·공휴일 제외) */
 function missingDays(){
   const out=[];
   for(let k=1;k<=14;k++){
     const t=new Date();t.setDate(t.getDate()-k);
     const s=[t.getFullYear(),String(t.getMonth()+1).padStart(2,'0'),String(t.getDate()).padStart(2,'0')].join('-');
     if(s<MES_FROM)break;
-    if(t.getDay()===0)continue;
+    if(t.getDay()===0||HOLI[s])continue;   // 일요일·공휴일은 일보가 없어도 누락으로 보지 않음
     if(!S.recs.some(r=>r.date===s))out.push(s);
   }
   return out;
@@ -1361,7 +1371,8 @@ function mesDefaultDay(){
   const md=missingDays();
   if(md.length)return md[0];
   const t=new Date();
-  do{t.setDate(t.getDate()-1)}while(t.getDay()===0);
+  const ds=()=>[t.getFullYear(),String(t.getMonth()+1).padStart(2,'0'),String(t.getDate()).padStart(2,'0')].join('-');
+  do{t.setDate(t.getDate()-1)}while(t.getDay()===0||HOLI[ds()]);
   return [t.getFullYear(),String(t.getMonth()+1).padStart(2,'0'),String(t.getDate()).padStart(2,'0')].join('-');
 }
 function mesDay(d,step){
@@ -1687,7 +1698,7 @@ function drawMes(d){
     <h2 style="margin:0">일보콜</h2>
     <button class="s" onclick="mesDay('${d}',-1)" title="전날">◀</button>
     <input type="date" id="mes_d" value="${d}" onchange="openMes(this.value)" style="width:150px">
-    <button class="s" onclick="mesDay('${d}',1)" title="다음날">▶</button>
+    <button class="s" onclick="mesDay('${d}',1)" title="다음날">▶</button>${/특근/.test(shiftTag(d))?`<span class="tag a">${esc(shiftTag(d))} · 표준 ${stdWork(d)}분</span>`:''}
     <span style="flex:1"></span>
     <button class="s" onclick="mesAll(${allOn?'false':'true'})" ${nSel?'':'disabled'} title="저장 가능한 줄을 한 번에 선택합니다">${allOn?'전체 해제':`전체 선택 (${nSel}건)`}</button>
     <button class="s" onclick="showClo('${d}')">마감 자료 보기</button><button onclick="closeMask()">닫기</button></div>
@@ -1948,7 +1959,7 @@ function closeMsg(d,n,w){
   if(warn.length)lines.push('⚠ '+warn.join(' · '));
   const me=localStorage.getItem('tj_me')||'';if(me)lines.push('마감자: '+me);
   let msg=lines.filter(Boolean).join('\n');if(msg.length>3500)msg=msg.slice(0,3500)+'\n…';
-  return{title:`생산일보 마감 ${d.slice(5).replace('-','/')}(${dw})`,msg,warn:warn.length};
+  const tg=shiftTag(d);return{title:`생산일보 마감 ${d.slice(5).replace('-','/')}(${dw})${/특근/.test(tg)?' · '+tg:''}`,msg,warn:warn.length};
 }
 async function notifyClose(d,n,w){
   try{
@@ -3666,7 +3677,7 @@ function ccRuleDraw(){
   const C=closeCfg(), on=shiftOf(today()).on;
   e.innerHTML='저장된 일보의 근무시간(재적)을 작업자가 <b>생산마감을 누른 시각</b> 기준으로 다시 잡습니다. 잔업·조퇴가 반영됩니다.<br>'
    +`출근 ${on} 기준 · 마감시각 ${C.pad>0?'+ '+C.pad+'분':C.pad<0?'− '+Math.abs(C.pad)+'분':'그대로'} · <b>${C.unit}분 단위</b>로 가장 가까운 시각에 맞춤 · `
-   +`표준 퇴근시각 <b>±${C.tol}분</b> 이내면 표준 근무시간(평일 ${SHIFT.base.span}분 · 수요일 ${SHIFT.wed.span}분 · 토요일 ${SHIFT.sat.span}분) 유지.<br>`
+   +`표준 퇴근시각 <b>±${C.tol}분</b> 이내면 표준 근무시간(평일 ${SHIFT.base.span}분 · 수요일 ${SHIFT.wed.span}분 · 토요일·공휴일 특근 ${SHIFT.sat.span}분) 유지.<br>`
    +`2시간 미만이거나 16시간을 넘는 값은 작업 중간 마감으로 보고 건너뜁니다. <span class="muted">이 기준은 기준정보 → <b>마감시각 → 근무시간</b>에서 바꿉니다.</span>`;
 }
 function closeDraw(){
