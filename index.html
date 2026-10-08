@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v19.8 · 태진다이텍</title>
+<title>생산일보 통합관리 v19.9 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -604,7 +604,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
     </div>
 
     <div class="panel"><h3>마감시각 → 근무시간 <span class="muted" style="font-weight:400;font-size:12px">작업자가 생산마감을 누른 시각으로 근무시간(잔업·조퇴)을 잡습니다</span></h3>
-      <p class="muted">근무시간 = (마감시각 + 보정) − 출근시각, 10분 단위. <b>표준 퇴근시각 ±허용오차 이내면 표준 근무시간</b>(평일 660분 · 수요일 540분)을 그대로 씁니다. 그 밖은 실제값으로 잡고 일보콜 화면에 확인 알람이 뜹니다.</p>
+      <p class="muted">근무시간 = (마감시각 + 보정) − 출근시각, 10분 단위. <b>표준 퇴근시각 ±허용오차 이내면 표준 근무시간</b>(평일 660분 · 수요일·토요일 540분)을 그대로 씁니다. 그 밖은 실제값으로 잡고 일보콜 화면에 확인 알람이 뜹니다.</p>
       <div class="fl" style="flex-wrap:wrap;gap:10px">
         <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px">마감시각 보정
           <input type=number id="cc_pad" onchange="closeSet()" style="width:70px;padding:3px 5px">분
@@ -808,14 +808,15 @@ const SEED_MASTER={"mcs":["01 쌍용200","02 심팩200","03 심팩150","04 심�
 const DEF_MESMC={'003':'34 심팩250','004':'03 심팩150','005':'28 국일250','007':'01 쌍용200','008':'02 심팩200','009':'04 심팩150','010':'05 심팩110','011':'06 심팩110','013':'30 국일160','014':'31 심팩150','015':'32 심팩200','017':'35 심팩250','018':'37 국일200','019':'38 국일250','020':'39 국일250','021':'40 심팩200','022':'41 국일200','024':'46 심팩300','025':'47 심팩300','001':'36 심팩300','002':'45 심팩300','026':'48 심팩300','027':'49 심팩300','006':'43 화일800','043':'43 화일800'};
 // MES 품번 → 앱 품번 (표기가 다른 것만)
 const DEF_MESPN={'54610-D3501-(BK)':'54610-D3501','1958-365-2(2호)':'1958-365-2','AT3037-GC-00':'AT3037-GC-01','IW/OW-BDA-1159B':'IW/OW BDA 1159B'};
-const APP_VER='19.8';        // 서버에 기록해 두고, 옛 파일이 열리면 한 번 새로고침시킨다
+const APP_VER='19.9';        // 서버에 기록해 두고, 옛 파일이 열리면 한 번 새로고침시킨다
 const SPM_COMMON_ONLY=true;   // 공통값(설비 미지정)만 기준으로 쓴다
 const MES_FROM='2026-09-01'; // 8월까지 실적은 손대지 않음
-/* 근무 기준 — 08:00~19:00, 수요일 08:00~17:00
-   휴식: 10:00·15:00·17:00 각 10분 + 12:00~13:00 60분 (수요일은 17:00 휴식 제외) */
+/* 근무 기준 — 08:00~19:00, 수요일·토요일 08:00~17:00
+   휴식: 10:00·15:00·17:00 각 10분 + 12:00~13:00 60분 (수요일·토요일은 17:00 휴식 제외) */
 const SHIFT={base:{on:'08:00',off:'19:00',span:660,brk:90,net:570},
-             wed :{on:'08:00',off:'17:00',span:540,brk:80,net:460}};
-function shiftOf(d){const w=new Date(d+'T00:00:00').getDay();return w===3?SHIFT.wed:SHIFT.base}
+             wed :{on:'08:00',off:'17:00',span:540,brk:80,net:460},
+             sat :{on:'08:00',off:'17:00',span:540,brk:80,net:460}};
+function shiftOf(d){const w=new Date(d+'T00:00:00').getDay();return w===3?SHIFT.wed:w===6?SHIFT.sat:SHIFT.base}
 function stdWork(d){return shiftOf(d).span}   // 재적 근무(분)
 function stdBrk(d){return shiftOf(d).brk}     // 휴식(분)
 /* 작업자 마감시각 → 재적 근무시간 역산 (잔업·조퇴 반영). 믿기 어려운 값은 0을 돌려 표준값을 쓰게 한다 */
@@ -1310,7 +1311,7 @@ $('f_date').addEventListener('change',()=>{
   const sh=shiftOf(d);
   if(!editId){$('f_work').value=sh.span;$('f_brk').value=sh.brk;readout()}
   const el=$('shiftInfo');
-  if(el)el.textContent=`${sh.on}~${sh.off} = ${sh.span}분 · 휴식 ${sh.brk}분 → 실근무 ${sh.net}분`+(sh===SHIFT.wed?' (수요일)':'');
+  if(el)el.textContent=`${sh.on}~${sh.off} = ${sh.span}분 · 휴식 ${sh.brk}분 → 실근무 ${sh.net}분`+(sh===SHIFT.wed?' (수요일)':sh===SHIFT.sat?' (토요일 특근)':'');
 });
 $('f_auto').addEventListener('change',autoRun);
 $('f_stop').addEventListener('input',()=>{$('f_auto').checked=false});
@@ -3665,7 +3666,7 @@ function ccRuleDraw(){
   const C=closeCfg(), on=shiftOf(today()).on;
   e.innerHTML='저장된 일보의 근무시간(재적)을 작업자가 <b>생산마감을 누른 시각</b> 기준으로 다시 잡습니다. 잔업·조퇴가 반영됩니다.<br>'
    +`출근 ${on} 기준 · 마감시각 ${C.pad>0?'+ '+C.pad+'분':C.pad<0?'− '+Math.abs(C.pad)+'분':'그대로'} · <b>${C.unit}분 단위</b>로 가장 가까운 시각에 맞춤 · `
-   +`표준 퇴근시각 <b>±${C.tol}분</b> 이내면 표준 근무시간(평일 ${SHIFT.base.span}분 · 수요일 ${SHIFT.wed.span}분) 유지.<br>`
+   +`표준 퇴근시각 <b>±${C.tol}분</b> 이내면 표준 근무시간(평일 ${SHIFT.base.span}분 · 수요일 ${SHIFT.wed.span}분 · 토요일 ${SHIFT.sat.span}분) 유지.<br>`
    +`2시간 미만이거나 16시간을 넘는 값은 작업 중간 마감으로 보고 건너뜁니다. <span class="muted">이 기준은 기준정보 → <b>마감시각 → 근무시간</b>에서 바꿉니다.</span>`;
 }
 function closeDraw(){
