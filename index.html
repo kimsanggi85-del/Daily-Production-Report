@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v19.5 · 태진다이텍</title>
+<title>생산일보 통합관리 v19.6 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -377,7 +377,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
   <div class="navitem" data-g="rep"><button type="button">생산일보 ▾</button><div class="mega">
     <div class="mega-col">
       <a class="scr" data-pg="entry"><i>✎</i>생산일보 입력 · 이력<em>ENTRY</em></a>
-      <a class="act pri" data-pg="entry" data-fn="openMes()"><i>📥</i>누락일보콜</a>
+      <a class="act pri" data-pg="entry" data-fn="openMes()"><i>📥</i>일보콜</a>
       <a class="act" data-pg="entry" data-fn="syncClose()"><i>🔄</i>실제수량갱신</a>
       <a class="act" data-pg="entry" data-fn="mesDiag()"><i>🩺</i>연결 점검</a>
       <a class="act" data-fn="go('fail')"><i>⚠</i>고장이력대장</a>
@@ -435,7 +435,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
   <div class="top">
     <h2 id="title">생산일보 입력 · 이력</h2>
     <div class="fl" id="topMes" style="display:none;flex:1;gap:6px">
-      <button class="p" onclick="openMes()" title="일보가 없는 가장 최근 날의 MES 자료를 읽어 일보를 만들어 줍니다 (날짜는 창에서 바꿀 수 있습니다)"><span class="lbl-long">누락일보콜</span><span class="lbl-short">일보콜</span></button><button onclick="syncClose()" title="이미 저장된 일보의 실적을 현장 마감 수량(실제양품)으로 한 번에 맞춥니다"><span class="lbl-long">실제수량갱신</span><span class="lbl-short">수량</span></button><button class="s" onclick="weekClose()" title="지난 한 주 실적을 정리하고 개선활동 항목을 뽑아 줍니다"><span class="lbl-long">주간 마감</span><span class="lbl-short">주간</span></button><button class="s" onclick="moldHist('300')" title="호기별 금형교체 이력을 마감 자료에서 뽑아 줍니다"><span class="lbl-long">금형교체 이력</span><span class="lbl-short">금형</span></button><button class="s" onclick="mesDiag()"><span class="lbl-long">연결 점검</span><span class="lbl-short">점검</span></button><button class="s" onclick="go('fail')" title="설비·금형 고장이력대장 — MTBF·MTTR"><span class="lbl-long">고장이력대장</span><span class="lbl-short">고장</span></button>
+      <button class="p" onclick="openMes()" title="달력에 고른 날짜(기본 오늘)의 MES 자료를 읽어 일보를 만들어 줍니다 (날짜는 창에서도 바꿀 수 있습니다)"><span class="lbl-long">일보콜</span><span class="lbl-short">일보콜</span></button><button onclick="syncClose()" title="이미 저장된 일보의 실적을 현장 마감 수량(실제양품)으로 한 번에 맞춥니다"><span class="lbl-long">실제수량갱신</span><span class="lbl-short">수량</span></button><button class="s" onclick="weekClose()" title="지난 한 주 실적을 정리하고 개선활동 항목을 뽑아 줍니다"><span class="lbl-long">주간 마감</span><span class="lbl-short">주간</span></button><button class="s" onclick="moldHist('300')" title="호기별 금형교체 이력을 마감 자료에서 뽑아 줍니다"><span class="lbl-long">금형교체 이력</span><span class="lbl-short">금형</span></button><button class="s" onclick="mesDiag()"><span class="lbl-long">연결 점검</span><span class="lbl-short">점검</span></button><button class="s" onclick="go('fail')" title="설비·금형 고장이력대장 — MTBF·MTTR"><span class="lbl-long">고장이력대장</span><span class="lbl-short">고장</span></button>
     </div>
     <div class="mon"><button onclick="mv(-1)">‹</button><b id="monLbl"></b><button onclick="mv(1)">›</button></div>
     <button id="btnToday" onclick="go('entry')" class="p">+ 오늘 일보 입력</button>
@@ -461,6 +461,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
     <div class="panel" id="mesPanel">
       <div class="fl">
         <select id="h_range" style="min-width:150px"></select>
+        <input type="date" id="h_day" title="일보콜 날짜 (기본 오늘) · 고르면 그날 일보만 표시" style="width:150px">
         <input type="date" id="h_from" style="display:none"><input type="date" id="h_to" style="display:none">
         <select id="h_cust"><option value="">고객사 전체</option></select>
         <select id="h_mc"><option value="">설비 전체</option></select>
@@ -603,7 +604,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
     </div>
 
     <div class="panel"><h3>마감시각 → 근무시간 <span class="muted" style="font-weight:400;font-size:12px">작업자가 생산마감을 누른 시각으로 근무시간(잔업·조퇴)을 잡습니다</span></h3>
-      <p class="muted">근무시간 = (마감시각 + 보정) − 출근시각, 10분 단위. <b>표준 퇴근시각 ±허용오차 이내면 표준 근무시간</b>(평일 660분 · 수요일 540분)을 그대로 씁니다. 그 밖은 실제값으로 잡고 누락일보콜 화면에 확인 알람이 뜹니다.</p>
+      <p class="muted">근무시간 = (마감시각 + 보정) − 출근시각, 10분 단위. <b>표준 퇴근시각 ±허용오차 이내면 표준 근무시간</b>(평일 660분 · 수요일 540분)을 그대로 씁니다. 그 밖은 실제값으로 잡고 일보콜 화면에 확인 알람이 뜹니다.</p>
       <div class="fl" style="flex-wrap:wrap;gap:10px">
         <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px">마감시각 보정
           <input type=number id="cc_pad" onchange="closeSet()" style="width:70px;padding:3px 5px">분
@@ -761,7 +762,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
       <h3>매일 하는 일 (5분)</h3>
       <ol>
         <li>왼쪽 <b>일보 입력</b> 클릭 → 날짜는 오늘로 자동 설정</li>
-        <li><b>누락일보콜</b>을 누르면 그날 MES 일 생산수량(생산마감)과 불량폐기를 읽어 설비별로 줄을 만들어 줍니다. 근무시간·작업자·정지사유만 확인·수정하고 저장하면 됩니다 (2026년 9월분부터).</li>
+        <li><b>일보콜</b>을 누르면 그날 MES 일 생산수량(생산마감)과 불량폐기를 읽어 설비별로 줄을 만들어 줍니다. 근무시간·작업자·정지사유만 확인·수정하고 저장하면 됩니다 (2026년 9월분부터).</li>
         <li>설비 선택 → 고객사 선택 → 품번 선택하면 품명·SPM이 자동으로 채워짐</li>
         <li>작업자, 근무시간(분), 정지시간(분), 실적수량, 불량수량 입력</li>
         <li>정지사유는 아래 버튼을 눌러 조합 (조회 · 금형점검 · 소재교환 …), 특기사항에 불량 내용 기록</li>
@@ -807,7 +808,7 @@ const SEED_MASTER={"mcs":["01 쌍용200","02 심팩200","03 심팩150","04 심�
 const DEF_MESMC={'003':'34 심팩250','004':'03 심팩150','005':'28 국일250','007':'01 쌍용200','008':'02 심팩200','009':'04 심팩150','010':'05 심팩110','011':'06 심팩110','013':'30 국일160','014':'31 심팩150','015':'32 심팩200','017':'35 심팩250','018':'37 국일200','019':'38 국일250','020':'39 국일250','021':'40 심팩200','022':'41 국일200','024':'46 심팩300','025':'47 심팩300','001':'36 심팩300','002':'45 심팩300','026':'48 심팩300','027':'49 심팩300','006':'43 화일800','043':'43 화일800'};
 // MES 품번 → 앱 품번 (표기가 다른 것만)
 const DEF_MESPN={'54610-D3501-(BK)':'54610-D3501','1958-365-2(2호)':'1958-365-2','AT3037-GC-00':'AT3037-GC-01','IW/OW-BDA-1159B':'IW/OW BDA 1159B'};
-const APP_VER='19.5';        // 서버에 기록해 두고, 옛 파일이 열리면 한 번 새로고침시킨다
+const APP_VER='19.6';        // 서버에 기록해 두고, 옛 파일이 열리면 한 번 새로고침시킨다
 const SPM_COMMON_ONLY=true;   // 공통값(설비 미지정)만 기준으로 쓴다
 const MES_FROM='2026-09-01'; // 8월까지 실적은 손대지 않음
 /* 근무 기준 — 08:00~19:00, 수요일 08:00~17:00
@@ -1328,7 +1329,7 @@ $('f_cust').addEventListener('change',()=>{fillPn();});
 $('f_date').addEventListener('change',renderEntry);
 document.addEventListener('keydown',e=>{if(e.ctrlKey&&e.key==='Enter'&&pg==='entry'&&$('formMask').classList.contains('on'))saveRec()});
 
-/* ===== 누락일보콜 (구 MES 실적 불러오기) ===== */
+/* ===== 일보콜 (구 MES 실적 불러오기) ===== */
 const mesNorm=s=>String(s||'').toUpperCase().replace(/[^0-9A-Z]/g,'');
 function mapPn(code,mc,d,allowLast){
   const m=S.master.mesPn||{};
@@ -1368,11 +1369,10 @@ function mesDay(d,step){
 }
 async function openMes(dateArg,quiet){
   // 날짜를 안 넘기면 오늘이 아니라 '일보 없는 가장 최근 날'로 연다 (입력화면에서 지난 날짜를 고른 경우엔 그 날짜)
-  const fd=$('f_date')?$('f_date').value:'';
-  const d=dateArg||((fd&&fd<today())?fd:mesDefaultDay());
+  const d=dateArg||($('h_day')&&$('h_day').value)||today();
   if(d<MES_FROM){if(!quiet)toast(MES_FROM.slice(0,7)+'월부터 MES 연동을 씁니다. 그 이전은 기존 자료를 그대로 두세요');return}
-  MESDATE=d;
-  if(!quiet){$('modal').innerHTML='<h2>누락일보콜</h2><p class="muted">'+d+' 자료를 읽는 중…</p>';
+  MESDATE=d;if($('h_day'))$('h_day').value=d;
+  if(!quiet){$('modal').innerHTML='<h2>일보콜</h2><p class="muted">'+d+' 자료를 읽는 중…</p>';
     $('mask').classList.add('on');}
   let led=[],use=[],dt=[],clo=[];
   try{
@@ -1457,7 +1457,7 @@ async function openMes(dateArg,quiet){
       logOk:!!(r5&&r5.ok),logSt:r5?r5.status:'-',logN,
       clo:clo.length,cloWith:clo.filter(x=>x.actual_qty!=null).length};
   }catch(e){ if(quiet)return null;
-    $('modal').innerHTML='<h2>누락일보콜</h2><p>MES 자료를 읽지 못했습니다. 인터넷 연결을 확인하세요.</p><div class="fl"><button onclick="closeMask()">닫기</button></div>';return}
+    $('modal').innerHTML='<h2>일보콜</h2><p>MES 자료를 읽지 못했습니다. 인터넷 연결을 확인하세요.</p><div class="fl"><button onclick="closeMask()">닫기</button></div>';return}
   // 설비별 가동시간(분) — 소재사용 기록에서 계산
   const runMap={},nameMap={},ranKeys=new Set();
   led.forEach(x=>{if(x.name)nameMap[x.pn]=x.name});
@@ -1683,7 +1683,7 @@ function drawMes(d){
   const miss=missingDays().filter(x=>x!==d);
   const warn=[nClosed?`현장 마감 반영 ${nClosed}줄`:'',nWait?`실제양품 미입력 ${nWait}줄`:'',nNoMc?`설비 미지정 ${nNoMc}줄`:'',nPend?`생산마감 미완료 ${nPend}줄`:'',nNoRun?`가동시간 없음 ${nNoRun}줄`:'',nNoSpm?`SPM 입력 필요 ${nNoSpm}줄`:'',nNoCust?`고객사 미지정 ${nNoCust}줄`:'',nUpd?`덮어쓰기 ${nUpd}줄`:'',nDup?`이미 저장 ${nDup}줄`:''].filter(Boolean).join(' · ');
   $('modal').innerHTML=`<div class="fl" style="margin-bottom:10px">
-    <h2 style="margin:0">누락일보콜</h2>
+    <h2 style="margin:0">일보콜</h2>
     <button class="s" onclick="mesDay('${d}',-1)" title="전날">◀</button>
     <input type="date" id="mes_d" value="${d}" onchange="openMes(this.value)" style="width:150px">
     <button class="s" onclick="mesDay('${d}',1)" title="다음날">▶</button>
@@ -1776,6 +1776,7 @@ function dataMonths(){const c={};S.recs.forEach(r=>{const m=r.date.slice(0,7);c[
 function histList(){
   const rg=$('h_range').value;let L=S.recs;
   if(rg.startsWith('m:')){const mo=rg.slice(2);L=L.filter(r=>r.date.slice(0,7)===mo)}
+  else if(rg==='d'){const dd=$('h_day').value;if(dd)L=L.filter(r=>r.date===dd)}
   else if(rg==='r'){const f=$('h_from').value,t=$('h_to').value;L=L.filter(r=>(!f||r.date>=f)&&(!t||r.date<=t))}
   const cu=$('h_cust').value,mc=$('h_mc').value,pn=$('h_pn').value,w=$('h_w').value,q=$('h_q').value.trim().toLowerCase();
   return L.filter(r=>(!cu||r.cust===cu)&&(!mc||r.mc===mc)&&(!pn||r.pn===pn)&&(!w||workers(r).includes(w))&&(!q||(r.name+' '+r.sr+' '+r.note+' '+r.pn).toLowerCase().includes(q)));
@@ -1787,7 +1788,7 @@ function renderHist(){
   opts($('h_pn'),m.items.map(i=>i.pn),$('h_pn').value,'품번 전체');
   opts($('h_w'),m.workers,$('h_w').value,'작업자 전체');
   const dm=dataMonths();const cur=$('h_range').value;
-  $('h_range').innerHTML='<option value="all">전체 기간</option><option value="r">기간 지정</option>'
+  $('h_range').innerHTML='<option value="all">전체 기간</option><option value="d">일자 지정</option><option value="r">기간 지정</option>'
     +(dm.length?'<optgroup label="월별">'+dm.map(([m,n])=>`<option value="m:${m}">${m.replace('-','년 ')}월 (${n}건)</option>`).join('')+'</optgroup>':'');
   const vals=[...$('h_range').options].map(o=>o.value);
   $('h_range').value=vals.includes(cur)?cur:(dm.length?'m:'+dm[0][0]:'all');
@@ -1812,6 +1813,9 @@ function renderHist(){
 }
 function sortBy(k){if(sortKey===k)sortDir*=-1;else{sortKey=k;sortDir=k==='date'?-1:1}renderHist();}
 ['h_range','h_from','h_to','h_cust','h_mc','h_pn','h_w'].forEach(id=>$(id).addEventListener('change',renderHist));
+$('h_day').value=today();$('h_day').addEventListener('change',()=>{if($('h_day').value)$('h_range').value='d';renderHist()});
+// 날짜가 바뀐 채로 켜 두면 다음 날 화면 복귀 시 오늘로 맞춤 (사용자가 다른 날을 고른 경우는 유지)
+(()=>{let last=today();document.addEventListener('visibilitychange',()=>{if(document.hidden)return;const t=today();if(t!==last){if($('h_day').value===last)$('h_day').value=t;last=t}})})();
 $('sp_q').addEventListener('input',renderSpm);
 $('h_q').addEventListener('input',renderHist);
 function histRows(L){return L.map(r=>{const c=calc(r);return{'생산일자':r.date.replace(/-/g,''),'설비명':r.mc,'공정명':r.proc,'고객사':r.cust,'품명':r.name,'품번':r.pn,'작업자1':r.w1||'','작업자2':r.w2||'','작업자3':r.w3||'','작업자4':r.w4||'','SPM':r.spm,'근무시간':r.work,'정지시간':r.stop,'휴식시간':r.brk||0,'가동시간':c.run,'가능수량':c.cap,'실적수량':r.qty,'MES원값':r.mes||'','조정수량':(r.mes?(+r.qty-+r.mes):''),'실적출처':r.src||'','가동율(%)':+(c.oper*100).toFixed(2),'효율(%)':+(c.eff*100).toFixed(2),'작업불량수량':r.ng||0,'시타발·검사폐기':r.ngp||0,'정지사유':r.sr,'특기사항':r.note,'금형코드':r.mold||'','설비고장건수':r.fcnt||0,'고장정지시간':r.fmin||0,'생등':r.reg??1}})}
@@ -1825,7 +1829,7 @@ function renderAdj(){
   if(!inp.value)inp.value=$('f_date').value||today();
   const d=inp.value,L=adjRows(),T=$('tAdj');
   if(d<MES_FROM){T.innerHTML=`<tr><td class=empty>${MES_FROM.slice(0,7)}월부터 조정·재고 반영을 씁니다</td></tr>`;return}
-  if(!L.length){T.innerHTML='<tr><td class=empty>이 날짜의 일보가 없습니다 — 누락일보콜이나 일보 입력 후 조정하세요</td></tr>';return}
+  if(!L.length){T.innerHTML='<tr><td class=empty>이 날짜의 일보가 없습니다 — 일보콜이나 일보 입력 후 조정하세요</td></tr>';return}
   let tm=0,tq=0;
   const h='<tr><th>설비</th><th>품번</th><th>품명</th><th>작업자</th><th class=num>MES 수량</th><th class=num>실제 양품</th><th class=num>차이</th><th>조정사유</th></tr>';
   T.innerHTML=h+L.map(r=>{const e=ADJ[r.id]||{};const q=e.qty!=null?e.qty:(+r.qty||0);const mes=(r.mes!=null&&r.mes!=='')?+r.mes:null;const df=mes!=null?q-mes:null;
@@ -1878,7 +1882,7 @@ function renderHist(){
   opts($('h_pn'),m.items.map(i=>i.pn),$('h_pn').value,'품번 전체');
   opts($('h_w'),m.workers,$('h_w').value,'작업자 전체');
   const dm=dataMonths();const cur=$('h_range').value;
-  $('h_range').innerHTML='<option value="all">전체 기간</option><option value="r">기간 지정</option>'
+  $('h_range').innerHTML='<option value="all">전체 기간</option><option value="d">일자 지정</option><option value="r">기간 지정</option>'
     +(dm.length?'<optgroup label="월별">'+dm.map(([m,n])=>`<option value="m:${m}">${m.replace('-','년 ')}월 (${n}건)</option>`).join('')+'</optgroup>':'');
   const vals=[...$('h_range').options].map(o=>o.value);
   $('h_range').value=vals.includes(cur)?cur:(dm.length?'m:'+dm[0][0]:'all');
@@ -2481,7 +2485,7 @@ function execHtml(){
       ${mdFix.slice(0,8).map(f=>`<tr><td>${esc(f.date.slice(5))}</td><td>${esc(f.mc)}${f.mold?`<div class=muted style="font-size:11px">${esc(f.mold)}</div>`:''}</td><td class=num>${f.min}</td><td style="font-size:12px">${esc(f.sym)}${f.act?`<div class=muted style="font-size:11px">${esc(f.act)}</div>`:''}</td></tr>`).join('')}
       <tr class=sum><td>합계</td><td>${mdFix.length}건</td><td class=num>${mdFixMin}</td><td class=muted>${(mdFixMin/60).toFixed(1)}H</td></tr></table>`:''}
     </div>`
-    :`<p class="muted">이번 달 일보에 <b>금형코드가 기록되지 않았습니다.</b> 누락일보콜로 저장하면 자동으로 들어가며, 기존 일보는 데이터 화면의 <b>금형코드 채우기</b>로 보완할 수 있습니다.</p>`}
+    :`<p class="muted">이번 달 일보에 <b>금형코드가 기록되지 않았습니다.</b> 일보콜로 저장하면 자동으로 들어가며, 기존 일보는 데이터 화면의 <b>금형코드 채우기</b>로 보완할 수 있습니다.</p>`}
   </div>
 
   <div class="rpt-sec pgnew">
@@ -2967,8 +2971,7 @@ function moldCopy(){
   try{navigator.clipboard.writeText(t);toast('클립보드에 복사했습니다')}catch(e){alert(t)}
 }
 async function mesDiag(){
-  const fd0=$('f_date')?$('f_date').value:'';
-  const d0=MESDATE||((fd0&&fd0<today())?fd0:mesDefaultDay());
+  const d0=MESDATE||($('h_day')&&$('h_day').value)||today();
   const d=(prompt('점검할 생산일자 (YYYY-MM-DD)',d0)||'').trim()||d0;
   const dh={'apikey':DT_KEY,'Authorization':'Bearer '+DT_KEY};
   const out=[`[모니터링 연결 점검 · ${d}] 앱 ${(document.querySelector('.foot')||{}).textContent?.match(/v[\d.]+/)?.[0]||''}`,`서버 ${DT_URL}`,''];
