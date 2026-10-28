@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v21.0 · 태진다이텍</title>
+<title>생산일보 통합관리 v21.1 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2316,7 +2316,7 @@ function buildToc(y,m){
 function moldRepHtml(no,cu){
   const MR=MOLDREP[month]||{};
   const[y,m]=month.split('-').map(Number);
-  const hd=`<h3>${no}금형수리 현황 <span class="muted" style="font-weight:400;font-size:12px">MES 점검앱 이력/설정 › 금형수리 · ${y}년 ${m}월${cu?' · '+esc(cu):''}</span></h3>`;
+  const hd=`<h3>${no}금형수리 현황 <span class="muted" style="font-weight:400;font-size:12px">${esc(MR.src||'')} · ${y}년 ${m}월${cu?' · '+esc(cu):''}</span></h3>`;
   if(!MR.ok)return `<div class="rpt-sec pgnew">${hd}<div class="empty">${MR.busy||!MOLDREP[month]?'금형수리 이력을 읽는 중입니다…':'금형수리 이력을 읽지 못했습니다 ('+esc(String(MR.err||''))+')'}</div></div>`;
   const MS=moldSum(month,cu),MP=moldSum(prevMonth(month),cu);
   if(!MS.n)return `<div class="rpt-sec pgnew">${hd}<div class="empty">이번 달 금형수리 기록이 없습니다${!MR.rows.length?' (점검로그 분류: '+esc(Object.keys(MR.cats||{}).join(', ')||'없음')+')':''}</div></div>`;
@@ -2505,9 +2505,12 @@ function autoCust(c){
   if(!P.length&&T.eff<tgt)P.push([`효율 ${pctTxt(T.eff)} — 목표 ${Math.round(tgt*100)}% 미달`,'SPM 표준·정지시간 기록 재확인']);
   return{an:L.join('\n'),pb:P.slice(0,2).map(x=>x[0]),pa:P.slice(0,2).map(x=>x[1])};
 }
-/* 금형수리 이력 — MES 점검앱(이력/설정 → 카테고리 '금형수리')이 mes_check_log 에 남긴 기록
-   분류값 이름을 몰라도 찾도록: 그 달의 prod 외 기록을 읽어 분류명이 금형/수리/mold/repair 인 것만 쓴다 */
+/* 금형수리 이력 — MES 점검앱(mes_work.html 이력/설정 › 금형수리)과 같은 원본:
+   kv_store 'repair_history_v2' (금형수리관리 앱 공용, 필드 금형번호·수리일자·수리유형·수리내용·담당자·비고·_machine_name)
+   설비수리 분류는 mes_check_log 에서 함께 읽는다. 금형수리 원본을 못 읽으면 mes_check_log 의 금형 분류로 대신한다 */
+const MR_URL='https://omngtyewdaqpphnzeate.supabase.co', MR_KEY='sb_publishable_9j2YkkL-7ul1TrhH-NjVdQ_vWDG2-1D';
 const MOLDREP={};
+let MRALL=null;   // repair_history_v2 전체 (한 번만 읽음)
 async function loadMoldRep(mo){
   if(MOLDREP[mo]&&(MOLDREP[mo].ok||MOLDREP[mo].busy))return;
   MOLDREP[mo]={busy:1,rows:[]};
@@ -2515,15 +2518,30 @@ async function loadMoldRep(mo){
   const to=nx.getFullYear()+'-'+String(nx.getMonth()+1).padStart(2,'0')+'-01';
   const q=DT_URL+'/rest/v1/mes_check_log?select=category,machine_code,item_code,worker,payload,created_at&category=neq.prod'
     +'&created_at=gte.'+mo+'-01T00:00:00%2B09:00&created_at=lt.'+to+'T00:00:00%2B09:00&order=created_at.asc&limit=5000';
+  const eqRe=/설비|고장|equip|breakdown|machine|보전/i;
+  const isRep=c=>{c=String(c||'');return /금형|mold|die/i.test(c)||(/수리|repair/i.test(c)&&!eqRe.test(c))};
+  const isEq=c=>{c=String(c||'');return eqRe.test(c)&&!/금형|mold|die/i.test(c)};
+  let all=[],cats={},logErr='';
   try{const r=await fetch(q,{headers:{'apikey':DT_KEY,'Authorization':'Bearer '+DT_KEY}});
-    if(!r.ok){MOLDREP[mo]={ok:0,rows:[],err:r.status};return}
-    const all=await r.json();const cats={};all.forEach(x=>{cats[x.category]=(cats[x.category]||0)+1});
-    const eqRe=/설비|고장|equip|breakdown|machine|보전/i;
-    const isRep=c=>{c=String(c||'');return /금형|mold|die/i.test(c)||(/수리|repair/i.test(c)&&!eqRe.test(c))};
-    const isEq=c=>{c=String(c||'');return eqRe.test(c)&&!/금형|mold|die/i.test(c)};
-    MOLDREP[mo]={ok:1,cats,rows:all.filter(x=>isRep(x.category)).map(moldRow),eq:all.filter(x=>isEq(x.category)).map(moldRow)};
-  }catch(e){MOLDREP[mo]={ok:0,rows:[],err:String(e.message||e)}}
+    if(r.ok){all=await r.json();all.forEach(x=>{cats[x.category]=(cats[x.category]||0)+1})}else logErr=r.status;
+  }catch(e){logErr=String(e.message||e)}
+  let rh=null,rhErr='';
+  try{if(!MRALL)MRALL=loadRepHist();rh=await MRALL}catch(e){MRALL=null;rhErr=String(e.message||e)}
+  if(rh){
+    const rows=rh.filter(x=>!x._deleted&&String(x['수리일자']||'').slice(0,7)===mo).map(x=>moldRow({
+      machine_code:x._machine_name||(String(x['비고']||'').match(/\[생산현황\s*([^\]]*)\]/)||[])[1]||x._machine_code||'',
+      item_code:x['금형번호']||'',worker:x['담당자']||'',created_at:x._updatedAt||'',
+      payload:{type:x['수리유형']||'기타',content:x['수리내용']||'',work_date:x['수리일자']||''}}));
+    MOLDREP[mo]={ok:1,src:'금형수리 이력(repair_history_v2)',cats,rows,eq:all.filter(x=>isEq(x.category)).map(moldRow)};
+  }else if(!logErr){
+    MOLDREP[mo]={ok:1,src:'점검로그(mes_check_log)',cats,rows:all.filter(x=>isRep(x.category)).map(moldRow),eq:all.filter(x=>isEq(x.category)).map(moldRow),warn:rhErr};
+  }else MOLDREP[mo]={ok:0,rows:[],err:rhErr||logErr};
   if(month===mo&&pg==='report')renderReport();
+}
+async function loadRepHist(){
+  const r=await fetch(MR_URL+'/rest/v1/kv_store?key=eq.repair_history_v2&select=value',{headers:{'apikey':MR_KEY,'Authorization':'Bearer '+MR_KEY}});
+  if(!r.ok)throw new Error('금형수리 이력 '+r.status);
+  const js=await r.json();return (js[0]&&Array.isArray(js[0].value))?js[0].value:[];
 }
 /* 한 건 → {date, mc(앱 설비명), code, pn, cust, type, txt, worker} */
 function moldRow(x){
@@ -2537,9 +2555,10 @@ function moldRow(x){
     const all=[...new Set([...Object.values(S.master.mesMc||{}),...S.recs.map(r=>r.mc)])];
     return all.find(v=>String(v).split(' ')[0]===n[1].padStart(2,'0')||String(v).split(' ')[0]===n[1])||code})();
   const raw=String(x.item_code||p.item_code||'');const nz=v=>String(v||'').toUpperCase().replace(/[^0-9A-Z]/g,'');
-  const pn=((S.master.mesPn||{})[raw])||(S.master.items.find(i=>nz(i.pn)===nz(raw))||{}).pn||raw;
+  const pn=((S.master.mesPn||{})[raw])||(S.master.items.find(i=>nz(i.pn)===nz(raw))||{}).pn
+    ||(S.recs.find(r=>r.mold&&nz(r.mold)===nz(raw))||{}).pn||raw;
   const cust=(S.master.items.find(i=>i.pn===pn)||{}).cust||(S.recs.find(r=>r.pn===pn&&r.cust)||{}).cust||'';
-  const dt=new Date(Date.parse(x.created_at)+9*3600e3).toISOString().slice(0,10);
+  const ms=Date.parse(x.created_at);const dt=isFinite(ms)?new Date(ms+9*3600e3).toISOString().slice(0,10):'';
   return{date:pick(['work_date','repair_date','date']).slice(0,10)||dt,mc:mm,code,pn,cust,type,txt,worker:x.worker||pick(['worker','repairer'])};
 }
 /* 금형수리 요약 (고객사 지정 시 그 고객사 품번만) */
@@ -2675,7 +2694,7 @@ function execHtml(){
   loadMoldRep(month);loadMoldRep(prevMonth(month));
   const AX=autoExec(cu);
   const MR=MOLDREP[month]||{};
-  const mrNote=MR.busy?'금형수리 이력 읽는 중…':MR.ok?`금형수리 이력 ${MR.rows.length}건 반영 (MES 점검앱)${!MR.rows.length?' · 분류: '+Object.keys(MR.cats||{}).join(', '):''}`:`금형수리 이력을 읽지 못함 (${esc(String(MR.err||''))})`;
+  const mrNote=MR.busy?'금형수리 이력 읽는 중…':MR.ok?`금형수리 이력 ${MR.rows.length}건 반영 (${esc(MR.src||'')})${!MR.rows.length?' · 분류: '+Object.keys(MR.cats||{}).join(', '):''}`:`금형수리 이력을 읽지 못함 (${esc(String(MR.err||''))})`;
   const arrow=(cur,prev,up)=>{ if(!isFinite(prev)||!prev) return '<em class="muted">전월 자료 없음</em>';
     const d=cur-prev, good=up?d>=0:d<=0;
     return `<em class="${good?'up':'dn'}">전월 ${d>=0?'▲':'▼'} ${fmt(Math.abs(d)>=10?Math.round(Math.abs(d)):+Math.abs(d).toFixed(1))}</em>`};
