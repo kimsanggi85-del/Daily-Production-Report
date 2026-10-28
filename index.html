@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v20.8 · 태진다이텍</title>
+<title>생산일보 통합관리 v20.9 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2518,8 +2518,10 @@ async function loadMoldRep(mo){
   try{const r=await fetch(q,{headers:{'apikey':DT_KEY,'Authorization':'Bearer '+DT_KEY}});
     if(!r.ok){MOLDREP[mo]={ok:0,rows:[],err:r.status};return}
     const all=await r.json();const cats={};all.forEach(x=>{cats[x.category]=(cats[x.category]||0)+1});
-    const isRep=c=>/금형|수리|mold|repair|die/i.test(String(c||''));
-    MOLDREP[mo]={ok:1,cats,rows:all.filter(x=>isRep(x.category)).map(moldRow)};
+    const eqRe=/설비|고장|equip|breakdown|machine|보전/i;
+    const isRep=c=>{c=String(c||'');return /금형|mold|die/i.test(c)||(/수리|repair/i.test(c)&&!eqRe.test(c))};
+    const isEq=c=>{c=String(c||'');return eqRe.test(c)&&!/금형|mold|die/i.test(c)};
+    MOLDREP[mo]={ok:1,cats,rows:all.filter(x=>isRep(x.category)).map(moldRow),eq:all.filter(x=>isEq(x.category)).map(moldRow)};
   }catch(e){MOLDREP[mo]={ok:0,rows:[],err:String(e.message||e)}}
   if(month===mo&&pg==='report')renderReport();
 }
@@ -2591,10 +2593,39 @@ function autoExec(cu){
   if(plD&&plD<1)N.push(`계획 미달분 ${fmt(Math.round(PL.tgt-T.qty))} EA 차월 생산계획 반영`);
   return{sum:S1.join('\n'),next:N.map((x,i)=>`${i+1}. ${x}`).join('\n')};
 }
+/* 설비 고장 원인 / 재발방지 · 담당 / 기한 — 고장이력대장(설비) + 고장 입력된 일보 정지사유 + 점검앱 설비수리 기록 */
+const EQ_FIX=[[/유압|실린더|오일/,'유압유 오염도·온도 점검, 실·호스 정기 교체'],[/센서|근접|광전/,'센서 위치·배선 점검, 오검출 방지 커버 설치'],
+  [/모터|인버터/,'모터 전류·발열 점검, 베어링 교체주기 설정'],[/언코일러|레벨러|피더|쏠림/,'언코일러·피더 센터링·브레이크 점검, 소재 가이드 정렬'],
+  [/에어|공압/,'에어 압력·누설 점검, 드레인 일상관리'],[/체인|컨베이어/,'체인 장력·급유 주기 관리'],
+  [/전장|릴레이|차단기|PLC|에러/i,'전장판넬 점검, 릴레이·차단기 예비품 확보'],[/볼트|풀림/,'볼트 풀림 마킹·토크 관리 점검표 추가'],
+  [/스크랩|막힘/,'스크랩 슈트 청소주기 설정, 막힘 감지 점검'],[/클러치|브레이크/,'클러치·브레이크 간극·마모 점검'],
+  [/오작동|설비이상|고장|멈춤/,'일상점검표에 해당 항목 추가, 재발 시 보전 PM 주기 단축']];
+function autoRel(mc,mo){
+  const F=(S.fails||[]).filter(f=>f.date.slice(0,7)===mo&&f.mc===mc&&f.kind==='설비');
+  const has=new Set(F.map(f=>f.date));
+  const R=S.recs.filter(r=>r.date.slice(0,7)===mo&&r.mc===mc&&+r.fcnt>0&&!has.has(r.date));
+  const M=((MOLDREP[mo]||{}).eq||[]).filter(r=>r.mc===mc);
+  const items=[];   // {d, t: 현상/원인, a: 조치}
+  F.forEach(f=>items.push({d:f.date,t:[f.sym,f.cause].filter(Boolean).join(' → '),a:f.act||f.prev||'',by:f.by||''}));
+  R.forEach(r=>{const seg=String(r.sr||'').split(/\s*\/\s*|,/).filter(x=>(FAIL_EQ.some(k=>x.includes(k))||/고장|오작동|에러|멈춤/.test(x))&&!FAIL_MD.some(k=>x.includes(k)));
+    items.push({d:r.date,t:(seg.join(' · ')||r.sr||'')+(r.note?' ('+String(r.note).slice(0,30)+')':''),a:'',by:''})});
+  M.forEach(r=>items.push({d:r.date,t:r.txt||r.type,a:'',by:r.worker||''}));
+  if(!items.length)return{d:'',w:''};
+  items.sort((a,b)=>a.d.localeCompare(b.d));
+  const txt=items.map(x=>x.t+' '+x.a).join(' ');
+  const fix=[...new Set(EQ_FIX.filter(([re])=>re.test(txt)).map(x=>x[1]))].slice(0,2);
+  const acts=[...new Set(items.map(x=>x.a).filter(Boolean))].slice(0,2);
+  const L=[`원인: ${items.slice(-4).map(x=>`${x.d.slice(5).replace('-','/')} ${String(x.t).slice(0,40)}`).join(' / ')}${items.length>4?` 외 ${items.length-4}건`:''}`];
+  if(acts.length)L.push('조치: '+acts.join(' / '));
+  L.push('재발방지: '+(fix.length?fix.join(', '):'고장 부위 일상점검 항목 추가, 보전 PM 주기 재검토'));
+  const by=Object.entries(items.reduce((g,x)=>{if(x.by)g[x.by]=(g[x.by]||0)+1;return g},{})).sort((a,b)=>b[1]-a[1]).map(x=>x[0])[0];
+  const[y,m]=mo.split('-').map(Number);const nx=new Date(y,m,0+1);
+  return{d:L.join('\n'),w:`${by||'설비보전'} / ${nx.getMonth()+1}월 말`};
+}
 /* 자동 문장 다시 쓰기 — 직접 고친 내용이 있으면 확인 후 덮어씀 */
 function rptAuto(which,c){
   const o=rptGet();
-  const keys=which==='exec'?['exSum','exNext']:['an_'+c,'pb1_'+c,'pa1_'+c,'pb2_'+c,'pa2_'+c];
+  const keys=which==='exec'?['exSum','exNext']:which==='rel'?[0,1,2].flatMap(i=>['relD'+i,'relW'+i]):['an_'+c,'pb1_'+c,'pa1_'+c,'pb2_'+c,'pa2_'+c];
   if(keys.some(k=>o[k])&&!confirm('직접 작성한 내용을 지우고 일보 집계로 다시 작성할까요?'))return;
   keys.forEach(k=>delete o[k]);o.ua=now();commit0();renderReport();
 }
@@ -2764,8 +2795,8 @@ function execHtml(){
       <div>${svgVBars(relL.slice(0,8).map(x=>({l:x.k.split(' ')[0],v:+hh(x.mtbf),txt:hh(x.mtbf)+'H',c:C.l1})),{W:470,H:150,rot:0,B:30})}
       <div class="legend"><span><i style="background:${C.l1}"></i>MTBF (시간)</span></div></div>
     </div>
-    <table><tr><th style="width:26%">설비</th><th style="width:37%">고장 원인 / 재발방지</th><th>담당 / 기한</th></tr>
-    ${relL.slice(0,3).map((x,i)=>`<tr><td>${esc(x.k)} <span class=muted>MTBF ${hh(x.mtbf)}H · MTTR ${hh(x.mttr)}H</span></td><td>${ta('relD'+i,'원인과 재발방지 대책')}</td><td>${ta('relW'+i,'')}</td></tr>`).join('')}
+    <table><tr><th style="width:26%">설비</th><th style="width:37%">고장 원인 / 재발방지 <button class="s noprint" style="font-size:11px;padding:0 8px" onclick="rptAuto('rel')" title="고장이력대장·일보 정지사유·점검앱 설비수리 기록으로 다시 작성">자동 작성</button></th><th>담당 / 기한</th></tr>
+    ${relL.slice(0,3).map((x,i)=>`<tr><td>${esc(x.k)} <span class=muted>MTBF ${hh(x.mtbf)}H · MTTR ${hh(x.mttr)}H</span></td>${(()=>{const A=autoRel(x.k,month);return `<td>${taA('relD'+i,A.d)}</td><td>${taA('relW'+i,A.w)}</td>`})()}</tr>`).join('')}
     </table>`
     :`<p class="muted">이번 달 <b>설비고장 기록이 없습니다.</b> 일보 작성 시 <b>설비고장 건수</b>와 <b>고장정지(분)</b>를 입력하면 설비별 MTBF·MTTR이 자동으로 산출됩니다. 계획정지(조회·금형점검·소재교환 등)는 제외하고 <b>설비 고장으로 선 경우만</b> 적으십시오.</p>`}
     ${relYtd.f?`<div class="grid g2" style="margin-top:10px">
