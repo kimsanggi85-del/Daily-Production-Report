@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v20.3 · 태진다이텍</title>
+<title>생산일보 통합관리 v20.5 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -785,7 +785,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
       <ol>
         <li><b>월간 집계</b>: 예전 "월MH당제품_DB" 시트와 같은 설비×품번 집계표. 엑셀 내려받기로 보고서에 붙입니다.</li>
         <li><b>품목별 일별표</b>: 예전 "현황" 시트처럼 품번별로 날짜 칸에 생산수량이 들어갑니다.</li>
-        <li><b>월간 보고서</b>: 예전 "가동율_효율 양식" 시트. 주차별·당월·전월 비교는 자동이고 문제점·대책·인원·특이사항만 적으면 됩니다. 적은 내용은 서버에 함께 저장됩니다. 대표님 보고용은 <b>PDF 내려받기</b>(A4 가로)를 쓰시면 됩니다.</li>
+        <li><b>월간 보고서</b>: 예전 "가동율_효율 양식" 시트. 주차별·당월·전월 비교는 자동이고, <b>총평·고객사별 실적 분석·문제점·대책도 일보 집계로 자동 작성</b>됩니다(고쳐 쓰면 그 내용이 우선, <b>자동 작성</b> 버튼으로 다시 작성). 인원·특이사항만 적으면 됩니다. 적은 내용은 서버에 함께 저장됩니다. 대표님 보고용은 <b>PDF 내려받기</b>(A4 가로)를 쓰시면 됩니다.</li>
         <li><b>데이터 관리 → 백업 파일 내려받기</b>: 월 1회.</li>
       </ol>
     </div>
@@ -2179,6 +2179,8 @@ function renderReport(){
   const dates=R.map(r=>r.date).sort();
   const ta=(k,ph)=>`<textarea onchange="rptSet('${k}',this.value)" placeholder="${ph||''}">${esc(o[k]||'')}</textarea>`;
   const inp=k=>`<input value="${esc(o[k]||'')}" onchange="rptSet('${k}',this.value)">`;
+  // 비어 있으면 자동 문장 (고쳐 쓰면 저장된 내용 우선)
+  const taA=(k,def,ph)=>{const v=o[k]||def||'';return `<textarea rows=${taRows(v)} onchange="rptSet('${k}',this.value)" placeholder="${ph||''}">${esc(v)}</textarea>`};
   const H=v=>+(v/60).toFixed(1);            // 분 → 시간
   const P=v=>isFinite(v)?Math.round(v*100)+'%':'-';
   const NB=n=>rptView==='all'?n+'.':'';
@@ -2225,6 +2227,8 @@ function renderReport(){
     /* 고객사 요약 (같은 장에 이어서) */
     const days=cst.days;
     const target=+(o['tgt_'+c]||75);
+    if(ci===0){loadMoldRep(month);loadMoldRep(pm)}
+    const AC=autoCust(c);
     html+=`<div style="height:8px"></div>
       <div class="grid g2" style="grid-template-columns:1fr 1.15fr;align-items:start;gap:12px">
       <div>${svgCombo(days.map(d=>d.d.slice(5).replace('-','/')),days.map(d=>d.qty),[{v:days.map(d=>d.oper),c:C.l1},{v:days.map(d=>d.eff),c:C.l2}],{W:520,H:132,rot:1,target:target/100})}
@@ -2238,8 +2242,10 @@ function renderReport(){
         <tr><td>총 불량수량</td><td class=num>${fmt(cT.ng+(cT.ngp||0))} EA</td><td>총 가동시간</td><td class=num>${fmt(cT.run)} 분</td><td>총 정지시간</td><td class=num>${fmt(cT.stop)} 분</td></tr>
         </table>
       </div>
-      <table style="font-size:12px;margin-top:4px"><tr><th style="width:34%">문제점</th><th>대책 및 개선내용</th></tr>
-      ${[1,2].map(k=>`<tr><td>${ta('pb'+k+'_'+c,'예: 8/12 1106-2 내경 상한')}</td><td>${ta('pa'+k+'_'+c,'예: 펀치 라이너 1.4→1.3')}</td></tr>`).join('')}
+      <table style="font-size:12px;margin-top:4px"><tr><th colspan=2 style="text-align:left">실적 분석 <button class="s noprint" style="font-size:11px;padding:0 8px" onclick="rptAuto('cust','${esc(c)}')" title="일보 집계로 실적 분석·문제점·대책을 다시 작성합니다">자동 작성</button></th></tr>
+      <tr><td colspan=2>${taA('an_'+c,AC.an)}</td></tr>
+      <tr><th style="width:34%">문제점</th><th>대책 및 개선내용</th></tr>
+      ${[1,2].map(k=>`<tr><td>${taA('pb'+k+'_'+c,AC.pb[k-1],'예: 8/12 1106-2 내경 상한')}</td><td>${taA('pa'+k+'_'+c,AC.pa[k-1],'예: 펀치 라이너 1.4→1.3')}</td></tr>`).join('')}
       </table></div>`;
   });
 
@@ -2382,6 +2388,168 @@ function ngBrief(notes){
   const top=L.slice(0,3).map(([k,v])=>`${k} ${fmt(v)}`).join(' · ');
   return top+(L.length>3?` 외 ${L.length-3}건`:'');
 }
+/* ===== 월간 보고서 자동 작성 (총평 · 고객사별 실적 분석 · 문제점/대책) =====
+   입력칸이 비어 있으면 일보 집계로 만든 문장을 기본값으로 넣는다. 고쳐 쓰면 그 내용이 저장되고 우선한다. */
+const STOP_CAT=[[/금형|셋팅/,'금형점검 및 수리'],[/소재|자재|코일/,'소재교환'],[/측정|검사/,'측정대기'],[/치수|조정/,'치수조정'],
+  [/설비|고장|이상/,'설비이상'],[/부품|연마|교체/,'부품교체·연마'],[/3정|청소|정리|박스/,'3정5행·청소'],
+  [/조회|교육|회의/,'조회·교육'],[/휴식|식사|중식/,'휴식·식사'],[/대기/,'대기']];
+const stopCatOf=s=>{for(const[re,n]of STOP_CAT)if(re.test(s))return n;return '기타'};
+/* 정지사유 '금형수리 30분 / 소재교환 20분' → 분류별 분(분 표기가 없으면 1건=1) */
+function stopCats(R){const w={};
+  R.forEach(r=>{const t=(r.sr||'').trim();if(!t){if(+r.stop>0)w['사유 미기재']=(w['사유 미기재']||0)+(+r.stop);return}
+    t.split(/\s*\/\s*|,/).filter(Boolean).forEach(x=>{const mm=x.match(/(\d+)\s*분/);const nm=stopCatOf(x.replace(/\d+\s*분/,''));w[nm]=(w[nm]||0)+(mm?+mm[1]:1)})});
+  return Object.entries(w).sort((a,b)=>b[1]-a[1])}
+/* 정지 분류별 표준 대책 (프레스 공정) */
+const STOP_FIX={'금형점검 및 수리':'금형 예방보전(PM) 주기를 타발수 기준으로 재설정, 예비 펀치·다이 확보, 금형 수리이력 관리',
+  '소재교환':'코일 교환 외준비(SMED) 사전 실시, 다음 소재 라인사이드 대기 배치',
+  '측정대기':'초·중·종물 검사 순서 표준화, 측정구 현장 비치로 측정 대기 단축',
+  '치수조정':'금형 셋팅 표준(셋팅시트·셧하이트) 정비, 초물 승인 기준 명확화',
+  '설비이상':'설비 일상점검 강화, 고장 재발방지 대책 수립(MTBF·MTTR 관리)',
+  '부품교체·연마':'펀치 연마 주기 표준화, 소모성 예비부품 재고 관리',
+  '3정5행·청소':'청소·정리 시간을 작업 종료 전으로 고정, 스크랩 배출 개선',
+  '조회·교육':'조회·교육 시간 표준화(정해진 시간 외 정지 금지)',
+  '대기':'작업지시·자재 공급 시점 조정으로 대기 해소',
+  '사유 미기재':'정지사유·시간 기록 철저 (일보 작성 교육)',
+  '기타':'기타 정지 세부 사유 분류 후 대책 수립'};
+const pctTxt=v=>isFinite(v)?(v*100).toFixed(1)+'%':'-';
+const ppTxt=(a,b)=>(isFinite(a)&&isFinite(b)&&b)?` · 전월 ${a>=b?'▲':'▼'}${Math.abs((a-b)*100).toFixed(1)}%p`:'';
+const qtyChg=(a,b)=>b?` (전월 대비 ${a>=b?'+':''}${((a/b-1)*100).toFixed(1)}%)`:'';
+/* 품번별 집계 (설비 포함) */
+function rptItems(R){const g={};
+  R.forEach(r=>{const k=r.mc+'|'+r.pn;const c=calc(r);const x=g[k]=g[k]||{mc:r.mc,pn:r.pn,q:0,cap:0,ng:0,run:0,work:0,stop:0};
+    x.q+=+r.qty||0;x.cap+=c.cap;x.ng+=(+r.ng||0)+(+r.ngp||0);x.run+=c.run;x.work+=+r.work||0;x.stop+=+r.stop||0});
+  return Object.values(g)}
+/* 고객사 한 곳의 실적 분석 + 문제점/대책 */
+function autoCust(c){
+  const st=rptStats(month,c),T=st.total,pv=rptStats(prevMonth(month),c).total,o=rptGet();
+  const tgt=(+(o['tgt_'+c]||75))/100;
+  if(!T.n)return{an:'',pb:[],pa:[]};
+  const R=st.R,ng=T.ng+(T.ngp||0),ppm=T.qty?ng/T.qty*1e6:0,pvNg=pv.ng+(pv.ngp||0),pvPpm=pv.qty?pvNg/pv.qty*1e6:NaN;
+  const it=rptItems(R);
+  const byPn={};it.forEach(x=>{byPn[x.pn]=(byPn[x.pn]||0)+x.q});
+  const main=Object.entries(byPn).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([k,v])=>`${k} ${(v/(T.qty||1)*100).toFixed(0)}%`);
+  const lowE=it.filter(x=>x.cap>0&&x.q>0).map(x=>({...x,e:x.q/x.cap})).filter(x=>x.e<tgt).sort((a,b)=>a.e-b.e);
+  const ngIt=it.filter(x=>x.ng>0).map(x=>({...x,p:x.ng/(x.q||1)*1e6})).sort((a,b)=>b.ng-a.ng);
+  const sc=stopCats(R),scT=sc.reduce((a,x)=>a+x[1],0)||1;
+  const L=[];
+  L.push(`생산 ${fmt(T.qty)} EA${qtyChg(T.qty,pv.qty)} · 가동 ${T.days}일`);
+  L.push(`가동율 ${pctTxt(T.oper)}${ppTxt(T.oper,pv.oper)} · 효율 ${pctTxt(T.eff)} (목표 ${Math.round(tgt*100)}% ${T.eff>=tgt?'달성':'미달'})${ppTxt(T.eff,pv.eff)}`);
+  L.push(`불량 ${fmt(ng)} EA · ${fmt(Math.round(ppm))} PPM${isFinite(pvPpm)?` (전월 ${fmt(Math.round(pvPpm))} PPM ${ppm<=pvPpm?'개선':'악화'})`:''}`);
+  if(main.length)L.push(`주력 품번: ${main.join(' · ')}`);
+  if(lowE.length)L.push(`효율 목표 미달 ${lowE.length}건: ${lowE.slice(0,3).map(x=>`${x.pn}(${x.mc}) ${pctTxt(x.e)}`).join(' · ')}`);
+  const MS=moldSum(month,c);
+  if(MS&&MS.n)L.push(`금형수리 ${MS.n}건: ${MS.top(MS.byPn,3)}${MS.byType.length?` (${MS.top(MS.byType,2)})`:''}`);
+  if(sc.length)L.push(`정지 ${fmt(Math.round(T.stop/60))}H 원인: ${sc.slice(0,3).map(([k,v])=>`${k} ${(v/scT*100).toFixed(0)}%`).join(' · ')}`);
+  // 문제점/대책 — 손실이 큰 순서대로 2건
+  const P=[];
+  if(lowE.length){const x=lowE[0];const why=stopCats(R.filter(r=>r.mc===x.mc&&r.pn===x.pn))[0];
+    P.push([`${x.pn}(${x.mc}) 효율 ${pctTxt(x.e)} — 목표 ${Math.round(tgt*100)}% 미달${why?`, 주요 정지 ${why[0]}`:''}`,
+      why?STOP_FIX[why[0]]||STOP_FIX['기타']:'SPM 표준·가동시간 재확인, 저속 운전 원인 파악'])}
+  if(sc.length&&sc[0][1]/scT>=.25&&!(P[0]&&P[0][0].includes(sc[0][0])))
+    P.push([`정지 원인 1위 ${sc[0][0]} ${(sc[0][1]/scT*100).toFixed(0)}% (정지 ${fmt(Math.round(T.stop/60))}H)`,STOP_FIX[sc[0][0]]||STOP_FIX['기타']]);
+  if(MS&&MS.byPn.length&&MS.byPn[0][1]>=3){const[pn,n]=MS.byPn[0];const L2=MS.L.filter(r=>r.pn===pn);
+    P.push([`${pn} 금형수리 ${n}건 반복 (${[...new Set(L2.map(r=>r.mc))].join(', ')})${moldWords(L2)?' — '+moldWords(L2):''}`,
+      '반복 수리 부위 원인분석, 금형 PM 주기(타발수) 재설정, 소모 부품(펀치·라이너) 예비품 확보'])}
+  if(ngIt.length&&ngIt[0].p>=1000){const x=ngIt[0];
+    P.push([`${x.pn}(${x.mc}) 불량 ${fmt(x.ng)} EA · ${fmt(Math.round(x.p))} PPM`,'불량유형별 원인분석(특성요인도), 금형 상태 점검, 초·중·종물 검사 강화'])}
+  if(!P.length&&T.eff<tgt)P.push([`효율 ${pctTxt(T.eff)} — 목표 ${Math.round(tgt*100)}% 미달`,'SPM 표준·정지시간 기록 재확인']);
+  return{an:L.join('\n'),pb:P.slice(0,2).map(x=>x[0]),pa:P.slice(0,2).map(x=>x[1])};
+}
+/* 금형수리 이력 — MES 점검앱(이력/설정 → 카테고리 '금형수리')이 mes_check_log 에 남긴 기록
+   분류값 이름을 몰라도 찾도록: 그 달의 prod 외 기록을 읽어 분류명이 금형/수리/mold/repair 인 것만 쓴다 */
+const MOLDREP={};
+async function loadMoldRep(mo){
+  if(MOLDREP[mo]&&(MOLDREP[mo].ok||MOLDREP[mo].busy))return;
+  MOLDREP[mo]={busy:1,rows:[]};
+  const[y,m]=mo.split('-').map(Number);const nx=new Date(y,m,1);
+  const to=nx.getFullYear()+'-'+String(nx.getMonth()+1).padStart(2,'0')+'-01';
+  const q=DT_URL+'/rest/v1/mes_check_log?select=category,machine_code,item_code,worker,payload,created_at&category=neq.prod'
+    +'&created_at=gte.'+mo+'-01T00:00:00%2B09:00&created_at=lt.'+to+'T00:00:00%2B09:00&order=created_at.asc&limit=5000';
+  try{const r=await fetch(q,{headers:{'apikey':DT_KEY,'Authorization':'Bearer '+DT_KEY}});
+    if(!r.ok){MOLDREP[mo]={ok:0,rows:[],err:r.status};return}
+    const all=await r.json();const cats={};all.forEach(x=>{cats[x.category]=(cats[x.category]||0)+1});
+    const isRep=c=>/금형|수리|mold|repair|die/i.test(String(c||''));
+    MOLDREP[mo]={ok:1,cats,rows:all.filter(x=>isRep(x.category)).map(moldRow)};
+  }catch(e){MOLDREP[mo]={ok:0,rows:[],err:String(e.message||e)}}
+  if(month===mo&&pg==='report')renderReport();
+}
+/* 한 건 → {date, mc(앱 설비명), code, pn, cust, type, txt, worker} */
+function moldRow(x){
+  const p=(x.payload&&typeof x.payload==='object')?x.payload:{};
+  const pick=ks=>{for(const k of ks)if(p[k]!=null&&String(p[k]).trim())return String(p[k]).trim();return ''};
+  const type=pick(['type','repair_type','kind','mold_type','defect_type','reason','sub_category','category'])||'기타';
+  let txt=pick(['content','detail','memo','note','description','repair_content','repair_detail','text','remark']);
+  if(!txt)txt=Object.values(p).filter(v=>typeof v==='string'&&v.length>3&&v!==type).join(' ');
+  const code=String(x.machine_code||'');
+  const mm=(S.master.mesMc||{})[code]||(()=>{const n=code.match(/^(\d+)/);if(!n)return code;
+    const all=[...new Set([...Object.values(S.master.mesMc||{}),...S.recs.map(r=>r.mc)])];
+    return all.find(v=>String(v).split(' ')[0]===n[1].padStart(2,'0')||String(v).split(' ')[0]===n[1])||code})();
+  const raw=String(x.item_code||p.item_code||'');const nz=v=>String(v||'').toUpperCase().replace(/[^0-9A-Z]/g,'');
+  const pn=((S.master.mesPn||{})[raw])||(S.master.items.find(i=>nz(i.pn)===nz(raw))||{}).pn||raw;
+  const cust=(S.master.items.find(i=>i.pn===pn)||{}).cust||(S.recs.find(r=>r.pn===pn&&r.cust)||{}).cust||'';
+  const dt=new Date(Date.parse(x.created_at)+9*3600e3).toISOString().slice(0,10);
+  return{date:pick(['work_date','repair_date','date']).slice(0,10)||dt,mc:mm,code,pn,cust,type,txt,worker:x.worker||pick(['worker','repairer'])};
+}
+/* 금형수리 요약 (고객사 지정 시 그 고객사 품번만) */
+function moldSum(mo,cu){
+  const M=MOLDREP[mo];if(!M||!M.ok)return null;
+  const L=M.rows.filter(r=>!cu||r.cust===cu);
+  const cnt=f=>{const g={};L.forEach(r=>{const k=f(r);if(k)g[k]=(g[k]||0)+1});return Object.entries(g).sort((a,b)=>b[1]-a[1])};
+  return{n:L.length,L,byPn:cnt(r=>r.pn),byMc:cnt(r=>r.mc),byType:cnt(r=>r.type),
+    top:(k,n)=>k.slice(0,n||3).map(([a,b])=>`${a} ${b}건`).join(' · ')};
+}
+/* 수리 내용에서 자주 나온 작업 (펀치·다이·라이너·코팅 …) */
+function moldWords(L){const dict=['펀치','다이','라이너','코팅','버','파손','크랙','연마','가이드','스프링','핀','볼트','인서트','패드','스트리퍼','셋팅','치수','교환','용접'];
+  const g={};L.forEach(r=>dict.forEach(w=>{if(String(r.txt).includes(w))g[w]=(g[w]||0)+1}));
+  return Object.entries(g).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([k,v])=>`${k} ${v}`).join(' · ')}
+
+/* 경영 요약 총평 */
+function autoExec(cu){
+  const st=rptStats(month,cu),T=st.total,pv=rptStats(prevMonth(month),cu).total,o=rptGet(),R=st.R;
+  if(!T.n)return{sum:'',next:''};
+  const tgtO=+(o.tgtOper||80)/100,tgtE=+(o.tgtEff||80)/100,tgtP=+(o.tgtPpm||1500);
+  const ng=T.ng+(T.ngp||0),ppm=T.qty?ng/T.qty*1e6:0,pvPpm=pv.qty?(pv.ng+(pv.ngp||0))/pv.qty*1e6:NaN;
+  const OE=oeeOf(R),PL=planOf(month),plD=(!cu&&PL.tgt)?T.qty/PL.tgt:0;
+  const S1=[];
+  S1.push(`생산 ${fmt(T.qty)} EA${qtyChg(T.qty,pv.qty)}, 가동 ${T.days}일${plD?` · 계획 달성률 ${(plD*100).toFixed(1)}% (${plD>=1?'달성':'미달 '+fmt(Math.round(PL.tgt-T.qty))+' EA'})`:''}`);
+  S1.push(`가동율 ${pctTxt(T.oper)} (목표 ${Math.round(tgtO*100)}% ${T.oper>=tgtO?'달성':'미달'})${ppTxt(T.oper,pv.oper)} · 효율 ${pctTxt(T.eff)} (목표 ${Math.round(tgtE*100)}% ${T.eff>=tgtE?'달성':'미달'})${ppTxt(T.eff,pv.eff)}`);
+  S1.push(`불량 ${fmt(Math.round(ppm))} PPM (목표 ${fmt(tgtP)} ${ppm<=tgtP?'달성':'초과'}${isFinite(pvPpm)?`, 전월 ${fmt(Math.round(pvPpm))}`:''}) · OEE ${pctTxt(OE.oee)} ${oeeGrade(OE.oee)}`);
+  // 고객사별 한 줄
+  const gc={};R.forEach(r=>{const c=calc(r);const g=gc[r.cust||'미지정']=gc[r.cust||'미지정']||{q:0,cap:0,ng:0};g.q+=+r.qty||0;g.cap+=c.cap;g.ng+=(+r.ng||0)+(+r.ngp||0)});
+  const pvc={};rptStats(prevMonth(month),cu).R.forEach(r=>{const k=r.cust||'미지정';pvc[k]=(pvc[k]||0)+(+r.qty||0)});
+  const gl=Object.entries(gc).sort((a,b)=>b[1].q-a[1].q);
+  if(!cu&&gl.length>1){S1.push('[고객사별]');
+    gl.slice(0,6).forEach(([k,g])=>S1.push(`· ${k} ${fmt(g.q)} EA (${(g.q/(T.qty||1)*100).toFixed(0)}%)${pvc[k]?` 전월 대비 ${g.q>=pvc[k]?'+':''}${((g.q/pvc[k]-1)*100).toFixed(0)}%`:''} · 효율 ${pctTxt(g.cap?g.q/g.cap:NaN)}${g.ng?` · ${fmt(Math.round(g.ng/(g.q||1)*1e6))} PPM`:''}`))}
+  // 손실 상위
+  const it=rptItems(R);
+  const mc={};it.forEach(x=>{const g=mc[x.mc]=mc[x.mc]||{q:0,cap:0,stop:0,work:0};g.q+=x.q;g.cap+=x.cap;g.stop+=x.stop;g.work+=x.work});
+  const mcl=Object.entries(mc).filter(([,g])=>g.work>0);
+  const stopTop=mcl.slice().sort((a,b)=>b[1].stop-a[1].stop).slice(0,3);
+  const lowMc=mcl.filter(([,g])=>g.cap>0&&g.q/g.cap<tgtE).sort((a,b)=>a[1].q/a[1].cap-b[1].q/b[1].cap).slice(0,3);
+  const sc=stopCats(R),scT=sc.reduce((a,x)=>a+x[1],0)||1;
+  if(stopTop.length)S1.push(`정지 상위 설비: ${stopTop.map(([k,g])=>`${k} ${fmt(Math.round(g.stop/60))}H(${(g.stop/g.work*100).toFixed(0)}%)`).join(' · ')}`);
+  if(sc.length)S1.push(`정지 원인: ${sc.slice(0,3).map(([k,v])=>`${k} ${(v/scT*100).toFixed(0)}%`).join(' · ')}`);
+  const MS=moldSum(month,cu),MSp=moldSum(prevMonth(month),cu);
+  if(MS&&MS.n)S1.push(`금형수리 ${MS.n}건${MSp&&MSp.n?` (전월 ${MSp.n}건)`:''} · 품번 ${MS.top(MS.byPn,3)} · 유형 ${MS.top(MS.byType,3)}${moldWords(MS.L)?` · 주요 작업 ${moldWords(MS.L)}`:''}`);
+  const N=[];
+  if(lowMc.length)N.push(`효율 저조 설비 개선: ${lowMc.map(([k,g])=>`${k} ${pctTxt(g.q/g.cap)}`).join(' · ')} → 목표 ${Math.round(tgtE*100)}%`);
+  sc.filter(([k])=>k!=='휴식·식사').slice(0,2).forEach(([k,v])=>N.push(`${k} 정지(${(v/scT*100).toFixed(0)}%) 감소: ${STOP_FIX[k]||STOP_FIX['기타']}`));
+  const ngTop=it.filter(x=>x.ng>0).sort((a,b)=>b.ng-a.ng)[0];
+  if(ngTop&&ppm>tgtP*0.5)N.push(`불량 관리: ${ngTop.pn}(${ngTop.mc}) ${fmt(ngTop.ng)} EA 원인분석·재발방지`);
+  if(MS&&MS.byPn.length&&MS.byPn[0][1]>=3)N.push(`반복 금형수리 ${MS.top(MS.byPn.filter(x=>x[1]>=3),3)} : 수리 원인 분석, 금형 PM 주기 재설정·예비 부품 확보`);
+  if(T.oper<tgtO)N.push(`가동율 ${pctTxt(T.oper)} → 목표 ${Math.round(tgtO*100)}% : 정지시간 기록·집계 정확도 점검`);
+  if(plD&&plD<1)N.push(`계획 미달분 ${fmt(Math.round(PL.tgt-T.qty))} EA 차월 생산계획 반영`);
+  return{sum:S1.join('\n'),next:N.map((x,i)=>`${i+1}. ${x}`).join('\n')};
+}
+/* 자동 문장 다시 쓰기 — 직접 고친 내용이 있으면 확인 후 덮어씀 */
+function rptAuto(which,c){
+  const o=rptGet();
+  const keys=which==='exec'?['exSum','exNext']:['an_'+c,'pb1_'+c,'pa1_'+c,'pb2_'+c,'pa2_'+c];
+  if(keys.some(k=>o[k])&&!confirm('직접 작성한 내용을 지우고 일보 집계로 다시 작성할까요?'))return;
+  keys.forEach(k=>delete o[k]);o.ua=now();commit0();renderReport();
+}
+const taRows=v=>Math.max(2,String(v||'').split('\n').length);
+
 function execHtml(){
   const cu=$('p_cust').value, st=rptStats(month,cu), T=st.total, R=st.R;
   const pm=prevMonth(month), pv=rptStats(pm,cu).total, o=rptGet();
@@ -2393,6 +2561,12 @@ function execHtml(){
   const stopR=T.work?T.stop/T.work:0, pvStopR=pv.work?pv.stop/pv.work:0;
   const mh=T.work?T.qty/(T.work/60):0, pvMh=pv.work?pv.qty/(pv.work/60):0;
   const ta=(k,ph)=>`<textarea onchange="rptSet('${k}',this.value)" placeholder="${ph||''}">${esc(o[k]||'')}</textarea>`;
+  // 비어 있으면 자동 문장 (고쳐 쓰면 저장된 내용 우선)
+  const taA=(k,def)=>{const v=o[k]||def||'';return `<textarea rows=${taRows(v)} onchange="rptSet('${k}',this.value)" placeholder="자동 작성할 자료가 없습니다">${esc(v)}</textarea>`};
+  loadMoldRep(month);loadMoldRep(prevMonth(month));
+  const AX=autoExec(cu);
+  const MR=MOLDREP[month]||{};
+  const mrNote=MR.busy?'금형수리 이력 읽는 중…':MR.ok?`금형수리 이력 ${MR.rows.length}건 반영 (MES 점검앱)${!MR.rows.length?' · 분류: '+Object.keys(MR.cats||{}).join(', '):''}`:`금형수리 이력을 읽지 못함 (${esc(String(MR.err||''))})`;
   const arrow=(cur,prev,up)=>{ if(!isFinite(prev)||!prev) return '<em class="muted">전월 자료 없음</em>';
     const d=cur-prev, good=up?d>=0:d<=0;
     return `<em class="${good?'up':'dn'}">전월 ${d>=0?'▲':'▼'} ${fmt(Math.abs(d)>=10?Math.round(Math.abs(d)):+Math.abs(d).toFixed(1))}</em>`};
@@ -2499,10 +2673,10 @@ function execHtml(){
     ${kpi}
     <h3 style="margin-top:10px">2. 추이 및 고객사별 실적</h3>
     ${trend}
-    <h3 style="margin-top:10px">3. 총평</h3>
+    <h3 style="margin-top:10px">3. 총평 <button class="s noprint" style="font-size:11px;padding:1px 8px;vertical-align:middle" onclick="rptAuto('exec')" title="일보 집계로 총평을 다시 작성합니다">자동 작성</button> <span class="muted noprint" style="font-weight:400;font-size:11px">${mrNote}</span></h3>
     <table><tr><th style="width:50%">이번 달 요약</th><th>다음 달 중점 관리</th></tr>
-      <tr><td>${ta('exSum','예: 생산 312만EA로 전월 대비 회복, 효율은 목표 대비 1.2%p 미달')}</td>
-          <td>${ta('exNext','예: 43 화일800 정지율 45% 개선, SPM 표준 재검토')}</td></tr></table>
+      <tr><td>${taA('exSum',AX.sum)}</td>
+          <td>${taA('exNext',AX.next)}</td></tr></table>
   </div>
 
   <div class="rpt-sec pgnew">
