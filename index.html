@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v20.6 · 태진다이텍</title>
+<title>생산일보 통합관리 v20.7 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -1810,6 +1810,8 @@ function saveMes(quiet,dateArg){
   if(quiet){commit();return n}
   if($('f_date')&&d)$('f_date').value=d;
   const pend=MESROWS.filter(r=>r.use&&r.pending).length, wait=MESROWS.filter(r=>r.use&&r.waitClose).length;
+  // 고장이력대장에 먼저 등록된 설비고장을 새로 만든 일보에 싣는다 (일보콜·자동마감은 고장 0으로 만들기 때문)
+  [...new Set((S.fails||[]).filter(f=>f.date===d&&f.kind==='설비').map(f=>f.mc))].forEach(mc=>flSync(d,mc));
   closeMask();commit();if(n)notifyClose(d,n,{pend,wait,skipped});toast(d.slice(5)+' · '+n+'건을 일보에 저장했습니다'+(skipped?` · SPM이 없어 ${skipped}건은 제외했습니다`:''));
   return n;
 }
@@ -2753,6 +2755,7 @@ function execHtml(){
     ${mcGone.length?`<div class="noprint" style="border:1px solid var(--amber);background:rgba(255,176,32,.10);border-radius:6px;padding:7px 10px;margin-bottom:8px;font-size:12px">
       <b style="color:var(--amber)">일보 누락 의심 ${mcGone.length}대</b> — 최근 3개월 가동 기록이 있는데 이번 달 일보가 없습니다 : ${mcGone.slice(0,10).map(esc).join(', ')}${mcGone.length>10?` 외 ${mcGone.length-10}대`:''}
       <div class="muted" style="margin-top:2px">이 경고는 화면에만 표시되며 인쇄물에는 나오지 않습니다.</div></div>`:''}
+    ${failHint(month)}
     ${relT.f?`<div class="grid g2" style="margin-bottom:8px">
       <div><table><tr><th>설비</th><th class=num>가동(H)</th><th class=num>고장<br>건수</th><th class=num>고장정지(H)</th><th class=num>MTBF(H)</th><th class=num>MTTR(H)</th><th class=num>가용률</th></tr>
       ${relL.slice(0,10).map(x=>`<tr><td>${esc(x.k)}</td><td class=num>${hh(x.run)}</td><td class=num><b>${x.f}</b></td><td class=num>${hh(x.fm)}</td><td class=num><b style="color:${x.mtbf<600?'var(--red)':x.mtbf<1800?'var(--amber)':'var(--green)'}">${hh(x.mtbf)}</b></td><td class=num><b style="color:${x.mttr>120?'var(--red)':x.mttr>60?'var(--amber)':'var(--green)'}">${hh(x.mttr)}</b></td><td class=num><span class="tag ${x.av>=.98?'g':x.av>=.95?'a':'r'}">${pct(x.av)}</span></td></tr>`).join('')}
@@ -3729,6 +3732,25 @@ function rbCopy(){
     .concat(Object.entries(byMc).filter(([,g])=>g.run>0).map(([k,g])=>
       [k,hh(g.run),g.f,hh(g.fm),g.f?hh(g.run/g.f):'',g.f?(g.fm/g.f).toFixed(0):''].join('\t'))).join('\n');
   try{navigator.clipboard.writeText(t);toast('클립보드에 복사했습니다')}catch(e){alert(t)}
+}
+/* 월간 보고서 MTBF 안내 — 대장에만 있고 일보에 안 실린 고장, 일보 정지사유의 고장 후보 */
+function failHint(mo){
+  const reg=(S.fails||[]).filter(f=>f.date.slice(0,7)===mo&&f.kind==='설비');
+  const inRec=S.recs.filter(r=>r.date.slice(0,7)===mo).reduce((a,r)=>a+(+r.fcnt||0),0);
+  const has=new Set((S.fails||[]).map(f=>f.date+'|'+f.mc));
+  const cand=S.recs.filter(r=>r.date.slice(0,7)===mo&&!(+r.fcnt)&&!has.has(r.date+'|'+r.mc)
+    &&FAIL_KW.some(k=>((r.sr||'')+(r.note||'')).includes(k))&&flKind((r.sr||'')+' '+(r.note||''))!=='금형');
+  const nC=new Set(cand.map(r=>r.date+'|'+r.mc)).size;
+  if(reg.length<=inRec&&!nC)return '';
+  return `<div class="noprint" style="margin:6px 0;padding:6px 10px;border:1px solid var(--amber);border-radius:6px;font-size:12px">
+    ${reg.length>inRec?`<b style="color:var(--amber)">고장이력대장의 ${+mo.slice(5)}월 설비고장 ${reg.length}건 중 일보에 실린 것은 ${inRec}건</b> — 대장 등록 뒤에 일보가 만들어진 날입니다. <button class="s" style="font-size:11px;padding:1px 8px" onclick="flResync('${mo}')">일보에 반영</button><br>`:''}
+    ${nC?`<b style="color:var(--amber)">일보 정지사유에 설비고장으로 보이는 줄 ${nC}건</b>(설비이상·고장·오작동 등) — 확인 후 고장정지(분)를 적으면 MTBF·MTTR이 산출됩니다. <button class="s" style="font-size:11px;padding:1px 8px" onclick="failOpen('${mo}')">${+mo.slice(5)}월 설비고장 입력</button>`:''}
+  </div>`;
+}
+function flResync(mo){
+  const ks=new Set((S.fails||[]).filter(f=>f.date.slice(0,7)===mo&&f.kind==='설비').map(f=>f.date+'|'+f.mc));
+  let n=0,miss=0;ks.forEach(k=>{const[d,mc]=k.split('|');if(flSync(d,mc))n++;else miss++});
+  commit();toast(`${n}건 반영했습니다${miss?` · 그날 일보가 없는 ${miss}건은 제외`:''}`);
 }
 /* ===== 고장이력대장 ===== */
 let FLEDIT=null;
