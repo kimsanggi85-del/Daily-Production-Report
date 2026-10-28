@@ -818,7 +818,7 @@ const SEED_MASTER={"mcs":["01 쌍용200","02 심팩200","03 심팩150","04 심�
 const DEF_MESMC={'003':'34 심팩250','004':'03 심팩150','005':'28 국일250','007':'01 쌍용200','008':'02 심팩200','009':'04 심팩150','010':'05 심팩110','011':'06 심팩110','013':'30 국일160','014':'31 심팩150','015':'32 심팩200','017':'35 심팩250','018':'37 국일200','019':'38 국일250','020':'39 국일250','021':'40 심팩200','022':'41 국일200','024':'46 심팩300','025':'47 심팩300','001':'36 심팩300','002':'45 심팩300','026':'48 심팩300','027':'49 심팩300','006':'43 화일800','043':'43 화일800'};
 // MES 품번 → 앱 품번 (표기가 다른 것만)
 const DEF_MESPN={'54610-D3501-(BK)':'54610-D3501','1958-365-2(2호)':'1958-365-2','AT3037-GC-00':'AT3037-GC-01','IW/OW-BDA-1159B':'IW/OW BDA 1159B'};
-const APP_VER='20.3';        // 서버에 기록해 두고, 옛 파일이 열리면 한 번 새로고침시킨다
+const APP_VER='20.4';        // 서버에 기록해 두고, 옛 파일이 열리면 한 번 새로고침시킨다
 const SPM_COMMON_ONLY=true;   // 공통값(설비 미지정)만 기준으로 쓴다
 const MES_FROM='2026-09-01'; // 8월까지 실적은 손대지 않음
 /* 근무 기준 — 08:00~19:00, 수요일·토요일 08:00~17:00
@@ -966,6 +966,13 @@ function migrate(){
   }
   // [SPM 공통값 기준] 설비를 비운 공통행이 기본, 설비 지정은 예외. (이전의 '쌍 통일' 펼치기는 중지)
   S.mig.spmPair=S.mig.spmPair||{at:now(),note:'공통값 기준으로 전환'};
+  // 2026-10-28 08:11 일보콜이 MES 예비 조회로 10/26·10/27 실적을 오늘 일보로 저장한 것 — 지운다 (같은 배치 id)
+  if(!S.mig.bad1028){
+    const bad=S.recs.filter(r=>r.date==='2026-10-28'&&String(r.id).startsWith('Rmvravgq'));
+    bad.forEach(r=>{S.del[r.id]=now()});
+    S.recs=S.recs.filter(r=>!S.del[r.id]);
+    S.mig.bad1028={at:now(),n:bad.length};
+  }
   // 일보의 빈 고객사·품명을 마스터·기본자료에서 채운다 (마감 갱신 중 빠진 것 보완)
   {let f=0;
    S.recs.forEach(r=>{
@@ -1364,6 +1371,13 @@ function mapPn(code,mc,d,allowLast){
   return '';
 }
 let MESROWS=[],MESDIAG={},MESCLO=[],MESDATE='';
+const DAY_COLS=['ymd','work_date','prod_date','close_date','date'];   // 생산일자 컬럼 (updated_at·closed_at 같은 시각 컬럼은 제외)
+/* 오늘이고 아직 업무 종료 전인지 — 현장 마감 전 줄을 일보로 확정하지 않기 위해 */
+function beforeOff(d){
+  if(d!==today())return false;
+  const k=new Date(Date.now()+9*3600000), [h,m]=shiftOf(d).off.split(':').map(Number);
+  return k.getUTCHours()*60+k.getUTCMinutes()<h*60+m;
+}
 /* 최근 14일 중 일보가 없는 날 (일요일·공휴일 제외) */
 function missingDays(){
   const out=[];
@@ -1403,18 +1417,21 @@ async function openMes(dateArg,quiet){
     const dpFetch=async()=>{
       const tries=[['ymd=eq.'+d,'ymd'],['work_date=eq.'+d,'work_date'],['prod_date=eq.'+d,'prod_date'],
                    ['date=eq.'+d,'date'],['ymd=like.'+d+'*','ymd~like']];
-      let last={status:'연결실패',text:''};
+      let last={status:'연결실패',text:''},zero='';
       for(const [f,tag] of tries){
         try{const r=await fetch(DT_URL+'/rest/v1/daily_production?select=*&'+f+'&limit=800',{headers:dh});
-          if(r.ok){const j=await r.json();if(j.length)return{ok:true,rows:j,status:200,filter:tag};last={status:200,text:'0건'};continue}
+          if(r.ok){const j=await r.json();if(j.length)return{ok:true,rows:j,status:200,filter:tag};last={status:200,text:'0건'};zero=zero||tag;continue}
           last={status:r.status,text:(await r.text()).slice(0,120)};
           if(r.status!==400)break;
         }catch(e){last={status:'연결실패',text:String(e.message||e)}}
       }
-      // 마지막 수단: 최근 자료를 받아 날짜가 들어간 줄만 고른다
+      // 날짜 컬럼으로 조회가 됐는데 0건이면 그날 실적이 아직 없는 것 — 예비 조회로 넘어가지 않는다
+      // (예비 조회는 updated_at 등이 그날인 '다른 날 실적'까지 끌어와 오늘 일보에 섞인 적이 있음)
+      if(zero)return{ok:true,rows:[],status:200,filter:zero+'(0)'};
+      // 마지막 수단: 최근 자료를 받아 날짜 컬럼이 그날인 줄만 고른다 (수정·갱신 시각 컬럼은 보지 않음)
       try{const r=await fetch(DT_URL+'/rest/v1/daily_production?select=*&limit=1500',{headers:dh});
         if(r.ok){const all=await r.json();
-          const rows=all.filter(x=>Object.values(x).some(v=>typeof v==='string'&&v.slice(0,10)===d));
+          const rows=all.filter(x=>DAY_COLS.some(k=>typeof x[k]==='string'&&x[k].slice(0,10)===d));
           return{ok:true,rows,status:200,filter:rows.length?'client':'client(0)',all:all.length,sample:all[0]}}
         last={status:r.status,text:(await r.text()).slice(0,120)};}catch(e){}
       return{ok:false,rows:[],...last};
@@ -1432,7 +1449,7 @@ async function openMes(dateArg,quiet){
         }catch(e){last={status:'연결실패',text:String(e.message||e)}}
       }
       try{const r=await fetch(DT_URL+'/rest/v1/production_close?select=*&order=id.desc&limit=500',{headers:dh});
-        if(r.ok){const all=await r.json();const rows=all.filter(x=>Object.values(x).some(v=>typeof v==='string'&&v.startsWith(d)));
+        if(r.ok){const all=await r.json();const rows=all.filter(x=>DAY_COLS.some(k=>typeof x[k]==='string'&&x[k].slice(0,10)===d));
           return{ok:true,rows,status:r.status,filter:'client'}}
         last={status:r.status,text:(await r.text()).slice(0,120)};}catch(e){}
       return{ok:false,rows:[],...last};
@@ -1627,6 +1644,8 @@ async function openMes(dateArg,quiet){
       note:[badNote[x.pn]||'',cz&&cz.memo?String(cz.memo):''].filter(Boolean).join(' / '),
       ledClosed:!!(cz&&cz.fromLedger),closed:!!cz,waitClose:!cz&&(+x.qty||0)>0,mesQty:(cz&&cz.mes_qty!=null)?(+cz.mes_qty||0):(+x.qty||0),czReason:cz?(cz.reason||''):'',pending:!!x.pending,use:(upd||!dup)&&!!mc&&!x.pending,dup:!!dup,dupId:dup?dup.id:'',upd};
   });
+  // 오늘 업무 종료 전에는 현장 마감(실제양품)이 안 된 줄을 기본 선택하지 않는다 — 마감 전 일보가 잡히지 않게
+  if(beforeOff(d))MESROWS.forEach(r=>{if(!r.closed&&!r.upd&&r.use){r.use=false;r.wipHold=true}});
   if(!quiet)drawMes(d);
   return MESROWS;
 }
@@ -1703,7 +1722,8 @@ function drawMes(d){
       ? `<span class="tag a">모니터링 실적 0건 → MES 원장 ${dg.ledN||0}건 사용</span>`
       : `<span class="tag${dg.dp?'':' r'}">모니터링 실적 ${dg.dp||0}건${dg.dpFilter?' · '+dg.dpFilter:''}${(!dg.dp&&dg.dpAll)?` (표 전체 ${dg.dpAll}건)`:''}</span>`)+(nMon?`<span class="tag g">모니터링 마감 ${nMon}줄</span>`:'');
   const miss=missingDays().filter(x=>x!==d);
-  const warn=[nClosed?`현장 마감 반영 ${nClosed}줄`:'',nWait?`실제양품 미입력 ${nWait}줄`:'',nNoMc?`설비 미지정 ${nNoMc}줄`:'',nPend?`생산마감 미완료 ${nPend}줄`:'',nNoRun?`가동시간 없음 ${nNoRun}줄`:'',nNoSpm?`SPM 입력 필요 ${nNoSpm}줄`:'',nNoCust?`고객사 미지정 ${nNoCust}줄`:'',nUpd?`덮어쓰기 ${nUpd}줄`:'',nDup?`이미 저장 ${nDup}줄`:''].filter(Boolean).join(' · ');
+  const nWip=MESROWS.filter(r=>r.wipHold&&!r.use).length;
+  const warn=[nWip?`오늘 업무 중 · 현장 마감 전 ${nWip}줄 선택 해제`:'',nClosed?`현장 마감 반영 ${nClosed}줄`:'',nWait?`실제양품 미입력 ${nWait}줄`:'',nNoMc?`설비 미지정 ${nNoMc}줄`:'',nPend?`생산마감 미완료 ${nPend}줄`:'',nNoRun?`가동시간 없음 ${nNoRun}줄`:'',nNoSpm?`SPM 입력 필요 ${nNoSpm}줄`:'',nNoCust?`고객사 미지정 ${nNoCust}줄`:'',nUpd?`덮어쓰기 ${nUpd}줄`:'',nDup?`이미 저장 ${nDup}줄`:''].filter(Boolean).join(' · ');
   $('modal').innerHTML=`<div class="fl" style="margin-bottom:10px">
     <h2 style="margin:0">일보콜</h2>
     <button class="s" onclick="mesDay('${d}',-1)" title="전날">◀</button>
