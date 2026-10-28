@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v20.9 · 태진다이텍</title>
+<title>생산일보 통합관리 v21.0 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2622,10 +2622,38 @@ function autoRel(mc,mo){
   const[y,m]=mo.split('-').map(Number);const nx=new Date(y,m,0+1);
   return{d:L.join('\n'),w:`${by||'설비보전'} / ${nx.getMonth()+1}월 말`};
 }
+/* 불량 상위 품목 원인 / 대책 — 불량유형(특기사항) + 발생 설비 + 같은 품번 금형수리·정지사유 */
+const NG_FIX=[[/치수|공차|상한|하한|높이|길이|폭|내경|외경|피치/,'금형 셋팅·셧하이트 점검, 초·중·종물 치수 측정 강화'],
+  [/버|버르|BURR/i,'펀치·다이 클리어런스 점검, 연마 주기 단축'],[/크랙|터짐|찢|파단|균열/,'소재 물성(성적서) 확인, R부 연마·윤활 관리'],
+  [/찍힘|타흔|스크래치|긁힘|이물|덴트/,'스크랩 부상 방지, 금형 청소·이물 관리'],[/형상|변형|휨|뒤틀|평탄|구부/,'금형 가이드·스트리퍼 점검, 소재 평탄도 확인'],
+  [/피어싱|홀|구멍|미타발|누락|미성형/,'펀치 마모·파손 점검, 미스피드 센서 점검'],[/시타발|초물|셋팅/,'셋팅 표준(셋팅시트) 정비로 시타발 수량 축소'],
+  [/녹|부식|도금|오염/,'보관·방청 관리, 세척 공정 점검'],[/주름|웨이브/,'블랭크 홀더 압력·윤활 조정']];
+function autoNg(pn,g){
+  const R=S.recs.filter(r=>r.date.slice(0,7)===month&&r.pn===pn);
+  // 특기사항 '치수 상한 5 / 버 3' → 유형별 합 (한 글자 유형 '버'도 살림)
+  const tg={};Object.entries(g.notes||{}).forEach(([t,c])=>String(t).split(/\s*\/\s*|,/).forEach(x=>{const mm=x.trim().match(/^(.*?[가-힣A-Za-z])\s*:?\s*(\d+)\s*(EA|개)?$/i);
+    if(mm&&!/^불량사유/.test(mm[1]))tg[mm[1].trim()]=(tg[mm[1].trim()]||0)+(+mm[2])*(+c||1)}));
+  const ty=Object.entries(tg).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([k,v])=>`${k} ${fmt(v)}`).join(' · ')||ngBrief(g.notes);
+  const byMc={};R.forEach(r=>{const v=(+r.ng||0)+(+r.ngp||0);if(v)byMc[r.mc]=(byMc[r.mc]||0)+v});
+  const mcs=Object.entries(byMc).sort((a,b)=>b[1]-a[1]);
+  const days=R.filter(r=>+r.ng).sort((a,b)=>(+b.ng)-(+a.ng)).slice(0,2).map(r=>`${r.date.slice(5).replace('-','/')} ${fmt(+r.ng)}`);
+  const MS=moldSum(month,'');const mr=MS?MS.L.filter(r=>r.pn===pn):[];
+  const srW=stopWords(R).filter(([k])=>/금형|치수|셋팅|조정|수정/.test(k)).slice(0,2);
+  const L=[];
+  L.push(`유형: ${ty||'특기사항에 불량유형 기록 없음'}${days.length?` · 최다일 ${days.join(', ')}`:''}`);
+  if(mcs.length)L.push(`설비: ${mcs.slice(0,2).map(([k,v])=>`${k} ${fmt(v)}`).join(' · ')}`);
+  if(mr.length)L.push(`금형수리 ${mr.length}건${moldWords(mr)?' ('+moldWords(mr)+')':''}`);
+  if(srW.length)L.push(`정지: ${srW.map(([k,v])=>k+' '+v+'회').join(' · ')}`);
+  const txt=Object.keys(g.notes||{}).join(' ')+' '+mr.map(r=>r.txt+' '+r.type).join(' ');
+  const fix=[...new Set(NG_FIX.filter(([re])=>re.test(txt)).map(x=>x[1]))].slice(0,2);
+  if(!fix.length&&mr.length)fix.push('금형 상태 점검, 수리 부위 재발 방지');
+  L.push('대책: '+(fix.length?fix.join(', '):'불량유형 기록 후 원인분석(특성요인도), 초·중·종물 검사 강화'));
+  return L.join('\n');
+}
 /* 자동 문장 다시 쓰기 — 직접 고친 내용이 있으면 확인 후 덮어씀 */
 function rptAuto(which,c){
   const o=rptGet();
-  const keys=which==='exec'?['exSum','exNext']:which==='rel'?[0,1,2].flatMap(i=>['relD'+i,'relW'+i]):['an_'+c,'pb1_'+c,'pa1_'+c,'pb2_'+c,'pa2_'+c];
+  const keys=which==='exec'?['exSum','exNext']:which==='rel'?[0,1,2].flatMap(i=>['relD'+i,'relW'+i]):which==='ng'?[0,1,2,3,4].map(i=>'ngC'+i):['an_'+c,'pb1_'+c,'pa1_'+c,'pb2_'+c,'pa2_'+c];
   if(keys.some(k=>o[k])&&!confirm('직접 작성한 내용을 지우고 일보 집계로 다시 작성할까요?'))return;
   keys.forEach(k=>delete o[k]);o.ua=now();commit0();renderReport();
 }
@@ -2840,9 +2868,9 @@ function execHtml(){
       <div><table><tr><th>정지사유</th><th class=num>건수</th><th class=num>구성비</th></tr>
         ${stopTop.map(([k,v])=>`<tr><td>${esc(k)}</td><td class=num>${v}</td><td class=num>${(v/swT*100).toFixed(1)}%</td></tr>`).join('')}
       </table></div></div>
-    <h3 style="margin-top:10px">7. 불량 상위 품목</h3>
-    <table><tr><th>품번</th><th>품명</th><th>고객사</th><th class=num>작업불량</th><th class=num>불량률</th><th class=num>시타발·검사</th><th>주요 내용</th></tr>
-    ${ngTop.slice(0,5).map(([k,g])=>`<tr><td>${esc(k)}</td><td class=muted>${esc(g.name)}</td><td>${esc(g.cust)}</td><td class=num><b>${fmt(g.ng)}</b></td><td class=num>${(g.ng/(g.q||1)*100).toFixed(2)}%</td><td class=num>${g.ngp?fmt(g.ngp):''}</td><td class=muted>${esc(ngBrief(g.notes))}</td></tr>`).join('')}
+    <h3 style="margin-top:10px">7. 불량 상위 품목 <button class="s noprint" style="font-size:11px;padding:0 8px;vertical-align:middle" onclick="rptAuto('ng')" title="불량유형·발생 설비·금형수리 기록으로 원인/대책을 다시 작성">자동 작성</button></h3>
+    <table><tr><th>품번</th><th>품명</th><th>고객사</th><th class=num>작업불량</th><th class=num>불량률</th><th class=num>시타발·검사</th><th style="width:40%">원인 / 대책</th></tr>
+    ${ngTop.slice(0,5).map(([k,g],i)=>`<tr><td>${esc(k)}</td><td class=muted>${esc(g.name)}</td><td>${esc(g.cust)}</td><td class=num><b>${fmt(g.ng)}</b></td><td class=num>${(g.ng/(g.q||1)*100).toFixed(2)}%</td><td class=num>${g.ngp?fmt(g.ngp):''}</td><td style="white-space:normal">${taA('ngC'+i,autoNg(k,g))}</td></tr>`).join('')}
     </table>
   </div>
 
