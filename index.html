@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v21.3 · 태진다이텍</title>
+<title>생산일보 통합관리 v21.4 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2496,16 +2496,32 @@ function autoCust(c){
   if(lowE.length){const x=lowE[0];const why=stopCats(R.filter(r=>r.mc===x.mc&&r.pn===x.pn))[0];
     P.push([`${x.pn}(${x.mc}) 효율 ${pctTxt(x.e)} — 목표 ${Math.round(tgt*100)}% 미달${why?`, 주요 정지 ${why[0]}`:''}`,
       why?STOP_FIX[why[0]]||STOP_FIX['기타']:'SPM 표준·가동시간 재확인, 저속 운전 원인 파악'])}
+  // 금형수리 — 수리가 가장 많은 금형의 실제 수리 내용으로 문제점·대책을 쓴다
+  let MP=null;
+  if(MS&&MS.byPn.length){const[pn,n]=MS.byPn[0];const L2=MS.L.filter(r=>r.pn===pn).sort((a,b)=>a.date.localeCompare(b.date));
+    MP=[`${pn} 금형수리 ${n}건${n>=3?' 반복':''}${MS.n>n?` (전체 ${MS.n}건)`:''}: ${L2.slice(-3).map(r=>`${r.date.slice(5).replace('-','/')} ${String(r.txt||r.type).slice(0,30)}`).join(' / ')}`,
+      moldFix(L2)]}
+  const moldStop=sc.length&&sc[0][0]==='금형점검 및 수리';
   if(sc.length&&sc[0][1]/scT>=.25&&!(P[0]&&P[0][0].includes(sc[0][0])))
-    P.push([`정지 원인 1위 ${sc[0][0]} ${(sc[0][1]/scT*100).toFixed(0)}% (정지 ${fmt(Math.round(T.stop/60))}H)`,STOP_FIX[sc[0][0]]||STOP_FIX['기타']]);
-  if(MS&&MS.byPn.length&&MS.byPn[0][1]>=3){const[pn,n]=MS.byPn[0];const L2=MS.L.filter(r=>r.pn===pn);
-    P.push([`${pn} 금형수리 ${n}건 반복 (${[...new Set(L2.map(r=>r.mc))].join(', ')})${moldWords(L2)?' — '+moldWords(L2):''}`,
-      '반복 수리 부위 원인분석, 금형 PM 주기(타발수) 재설정, 소모 부품(펀치·라이너) 예비품 확보'])}
+    P.push(moldStop&&MP?[`정지 1위 금형점검 및 수리 ${(sc[0][1]/scT*100).toFixed(0)}% — ${MP[0]}`,MP[1]]
+      :[`정지 원인 1위 ${sc[0][0]} ${(sc[0][1]/scT*100).toFixed(0)}% (정지 ${fmt(Math.round(T.stop/60))}H)`,STOP_FIX[sc[0][0]]||STOP_FIX['기타']]);
+  if(MP&&!P.some(x=>x[0].includes('금형수리')))P.push(MP);
   if(ngIt.length&&ngIt[0].p>=1000){const x=ngIt[0];
     P.push([`${x.pn}(${x.mc}) 불량 ${fmt(x.ng)} EA · ${fmt(Math.round(x.p))} PPM`,'불량유형별 원인분석(특성요인도), 금형 상태 점검, 초·중·종물 검사 강화'])}
   if(!P.length&&T.eff<tgt)P.push([`효율 ${pctTxt(T.eff)} — 목표 ${Math.round(tgt*100)}% 미달`,'SPM 표준·정지시간 기록 재확인']);
-  return{an:L.join('\n'),pb:P.slice(0,2).map(x=>x[0]),pa:P.slice(0,2).map(x=>x[1])};
+  // 2건 안에 금형수리 내용이 들도록 (수리 기록이 있으면)
+  let Q=P.slice(0,2);const mi=P.findIndex(x=>x[0].includes('금형수리'));
+  if(mi>=2)Q=[P[0],P[mi]];
+  return{an:L.join('\n'),pb:Q.map(x=>x[0]),pa:Q.map(x=>x[1])};
 }
+/* 금형수리 내용 → 대책 (수리유형·수리내용 단어 기준) */
+const MOLD_FIX=[[/연마|마모/,'연마 주기를 타발수 기준으로 설정, 연마 이력 관리'],[/파손|크랙|깨짐|부러/,'파손 부위 원인분석(소재·셋팅·하사점), 예비 부품 확보, 금형 구조 보강 검토'],
+  [/스프링/,'스프링 수명 기준 교체 주기 설정, 예비품 확보'],[/치수|라이너|셧하이트/,'치수 변동(마모) 원인 확인, 라이너 조정 기준 표준화'],
+  [/코팅|벗겨/,'코팅 재처리 주기 설정, 코팅 상태 정기 점검'],[/펀치/,'펀치 마모 점검주기 단축, 예비 펀치 확보'],
+  [/가이드|핀|포스트|부시/,'가이드 포스트·핀 급유 및 마모 점검'],[/버|클리어런스/,'펀치·다이 클리어런스 점검, 연마 주기 단축'],[/용접/,'용접 보수 부위 재발 점검, 부품 교체 검토']];
+function moldFix(L){const t=L.map(r=>(r.type||'')+' '+(r.txt||'')).join(' ');
+  const f=[...new Set(MOLD_FIX.filter(([re])=>re.test(t)).map(x=>x[1]))].slice(0,2);
+  return (f.length?f.join(', '):'수리 부위 원인분석')+(L.length>=3?', 타발수 기준 PM 주기 재설정':'')}
 /* 금형수리 이력 — MES 점검앱(mes_work.html 이력/설정 › 금형수리)과 같은 원본:
    kv_store 'repair_history_v2' (금형수리관리 앱 공용, 필드 금형번호·수리일자·수리유형·수리내용·담당자·비고·_machine_name)
    설비수리 분류는 mes_check_log 에서 함께 읽는다. 금형수리 원본을 못 읽으면 mes_check_log 의 금형 분류로 대신한다 */
