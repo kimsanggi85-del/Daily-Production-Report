@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v21.7 · 태진다이텍</title>
+<title>생산일보 통합관리 v21.8 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2722,7 +2722,7 @@ function execHtml(){
   const mh=T.work?T.qty/(T.work/60):0, pvMh=pv.work?pv.qty/(pv.work/60):0;
   const ta=(k,ph)=>`<textarea onchange="rptSet('${k}',this.value)" placeholder="${ph||''}">${esc(o[k]||'')}</textarea>`;
   // 비어 있으면 자동 문장 (고쳐 쓰면 저장된 내용 우선)
-  const taA=(k,def)=>{const v=o[k]||def||'';return `<textarea rows=${taRows(v)} onchange="rptSet('${k}',this.value)" placeholder="자동 작성할 자료가 없습니다">${esc(v)}</textarea>`};
+  const taA=(k,def,ph)=>{const v=o[k]||def||'';return `<textarea rows=${taRows(v)} onchange="rptSet('${k}',this.value)" placeholder="${ph||'자동 작성할 자료가 없습니다'}">${esc(v)}</textarea>`};
   loadMoldRep(month);loadMoldRep(prevMonth(month));
   const AX=autoExec(cu);
   const MR=MOLDREP[month]||{};
@@ -2926,11 +2926,12 @@ function execHtml(){
   </div>
 
   <div class="rpt-sec pgnew">
-    <h3>8. 개선 활동 <button class="s noprint" onclick="rptSuggest()" style="font-size:11px;padding:2px 8px;margin-left:6px">자동 작성</button></h3>
+    <h3>8. 개선 활동 <button class="s noprint" onclick="rptSuggest()" style="font-size:11px;padding:2px 8px;margin-left:6px">자동 작성</button><button class="s noprint" onclick="rptFix()" style="font-size:11px;padding:2px 8px;margin-left:4px" title="이 내용을 이번 달 개선 활동으로 저장 — 다음 달 보고서에서 이행 점검">개선 활동 확정</button>${o.fix?`<span class="muted noprint" style="font-weight:400;font-size:11px;margin-left:6px">확정 ${esc(o.fix.at)}</span>`:''}</h3>
     <table><tr><th style="width:26%">항목</th><th style="width:37%">조치 내용</th><th>담당 / 기한</th></tr>
     ${(()=>{const AR=acRows(cu);return [1,2,3,4,5].map(k=>{const own=o['acT'+k]||o['acD'+k]||o['acW'+k];const d=own?['','','']:(AR[k-1]||['','','']);   // 한 줄이라도 고쳐 쓰면 그 줄은 저장 내용만
       return `<tr><td>${taA('acT'+k,d[0])}</td><td>${taA('acD'+k,d[1])}</td><td>${taA('acW'+k,d[2])}</td></tr>`}).join('')})()}
     </table>
+    ${prevCheckHtml(cu,o,taA)}
   </div>`;
 }
 
@@ -3113,7 +3114,7 @@ function weekPrint(){
 
 /* 개선 활동 자동 작성 — 그 달 자료에서 상위 문제를 뽑아 채운다 */
 /* 개선 활동 후보 — 손실이 큰 항목부터 최대 5건 [항목, 조치 내용, 담당 / 기한] */
-function acRows(cu){
+function acRows(cu,noCarry){
   const L=S.recs.filter(r=>r.date.slice(0,7)===month&&(!cu||r.cust===cu));
   if(!L.length)return [];
   const[y,m]=month.split('-').map(Number);const nm=new Date(y,m,1).getMonth()+1;   // 익월
@@ -3126,12 +3127,12 @@ function acRows(cu){
   // ① 정지 원인 1순위 (계획 휴식 제외)
   const sc=stopCats(L).filter(([k])=>k!=='휴식·식사'),scT=sc.reduce((a,x)=>a+x[1],0)||1;
   if(sc[0])rows.push([`정지 1순위 : ${sc[0][0]} ${(sc[0][1]/scT*100).toFixed(0)}%`,
-    `${m}월 정지 중 ${fmt(sc[0][1])}분 — ${STOP_FIX[sc[0][0]]||STOP_FIX['기타']}`,`생산팀 / ${nm}월 15일`]);
+    `${m}월 정지 중 ${fmt(sc[0][1])}분 — ${STOP_FIX[sc[0][0]]||STOP_FIX['기타']}`,`생산팀 / ${nm}월 15일`,{k:'stopCat',x:sc[0][0]}]);
   // ② 효율 최저 설비
   const effLow=E.filter(([,o])=>o.cap>0&&o.n>=3).sort((a,b)=>a[1].q/a[1].cap-b[1].q/b[1].cap)[0];
   if(effLow){const why=stopCats(L.filter(r=>r.mc===effLow[0])).filter(([k])=>k!=='휴식·식사')[0];
     rows.push([`${effLow[0]} 효율 ${(effLow[1].q/effLow[1].cap*100).toFixed(1)}%`,
-      `정지율 ${(effLow[1].stop/(effLow[1].net||1)*100).toFixed(0)}%${why?`, 주요 정지 ${why[0]}`:''} — SPM 표준 적정성 확인${why?', '+(STOP_FIX[why[0]]||'').split(',')[0]:''}`,`${who(effLow[0])} / ${nm}월 20일`])}
+      `정지율 ${(effLow[1].stop/(effLow[1].net||1)*100).toFixed(0)}%${why?`, 주요 정지 ${why[0]}`:''} — SPM 표준 적정성 확인${why?', '+(STOP_FIX[why[0]]||'').split(',')[0]:''}`,`${who(effLow[0])} / ${nm}월 20일`,{k:'mcEff',x:effLow[0]}])}
   // ③ 불량 상위 품번
   const gp={};L.forEach(r=>{const v=(+r.ng||0)+(+r.ngp||0);const x=gp[r.pn]=gp[r.pn]||{ng:0,q:0,notes:{},mc:{}};x.ng+=v;x.q+=+r.qty||0;
     if(r.note)x.notes[r.note]=(x.notes[r.note]||0)+1;if(v)x.mc[r.mc]=(x.mc[r.mc]||0)+v});
@@ -3139,25 +3140,97 @@ function acRows(cu){
   if(ngP&&ngP[1].ng/(ngP[1].q||1)*1e6>=500){const a=autoNg(ngP[0],ngP[1]).split('\n');
     const mc=Object.entries(ngP[1].mc).sort((a,b)=>b[1]-a[1])[0];
     rows.push([`${ngP[0]} 불량 ${fmt(Math.round(ngP[1].ng/(ngP[1].q||1)*1e6))} PPM`,
-      `${a[0].replace(/^유형:\s*/,'유형 ')} — ${(a.find(x=>/^대책:/.test(x))||'').replace(/^대책:\s*/,'')}`,`${who(mc?mc[0]:'')} / ${nm}월 10일`])}
+      `${a[0].replace(/^유형:\s*/,'유형 ')} — ${(a.find(x=>/^대책:/.test(x))||'').replace(/^대책:\s*/,'')}`,`${who(mc?mc[0]:'')} / ${nm}월 10일`,{k:'pnPpm',x:ngP[0]}])}
   // ④ 반복 금형수리
   const MS=moldSum(month,cu);
   if(MS&&MS.byPn.length&&MS.byPn[0][1]>=3){const[pn,n]=MS.byPn[0];const ML=MS.L.filter(r=>r.pn===pn);
     const by=Object.entries(ML.reduce((o,r)=>{if(r.worker)o[r.worker]=(o[r.worker]||0)+1;return o},{})).sort((a,b)=>b[1]-a[1])[0];
-    rows.push([`${pn} 금형수리 ${n}건 반복`,`${moldWords(ML)||MS.top(MS.byType,2)} — 수리 부위 원인분석, 타발수 기준 PM 주기 재설정, 예비 부품 확보`,`금형팀${by?' '+by[0]:''} / ${nm}월 15일`])}
+    rows.push([`${pn} 금형수리 ${n}건 반복`,`${moldWords(ML)||MS.top(MS.byType,2)} — 수리 부위 원인분석, 타발수 기준 PM 주기 재설정, 예비 부품 확보`,`금형팀${by?' '+by[0]:''} / ${nm}월 15일`,{k:'moldPn',x:pn}])}
   // ⑤ MTBF 최저 설비 (설비고장 2건 이상)
   const rel=E.filter(([,o])=>o.f>=2).sort((a,b)=>a[1].run/a[1].f-b[1].run/b[1].f)[0];
   if(rel){const A=autoRel(rel[0],month);const fx=(A.d.split('\n').find(x=>/^재발방지:/.test(x))||'').replace(/^재발방지:\s*/,'');
-    rows.push([`${rel[0]} 설비고장 ${rel[1].f}건 · MTBF ${(rel[1].run/rel[1].f/60).toFixed(1)}H`,`고장정지 ${fmt(rel[1].fm)}분 — ${fx||'고장 부위 일상점검 항목 추가'}`,A.w||`설비보전 / ${nm}월 말`])}
+    rows.push([`${rel[0]} 설비고장 ${rel[1].f}건 · MTBF ${(rel[1].run/rel[1].f/60).toFixed(1)}H`,`고장정지 ${fmt(rel[1].fm)}분 — ${fx||'고장 부위 일상점검 항목 추가'}`,A.w||`설비보전 / ${nm}월 말`,{k:'mtbf',x:rel[0]}])}
   // ⑥ 정지율 최고 설비 (②와 다를 때)
   const stopTop=E.filter(([,o])=>o.net>0).sort((a,b)=>b[1].stop/b[1].net-a[1].stop/a[1].net)[0];
   if(stopTop&&(!effLow||stopTop[0]!==effLow[0]))rows.push([`${stopTop[0]} 정지율 ${(stopTop[1].stop/stopTop[1].net*100).toFixed(0)}%`,
-    `정지 ${fmt(stopTop[1].stop)}분 — 상위 정지사유 확인 후 금형·소재 준비 방식 개선(외준비)`,`${who(stopTop[0])} / ${nm}월 15일`]);
+    `정지 ${fmt(stopTop[1].stop)}분 — 상위 정지사유 확인 후 금형·소재 준비 방식 개선(외준비)`,`${who(stopTop[0])} / ${nm}월 15일`,{k:'mcStop',x:stopTop[0]}]);
   // ⑦ 계획 미달
   const PL=planOf(month),T=rptStats(month,cu).total;
-  if(!cu&&PL.tgt&&T.qty<PL.tgt)rows.push([`계획 달성률 ${(T.qty/PL.tgt*100).toFixed(1)}%`,`미달 ${fmt(Math.round(PL.tgt-T.qty))} EA — ${nm}월 생산계획에 반영, 병목 설비 우선 배치`,`생산팀 / ${nm}월 초`]);
-  rows.push(['일보 작성 정착','현장 마감(실제양품) 당일 입력, 익일 오전 일보 확정','생산팀 / 상시']);
+  if(!cu&&PL.tgt&&T.qty<PL.tgt)rows.push([`계획 달성률 ${(T.qty/PL.tgt*100).toFixed(1)}%`,`미달 ${fmt(Math.round(PL.tgt-T.qty))} EA — ${nm}월 생산계획에 반영, 병목 설비 우선 배치`,`생산팀 / ${nm}월 초`,{k:'plan'}]);
+  rows.push(['일보 작성 정착','현장 마감(실제양품) 당일 입력, 익일 오전 일보 확정','생산팀 / 상시',null]);
+  // 전월 미개선 항목은 이번 달 개선 활동 맨 앞으로 이월 (최대 2건)
+  if(!noCarry){const C=prevCheck(cu).rows.filter(r=>r.eff==='미개선').slice(0,2)
+    .map(r=>[`[전월 이월] ${r.t}`,`${r.cmp} — ${r.d}`,r.w.replace(/\d+월\s*(\d+일|말|초)/,`${nm}월 $1`),r.m]);
+    const seen=new Set(C.map(c=>JSON.stringify(c[3])));
+    return C.concat(rows.filter(r=>!r[3]||!seen.has(JSON.stringify(r[3])))).slice(0,5);}
   return rows.slice(0,5);
+}
+/* ===== 전월 개선활동 이행 점검 =====
+   확정(rptFix): 그 달 보고서 8번 개선 활동을 그대로 저장 → 다음 달 보고서에서 수치로 효과 확인 */
+function withMonth(mo,fn){const sv=month;month=mo;try{return fn()}finally{month=sv}}
+/* 지표 값 — up: 높을수록 좋음 */
+function metricVal(mt,mo,cu){
+  if(!mt)return null;
+  const L=S.recs.filter(r=>r.date.slice(0,7)===mo&&(!cu||r.cust===cu));
+  if(!L.length)return null;
+  const P=v=>isFinite(v)?(v*100).toFixed(1)+'%':'-';
+  if(mt.k==='stopCat'){const sc=stopCats(L).filter(([k])=>k!=='휴식·식사'),T=sc.reduce((a,x)=>a+x[1],0)||1;const v=((sc.find(x=>x[0]===mt.x)||[0,0])[1])/T;
+    return{v,txt:`${mt.x} ${P(v)}`,up:0}}
+  if(mt.k==='mcEff'||mt.k==='mcStop'||mt.k==='mtbf'){const R=L.filter(r=>r.mc===mt.x);if(!R.length)return{v:NaN,txt:`${mt.x} 가동 없음`,up:1};
+    let q=0,cap=0,stop=0,net=0,run=0,f=0;R.forEach(r=>{const c=calc(r);q+=+r.qty||0;cap+=c.cap;stop+=+r.stop||0;net+=c.net;run+=c.run;f+=+r.fcnt||0});
+    if(mt.k==='mcEff')return{v:cap?q/cap:NaN,txt:`효율 ${P(cap?q/cap:NaN)}`,up:1};
+    if(mt.k==='mcStop')return{v:net?stop/net:NaN,txt:`정지율 ${P(net?stop/net:NaN)}`,up:0};
+    return{v:f?run/f/60:Infinity,txt:f?`고장 ${f}건 · MTBF ${(run/f/60).toFixed(1)}H`:'고장 0건',up:1}}
+  if(mt.k==='pnPpm'){const R=L.filter(r=>r.pn===mt.x);const q=R.reduce((a,r)=>a+(+r.qty||0),0),ng=R.reduce((a,r)=>a+(+r.ng||0)+(+r.ngp||0),0);
+    if(!q)return{v:NaN,txt:'생산 없음',up:0};return{v:ng/q*1e6,txt:`${fmt(Math.round(ng/q*1e6))} PPM`,up:0}}
+  if(mt.k==='moldPn'){const MS=moldSum(mo,cu);if(!MS)return null;const n=MS.L.filter(r=>r.pn===mt.x).length;return{v:n,txt:`금형수리 ${n}건`,up:0}}
+  if(mt.k==='plan'){const PL=planOf(mo),T=rptStats(mo,cu).total;if(!PL.tgt)return null;const v=T.qty/PL.tgt;return{v,txt:`달성률 ${P(v)}`,up:1}}
+  return null;
+}
+/* '11월 15일' · '11월 말' · '11월 초' → 날짜 (그 해, 다음 달 기준) */
+function dueOf(w,mo){const m=String(w||'').match(/(\d+)월\s*(\d+일|말|초)/);if(!m)return '';
+  const[y,cm]=mo.split('-').map(Number);const mm=+m[1];const yy=mm<cm?y+1:y;
+  const d=m[2]==='말'?new Date(yy,mm,0).getDate():m[2]==='초'?5:parseInt(m[2]);
+  return yy+'-'+String(mm).padStart(2,'0')+'-'+String(d).padStart(2,'0')}
+/* 전월(보고서 월의 앞 달) 개선 활동 + 이번 달 수치 비교 */
+function prevCheck(cu){
+  const pm=prevMonth(month),key=pm+'|'+(cu||'전체');
+  const F=(S.rpt&&S.rpt[key]&&S.rpt[key].fix)||null;
+  let items=F?F.items:withMonth(pm,()=>acRows(cu,true)).map(r=>({t:r[0],d:r[1],w:r[2],m:r[3]||null}));
+  items=items.filter(x=>x&&x.t&&!/^일보 작성 정착/.test(x.t));
+  const rows=items.map(x=>{const a=metricVal(x.m,pm,cu),b=metricVal(x.m,month,cu);
+    let eff='판정불가';
+    if(a&&b&&isFinite(a.v)&&isFinite(b.v)){const d=b.v-a.v;const tol=Math.abs(a.v)*.05;eff=(a.up?d>tol:d<-tol)?'개선':Math.abs(d)<=tol?'유지':'미개선'}
+    else if(a&&b&&!isFinite(b.v)&&x.m&&x.m.k==='mtbf')eff='개선';
+    return{...x,a,b,eff,due:dueOf(x.w,pm),cmp:a&&b?`${a.txt} → ${b.txt}`:'수치 비교 대상 아님'}});
+  return{pm,fixed:F,rows};
+}
+function rptFix(){
+  const cu=$('p_cust').value,o=rptGet(),AR=acRows(cu);
+  if(o.fix&&!confirm(`${o.fix.at}에 확정한 개선 활동이 있습니다. 지금 내용으로 다시 확정할까요?`))return;
+  const items=[1,2,3,4,5].map(k=>{const own=o['acT'+k]||o['acD'+k]||o['acW'+k];const A=AR[k-1]||[];
+    const t=own?(o['acT'+k]||''):(A[0]||''),d=own?(o['acD'+k]||''):(A[1]||''),w=own?(o['acW'+k]||''):(A[2]||'');
+    return t?{t,d,w,m:(A[0]===t||String(t).split(' ')[0]===String(A[0]||'').split(' ')[0])?(A[3]||null):null}:null}).filter(Boolean);
+  o.fix={at:today(),by:localStorage.getItem('tj_me')||'',items};o.ua=now();commit0();renderReport();
+  toast(`${+month.slice(5)}월 개선 활동 ${items.length}건을 확정했습니다 — 다음 달 보고서에서 이행 점검됩니다`);
+}
+function prevCheckHtml(cu,o,taA){
+  const C=prevCheck(cu);if(!C.rows.length)return '';
+  const pmN=+C.pm.slice(5),mN=+month.slice(5),td=today();
+  const E={'개선':'g','유지':'a','미개선':'r','판정불가':''};
+  const rows=C.rows.map((r,i)=>{
+    const late=r.due&&td>r.due;
+    const def=r.eff==='개선'?'완료':late?'지연':'진행';
+    const st=o['chkS'+i]||def;
+    return `<tr><td>${esc(r.t)}<div class=muted style="font-size:11px;white-space:normal">${esc(r.d)}</div></td><td style="white-space:nowrap">${esc(r.w)}${late&&st!=='완료'?'<div style="color:var(--red);font-size:11px">기한 경과</div>':''}</td>
+      <td style="white-space:normal">${esc(r.cmp)}</td><td><span class="tag ${E[r.eff]}">${r.eff}</span></td>
+      <td><select onchange="rptSet('chkS${i}',this.value)" style="width:76px;padding:2px 4px">${['계획','진행','완료','지연','보류'].map(v=>`<option${v===st?' selected':''}>${v}</option>`).join('')}</select></td>
+      <td>${taA('chkN'+i,'','실행 내용·효과')}</td></tr>`}).join('');
+  const nI=C.rows.filter(r=>r.eff==='개선').length,nN=C.rows.filter(r=>r.eff==='미개선').length;
+  return `<h3 style="margin-top:14px">8-1. 전월 개선활동 이행 점검 <span class="muted" style="font-weight:400;font-size:12px">${pmN}월 개선 활동 → ${mN}월 수치 비교 · 개선 ${nI}건 · 미개선 ${nN}건${nN?' (이번 달 개선 활동으로 이월)':''}</span></h3>
+    ${C.fixed?`<div class="muted" style="font-size:11px">${pmN}월 확정 ${esc(C.fixed.at)}${C.fixed.by?' · '+esc(C.fixed.by):''}</div>`
+      :`<div class="noprint" style="font-size:11px;color:var(--amber)">${pmN}월 개선 활동이 확정되지 않아 ${pmN}월 자료로 다시 뽑은 항목입니다. ${pmN}월 보고서에서 [개선 활동 확정]을 누르면 그 내용으로 고정됩니다.</div>`}
+    <table style="font-size:12px"><tr><th style="width:30%">항목 / 조치 내용</th><th>담당 / 기한</th><th style="width:22%">${pmN}월 → ${mN}월</th><th>효과</th><th>진행</th><th style="width:20%">비고</th></tr>${rows}</table>`;
 }
 function rptSuggest(){rptAuto('ac')}
 
