@@ -35,7 +35,7 @@ Deno.serve(async (req) => {
     let mesMc: Record<string, string> = {}, mesPn: Record<string, string> = {};
     try {
       const kv = await getJson(`${DT_URL}/rest/v1/kv_store?key=eq.tj_prod_daily_v1&select=mc:value->master->mesMc,pn:value->master->mesPn`, DT_KEY);
-      mesMc = (kv[0] && kv[0].mc) || {}; mesPn = (kv[0] && kv[0].pn) || {};
+      mesMc = { "012": "29 국일200", "016": "33 심팩250", ...((kv[0] && kv[0].mc) || {}) }; mesPn = (kv[0] && kv[0].pn) || {};
     } catch (_) { /* 이름 매칭 없이 코드로 */ }
     const st = await getJson(`${SB_URL}/rest/v1/kv_store?key=eq.${STATE_KEY}&select=value`, SB_KEY);
     const prev: any = (st[0] && st[0].value) || {};
