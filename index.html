@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v22.0 · 태진다이텍</title>
+<title>생산일보 통합관리 v22.1 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -205,6 +205,10 @@ table.mh th,table.mh td{font-size:12px;padding:2px 6px;white-space:nowrap}
 /* PDF 캡처 중 (슬라이드형) */
 #rptBody.pdfcap>.rpt-sec{border:0;border-radius:0;margin:0!important;padding:10px 14px;box-sizing:border-box;max-width:none;background:#fff}
 #rptBody.pdfcap .noprint{display:none!important}
+#rptBody.editing [data-ek]{outline:1px dashed #9FB4D0;outline-offset:-1px;cursor:text}
+#rptBody.editing [data-ek]:focus{outline:2px solid var(--steel);background:#F7FAFF}
+#rptBody.editing .rpt-ed{background:#FFF6D6}
+#btnRptEdit.on{background:var(--amber);color:#fff;border-color:var(--amber)}
 #rptBody.pdfcap .cover{min-height:0}
 #rptBody.pdfcap .pdfpad td,#rptBody.pdfcap .pdfpad th{padding-top:calc(var(--pp,0px) + 2px)!important;padding-bottom:calc(var(--pp,0px) + 2px)!important}
 table.mh tr.sum td{background:#EEF2F7;font-weight:700}
@@ -595,6 +599,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
         <span class="chips" id="rptTabs"></span>
         <span class="muted" id="rptNote">평균 가동율·효율은 기존 엑셀 보고서와 같은 방식(일자별 평균의 평균)</span>
         <span class="grow"></span>
+        <button id="btnRptEdit" onclick="rptEditToggle()" title="보고서의 글자·숫자를 직접 고칩니다 (그래프 제외)">편집</button><span id="rptEdNote" class="muted" style="font-size:11px"></span>
         <button class="p" onclick="savePdf()" id="btnPdf">PDF 내려받기</button><button onclick="window.print()">인쇄</button>
       </div>
     </div>
@@ -2173,7 +2178,7 @@ function renderReport(){
   opts($('p_cust'),S.master.custs,$('p_cust').value,'고객사 전체');
   if($('rptTabs'))$('rptTabs').innerHTML=[['all','전체 (경영+상세)'],['exec','경영 요약'],['std','상세 보고']]
     .map(([k,l])=>`<span class="chip ${rptView===k?'on':''}" onclick="setRptView('${k}')">${l}</span>`).join('');
-  if(rptView==='exec'){$('rptBody').innerHTML=execHtml();return}
+  if(rptView==='exec'){$('rptBody').innerHTML=execHtml();rptApplyEdits();return}
   const cu=$('p_cust').value;
   const st=rptStats(month,cu);const pm=prevMonth(month);const pvAll=rptStats(pm,cu).total;
   const o=rptGet();const R=st.R;const T=st.total;
@@ -2281,6 +2286,7 @@ function renderReport(){
   html+=moldRepHtml(NB(11)?NB(11)+' ':'',cu);
   $('rptBody').innerHTML = rptView==='all' ? execHtml()+html : html;
   if(rptView==='all')buildToc(y,m);
+  rptApplyEdits();
 }
 
 /* 목차 자동 생성 (항목 = 한 장) */
@@ -2357,6 +2363,47 @@ function moldRepHtml(no,cu){
       <span class="muted">${unk.map(esc).join(', ')}</span></div>`:''}
   </div>`;
 }
+
+/* ===== 월간 보고서 직접 편집 =====
+   [편집]을 켜면 제목·표·지표의 글자를 바로 고칠 수 있다(그래프·입력칸 제외).
+   고친 내용은 그 보고서(월|고객사)의 ed 에 {원래 글자, 고친 내용}으로 저장 → 생산일보 데이터(kv_store tj_prod_daily_v1)에 함께 저장.
+   다시 그릴 때 원래 글자가 같으면 고친 내용을 덮어쓴다 (일보가 바뀌어 원래 글자가 달라지면 적용하지 않고 알려 줌) */
+let RPTEDIT=false;
+const RPT_ED_SEL='h1,h2,h3,h4,p,li,th,td,small,b,em,.made,.muted,.legend span,.kpis div>span';
+function rptEdCand(){const B=$('rptBody');if(!B)return[];const out=[];
+  [...B.children].forEach(sec=>{const h=sec.querySelector('h1,h3');
+    const ttl=h?(h.cloneNode(true)):null;if(ttl)[...ttl.querySelectorAll('.muted,button,input,.noprint')].forEach(x=>x.remove());
+    const sk=(ttl?ttl.textContent:'').replace(/\s+/g,' ').trim().replace(/^\d+(-\d+)?\.\s*/,'').slice(0,40)||'sec';
+    const L=[...sec.querySelectorAll(RPT_ED_SEL)].filter(e=>!e.closest('.noprint,svg,button,select')&&!e.querySelector('textarea,input,select,button,svg,table,canvas')
+      &&String(e.textContent).trim());
+    const leaf=L.filter(e=>!e.querySelector(RPT_ED_SEL));
+    leaf.forEach((e,j)=>out.push([sk+'#'+j,e]))});
+  return out}
+function rptClean(h){return String(h).replace(/<\s*(script|style|iframe|object)[^>]*>[\s\S]*?<\/\s*\1\s*>/gi,'').replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi,'').replace(/javascript:/gi,'')}
+function rptApplyEdits(){
+  const o=rptGet(),ed=o.ed||{};let n=0,stale=0;
+  rptEdCand().forEach(([k,e])=>{e.dataset.ek=k;e.dataset.eo=e.textContent;
+    const x=ed[k];if(x){if(x.o===e.textContent){e.innerHTML=rptClean(x.h);e.classList.add('rpt-ed');n++}else stale++}
+    if(RPTEDIT)e.setAttribute('contenteditable','true')});
+  $('rptBody').classList.toggle('editing',RPTEDIT);
+  const b=$('btnRptEdit');if(b){b.classList.toggle('on',RPTEDIT);b.textContent=RPTEDIT?'편집 끝내기':'편집'}
+  const nt=$('rptEdNote');if(nt)nt.innerHTML=(n?`수정 ${n}건`:'')+(stale?` · <span style="color:var(--amber)">일보가 바뀌어 적용 안 된 수정 ${stale}건</span>`:'')
+    +((n||stale)?` <a href="#" onclick="rptEdReset();return false" style="font-size:11px">수정 지우기</a>`:'');
+}
+function rptEditToggle(){RPTEDIT=!RPTEDIT;if(RPTEDIT)toast('보고서의 글자를 눌러 바로 고치세요 · 다른 곳을 누르면 저장됩니다');renderReport()}
+function rptEdSave(e){const k=e.dataset.ek;if(!k)return;const o=rptGet();o.ed=o.ed||{};
+  const h=rptClean(e.innerHTML).trim(),orig=e.dataset.eo;
+  if(e.textContent===orig&&!o.ed[k])return;
+  if(e.textContent===orig&&o.ed[k]&&o.ed[k].h===h)return;
+  // 원래 글자와 같아지면 수정 기록 삭제
+  if(e.textContent.trim()===String(orig).trim()&&!/<(b|i|u|br)\b/i.test(h))delete o.ed[k];
+  else o.ed[k]={o:o.ed[k]?o.ed[k].o:orig,h};
+  e.classList.toggle('rpt-ed',!!o.ed[k]);o.ua=now();commit0();
+}
+function rptEdReset(){const o=rptGet();if(!o.ed||!Object.keys(o.ed).length)return;
+  if(!confirm(`이 보고서에서 직접 고친 내용 ${Object.keys(o.ed).length}건을 지우고 자동 내용으로 되돌릴까요?`))return;
+  delete o.ed;o.ua=now();commit0();renderReport()}
+document.addEventListener('focusout',e=>{const t=e.target;if(RPTEDIT&&t&&t.dataset&&t.dataset.ek&&t.closest('#rptBody'))rptEdSave(t)});
 
 /* 보고서 집계 묶음 */
 function rptGroups(st,cu){
@@ -3370,7 +3417,8 @@ async function savePdf(){
   const swapped=[],styled=[],tocSave=[];
   body.querySelectorAll('.tw').forEach(el=>{styled.push([el,el.getAttribute('style')||'']);el.style.overflow='visible';el.style.maxHeight='none'});
   styled.push([body,body.getAttribute('style')||'']);body.style.overflow='visible';
-  body.classList.add('pdfcap');
+  body.classList.add('pdfcap');const wasEd=body.classList.contains('editing');body.classList.remove('editing');
+  body.querySelectorAll('[contenteditable]').forEach(e=>e.removeAttribute('contenteditable'));
   // 입력칸은 그림으로 안 찍히므로 잠시 글자로 바꿔 둠
   body.querySelectorAll('textarea,input').forEach(el=>{
     if(el.closest('.noprint'))return;
@@ -3422,7 +3470,7 @@ async function savePdf(){
     toast('PDF를 저장했습니다');
   }catch(e){console.error(e);toast('PDF 저장에 실패했습니다 — [인쇄]에서 PDF로 저장하세요')}
   finally{swapped.forEach(([el,d])=>{d.remove();el.style.display=''});tocSave.forEach(([el,t])=>el.textContent=t);
-    styled.forEach(([el,s])=>s?el.setAttribute('style',s):el.removeAttribute('style'));body.classList.remove('pdfcap');body.querySelectorAll('.pdfpad').forEach(e=>e.classList.remove('pdfpad'));btn.disabled=false;btn.textContent=lab}
+    styled.forEach(([el,s])=>s?el.setAttribute('style',s):el.removeAttribute('style'));body.classList.remove('pdfcap');if(wasEd){body.classList.add('editing');body.querySelectorAll('[data-ek]').forEach(e=>e.setAttribute('contenteditable','true'))}body.querySelectorAll('.pdfpad').forEach(e=>e.classList.remove('pdfpad'));btn.disabled=false;btn.textContent=lab}
 }
 
 
