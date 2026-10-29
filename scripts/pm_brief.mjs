@@ -1,6 +1,6 @@
 // 생산관리 아침 브리핑 — 매일 08:30 실행 (GitHub Actions, 07:00 자동 재마감과 별도)
 //   ① 생산일보 앱(index.html)을 그대로 실행: 마지막 생산일 실적·월 계획 진척·이상 항목 → 이상 대응 목록(issues) 등록
-//   ② 재고수불부 앱(kimsanggi85-del/stock_ledger)을 읽기 전용으로 실행: 품목별 현재고·안전재고·재고일수
+//   ② 재고수불부 앱(kimsanggi85-del/stock_ledger)을 읽기 전용으로 실행: 품목별 현재고·안전재고·재고일수 (최근 90일 출하·생산 품목만)
 //      → 요약을 kv_store 'tj_pm_stock_v1' 에 남김 (생산일보 앱 생산관리 화면 표시용)
 //   ③ ntfy(taejincall)로 브리핑 발송, 발송 기록은 kv_store 'tj_prod_autoclose_v1' 의 그 날짜 brief
 // 사용: node scripts/pm_brief.mjs [YYYY-MM-DD(실적 기준일)] [--dry] [--force]
@@ -50,10 +50,12 @@ async function stockSummary() {
   for (let i = 0; i < 60; i++) { await sleep(1000); try { if (ev("typeof autoDone!=='undefined'&&autoDone")) break; } catch (e) {} }
   if (!ev("typeof autoDone!=='undefined'&&autoDone")) { w.close(); throw new Error("재고수불부 자료를 받지 못함"); }
   const res = ev(`(()=>{const t='${kstToday}',from=new Date(Date.parse(t)-30*864e5).toISOString().slice(0,10);
-    const ship={};S.led.forEach(r=>{if(r.k==='출하'&&r.d>from&&r.d<=t)ship[r.pn]=(ship[r.pn]||0)+(+r.q||0)});
+    const ship={},act={},f90=new Date(Date.parse(t)-90*864e5).toISOString().slice(0,10);
+    S.led.forEach(r=>{if(r.k==='출하'&&r.d>from&&r.d<=t)ship[r.pn]=(ship[r.pn]||0)+(+r.q||0);
+      if((r.k==='출하'||r.k==='생산입고')&&r.d>f90&&r.d<=t)act[r.pn]=1});
     const L=S.items.filter(it=>it.pn&&!(typeof isExcl==='function'&&isExcl(it.pn))).map(it=>{
       const base=String(it.pn).replace(/\\s*\\[2F\\]\\s*$/,'');const cur=stockAt(it,t),sf=+it.sf||0,day=(ship[base]||0)/30;
-      return{pn:it.pn,nm:it.nm||'',cu:it.cu||'',cur,sf,day:Math.round(day),doi:day>0?Math.round(cur/day*10)/10:null}});
+      return{pn:it.pn,nm:it.nm||'',cu:it.cu||'',cur,sf,day:Math.round(day),doi:day>0?Math.round(cur/day*10)/10:null,act:!!act[base]}}).filter(x=>x.act);   // 최근 90일 출하·생산이 있는 품목만
     const short=L.filter(x=>x.sf>0&&x.cur<x.sf).sort((a,b)=>(a.cur/a.sf)-(b.cur/b.sf));
     const low=L.filter(x=>x.doi!=null&&x.doi<3&&!(x.sf>0&&x.cur<x.sf)).sort((a,b)=>a.doi-b.doi);
     return{at:new Date().toISOString(),n:L.length,nShort:short.length,short:short.slice(0,15),low:low.slice(0,15)}})()`);

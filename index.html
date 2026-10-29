@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v22.7 · 태진다이텍</title>
+<title>생산일보 통합관리 v22.8 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2453,8 +2453,8 @@ function pmFind(d){
   const FL=(S.fails||[]).filter(f=>f.date===d&&f.kind==='설비');const fmc=new Set();
   FL.forEach(f=>{fmc.add(f.mc);out.push({key:`fail|${d}|${f.mc}|${f.id}`,kind:'설비고장',mc:f.mc,pn:'',title:`${f.mc} 설비고장 ${f.min||0}분`,detail:[f.sym,f.cause].filter(Boolean).join(' → '),owner:f.by||'설비보전',due:addDay(d,3)})});
   Object.entries(g).forEach(([mc,x])=>{if(x.f>0&&!fmc.has(mc))out.push({key:`fail|${d}|${mc}`,kind:'설비고장',mc,pn:'',title:`${mc} 설비고장 ${x.f}건 ${x.fm}분`,detail:String(x.sr).split(/\s*\/\s*/).filter(s=>FAIL_EQ.some(k=>s.includes(k))||/고장|오작동|에러/.test(s)).join(' / ')||x.sr,owner:'설비보전',due:addDay(d,3)})});
-  // 효율 저조 (근무 5시간 이상, 효율 50% 미만)
-  Object.entries(g).forEach(([mc,x])=>{if(x.cap>0&&x.work>=300&&x.q/x.cap<.5){const sc=stopCats(L.filter(r=>r.mc===mc)).filter(([k])=>k!=='휴식·식사')[0];
+  // 효율 저조 (근무 5시간 이상, 효율 40% 미만)
+  Object.entries(g).forEach(([mc,x])=>{if(x.cap>0&&x.work>=300&&x.q/x.cap<.4){const sc=stopCats(L.filter(r=>r.mc===mc)).filter(([k])=>k!=='휴식·식사')[0];
     out.push({key:`eff|${d}|${mc}`,kind:'효율 저조',mc,pn:'',title:`${mc} 효율 ${(x.q/x.cap*100).toFixed(0)}%`,detail:`정지 ${x.stop}분${sc?' · 1위 '+sc[0]+' '+sc[1]+'분':''}`,owner:who(mc),due:addDay(d,2)})}});
   // 불량 (품번 PPM 이 목표의 2배·3,000 이상, 30EA 이상)
   const gp={};L.forEach(r=>{const x=gp[r.pn]=gp[r.pn]||{q:0,ng:0,mc:r.mc,note:''};x.q+=+r.qty||0;x.ng+=(+r.ng||0)+(+r.ngp||0);if(r.note)x.note=r.note});
