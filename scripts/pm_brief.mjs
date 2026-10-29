@@ -5,7 +5,8 @@
 //   ②' 품질 검사 불량(defect_history, 품질팀 주간보고서와 같은 표) 최근 7일 vs 전주 — 급증 기종은 이상 대응 목록(품질팀)
 //   ②'' 유출불량(유효성 평가 kv tj_effect_eval_v1)·일상점검(p_machine_check·p_mold_check) — 점검 NG 는 이상 대응 목록
 //   ③ ntfy(taejincall)로 브리핑 발송, 발송 기록은 kv_store 'tj_prod_autoclose_v1' 의 그 날짜 brief
-// 사용: node scripts/pm_brief.mjs [YYYY-MM-DD(실적 기준일)] [--dry] [--force]
+//   --wo : 09:30 금일 작업지시만 발송 (자주검사 성적서 대상, 기록은 오늘 날짜의 wo)
+// 사용: node scripts/pm_brief.mjs [YYYY-MM-DD(실적 기준일)] [--dry] [--force] [--wo]
 import { JSDOM, VirtualConsole } from "jsdom";
 import fs from "node:fs";
 import path from "node:path";
@@ -19,7 +20,7 @@ const STOCK_URL = "https://raw.githubusercontent.com/kimsanggi85-del/stock_ledge
 const NTFY_TOPIC = "taejincall";
 
 const args = process.argv.slice(2);
-const dry = args.includes("--dry"), force = args.includes("--force");
+const dry = args.includes("--dry"), force = args.includes("--force"), woOnly = args.includes("--wo");
 const pos = args.filter((a) => !a.startsWith("--"));
 const kstToday = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
 const hdr = { apikey: SB_KEY, Authorization: "Bearer " + SB_KEY };
@@ -78,6 +79,24 @@ async function main() {
   const w = dom.window, ev = (c) => w.eval(c);
   await sleep(1500);
   await ev("pull()");
+  if (woOnly) {   // 09:30 금일 작업지시
+    const done0 = (await kvGet(DONE_KEY)) || {};
+    if ((done0[kstToday] || {}).wo && !force && !dry) { log(`작업지시 이미 발송 (${done0[kstToday].wo})`); w.close(); return; }
+    const x = await ev(`pmExtra(today())`);
+    w.__wo = x.wo;
+    const M = ev("pmWoMsg(window.__wo)");
+    w.close();
+    log(M.title); console.log(M.msg);
+    if (!M.n) return log("작업지시 없음 → 발송하지 않음");
+    if (dry) return log("(dry) 발송·저장하지 않음");
+    const r = await fetch("https://ntfy.sh/", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ topic: NTFY_TOPIC, title: M.title, message: M.msg, tags: ["memo"], priority: 3 }) });
+    if (!r.ok) throw new Error("ntfy " + r.status);
+    const done1 = (await kvGet(DONE_KEY)) || {};
+    done1[kstToday] = { ...(done1[kstToday] || {}), wo: new Date(Date.now() + 9 * 3600e3).toISOString().slice(11, 16) };
+    await kvPut(DONE_KEY, Object.fromEntries(Object.entries(done1).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 40)));
+    return log("작업지시 발송 완료");
+  }
   const d = pos[0] || ev("pmLastDay()");
   const done = (await kvGet(DONE_KEY)) || {};
   const rec = done[d] || {};

@@ -3,6 +3,7 @@ name: 생산일보 자동 마감
 # 업무 종료 10분 뒤 자동 마감: 월·화·목·금 19:10 / 수 17:10 (토·일·빨간날 17:10, 연장이면 최종 가동 10분 뒤)
 # 다음날 07:00 전날 재마감 (늦게 들어온 작업자 마감 반영)
 # 08:30 생산관리 브리핑(ntfy) — 23:30 UTC
+# 09:30 금일 작업지시(ntfy, 자주검사 성적서 대상) — 00:30 UTC
 # GitHub 예약 실행은 10분 간격이면 대부분 건너뛰므로 정해진 시각 + 예비 실행만 둔다 (이미 마감한 날은 스크립트가 건너뜀)
 # 시각(UTC = KST-9): 17:10 = 08:10 / 19:10 = 10:10 / 07:00 = 22:00(전날)
 on:
@@ -14,10 +15,11 @@ on:
     - cron: "10 11-14 * * *"      # 20:10~23:10 연장·지연 예비
     - cron: "0 22 * * *"
     - cron: "30 23 * * *"         # 08:30 생산관리 브리핑
+    - cron: "30 0 * * *"          # 09:30 금일 작업지시
   workflow_dispatch:
     inputs:
       mode:
-        description: "auto / evening / morning / brief(생산관리 브리핑만)"
+        description: "auto / evening / morning / brief(생산관리 브리핑만) / wo(금일 작업지시만)"
         default: "auto"
       date:
         description: "YYYY-MM-DD (비우면 자동)"
@@ -51,16 +53,18 @@ jobs:
           # 07:00 예약 실행은 GitHub 지연이 있어도 morning 으로 고정
           if [ "${{ github.event.schedule }}" = "0 22 * * *" ]; then MODE=morning; fi
           if [ "${{ github.event.schedule }}" = "30 23 * * *" ]; then MODE=brief; fi
+          if [ "${{ github.event.schedule }}" = "30 0 * * *" ]; then MODE=wo; fi
           ARGS="$MODE ${{ github.event.inputs.date }}"
           [ "${{ github.event.inputs.dry }}" = "true" ] && ARGS="$ARGS --dry"
           [ "${{ github.event.inputs.force }}" = "true" ] && ARGS="$ARGS --force"
-          if [ "$MODE" != "brief" ]; then node scripts/auto_close.mjs $ARGS; fi
+          if [ "$MODE" != "brief" ] && [ "$MODE" != "wo" ]; then node scripts/auto_close.mjs $ARGS; fi
           echo "MODE=$MODE" >> "$GITHUB_ENV"
       - name: 생산관리 브리핑
         # 08:30 예약 실행 (또는 수동 실행 brief) — 마감과 별도 실행
-        if: ${{ always() && (github.event.schedule == '30 23 * * *' || github.event.inputs.mode == 'brief') }}
+        if: ${{ always() && (github.event.schedule == '30 23 * * *' || github.event.schedule == '30 0 * * *' || github.event.inputs.mode == 'brief' || github.event.inputs.mode == 'wo') }}
         run: |
           ARGS="${{ github.event.inputs.mode == 'brief' && github.event.inputs.date || '' }}"
           [ "${{ github.event.inputs.dry }}" = "true" ] && ARGS="$ARGS --dry"
           [ "${{ github.event.inputs.force }}" = "true" ] && ARGS="$ARGS --force"
+          [ "$MODE" = "wo" ] && ARGS="$ARGS --wo"
           node scripts/pm_brief.mjs $ARGS

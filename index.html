@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v23.3 · 태진다이텍</title>
+<title>생산일보 통합관리 v23.4 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2541,6 +2541,18 @@ async function pmExtra(d){
   }catch(e){out.wo={err:String(e.message||e)}}
   return out;
 }
+/* 09:30 금일 작업지시 알림 — 자주검사 성적서 대상 전체 목록 */
+function pmWoMsg(wo){const d=wo.d||today(),L=wo.list||[];
+  const run=L.filter(x=>x.st),wait=L.filter(x=>!x.st);
+  const line=x=>`· ${x.mc} ${x.pn}${x.wo?' ['+x.wo+']':''}${x.tq?' 목표 '+fmt(x.tq):''}${x.st?' '+x.st+'~':''}`;
+  const T=[];
+  if(wo.err)T.push('조회 실패 ('+wo.err+')');
+  else{if(run.length)T.push(`■ 생산 시작 ${run.length}건`,...run.map(line));
+    if(wait.length)T.push(`■ 시작 전 (설비 상태 기준) ${wait.length}건`,...wait.map(line));
+    if(!L.length)T.push('작업지시 없음');
+    T.push('','※ 초·중·종물 자주검사 성적서 작성 대상')}
+  let msg=T.join('\n');if(msg.length>3800)msg=msg.slice(0,3800)+'\n…';
+  return{title:`금일 작업지시 ${+d.slice(5,7)}/${+d.slice(8)}(${dwOf(d)}) · ${L.length}건`,msg,n:L.length}}
 function pmOpen(){return (S.issues||[]).filter(x=>x.status!=='완료'&&x.status!=='취소')}
 /* 브리핑 문장. st = 재고 요약 {at, short:[], low:[]} (없으면 생략) */
 function pmBrief(d,st,qd){
