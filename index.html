@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v21.2 · 태진다이텍</title>
+<title>생산일보 통합관리 v21.3 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2271,9 +2271,10 @@ function renderReport(){
     .sort((a,b)=>b[1].stop-a[1].stop).slice(0,8);   // 정지시간 상위 8대
   for(let i=0;i<mcs.length;i+=4){
     const part=mcs.slice(i,i+4);
-    html+=`<div class="rpt-sec pgnew"><h3>${NB(10)} 설비 정지 원인별 분포도${mcs.length>4?` <span class="muted" style="font-weight:400;font-size:12px">정지시간 상위 ${i+1}~${i+part.length}위</span>`:''}</h3><div class="grid g2">${
+    html+=`<div class="rpt-sec pgnew"><h3>${NB(10)} 설비 정지 원인별 분포도 <button class="s noprint" style="font-size:11px;padding:0 8px;vertical-align:middle" onclick="rptAuto('sp')" title="정지 원인 분석·대책을 다시 작성">자동 작성</button>${mcs.length>4?` <span class="muted" style="font-weight:400;font-size:12px">정지시간 상위 ${i+1}~${i+part.length}위</span>`:''}</h3><div class="grid g2">${
       part.map(([mc,x])=>{const top=Object.entries(x.pn).sort((a,b)=>b[1]-a[1])[0];
-        return `<div style="text-align:center"><div style="font-weight:700;margin-bottom:4px">${esc(mc)}${top?' &nbsp;'+esc(top[0]):''}</div>${svgPie(Object.entries(x.w).sort((a,b)=>b[1]-a[1]).slice(0,8))}</div>`}).join('')}</div></div>`;
+        return `<div style="text-align:center"><div style="font-weight:700;margin-bottom:4px">${esc(mc)}${top?' &nbsp;'+esc(top[0]):''}</div>${svgPie(Object.entries(x.w).sort((a,b)=>b[1]-a[1]).slice(0,8))}
+          <div style="text-align:left;font-size:12px;margin-top:2px">${taA('spC_'+mc,autoStop(mc,x,R))}</div></div>`}).join('')}</div></div>`;
   }
   /* ── 금형수리 현황 ── */
   loadMoldRep(month);loadMoldRep(pm);
@@ -2669,10 +2670,24 @@ function autoNg(pn,g){
   L.push('대책: '+(fix.length?fix.join(', '):'불량유형 기록 후 원인분석(특성요인도), 초·중·종물 검사 강화'));
   return L.join('\n');
 }
+/* 설비 정지 원인 분석 — 분포도 아래 칸. x = {w:분류별 분, stop} */
+function autoStop(mc,x,R){
+  const L=R.filter(r=>r.mc===mc);
+  const work=L.reduce((a,r)=>a+(+r.work||0),0);
+  const W=Object.entries(x.w).filter(([k])=>k!=='휴식·식사').sort((a,b)=>b[1]-a[1]),T=W.reduce((a,v)=>a+v[1],0)||1;
+  if(!W.length)return '';
+  const out=[`정지 ${fmt(Math.round(x.stop/60))}H${work?` (정지율 ${(x.stop/work*100).toFixed(0)}%)`:''} · ${W.slice(0,3).map(([k,v])=>`${k} ${(v/T*100).toFixed(0)}%`).join(' · ')}`];
+  const f=L.reduce((a,r)=>a+(+r.fcnt||0),0),fm=L.reduce((a,r)=>a+(+r.fmin||0),0);
+  const MS=moldSum(month,''),mr=MS?MS.L.filter(r=>r.mc===mc):[];
+  const ex=[f?`설비고장 ${f}건 ${fmt(fm)}분`:'',mr.length?`금형수리 ${mr.length}건${moldWords(mr)?'('+moldWords(mr)+')':''}`:''].filter(Boolean);
+  if(ex.length)out.push(ex.join(' · '));
+  out.push('대책: '+(STOP_FIX[W[0][0]]||STOP_FIX['기타']).split(',').slice(0,2).join(','));
+  return out.join('\n');
+}
 /* 자동 문장 다시 쓰기 — 직접 고친 내용이 있으면 확인 후 덮어씀 */
 function rptAuto(which,c){
   const o=rptGet();
-  const keys=which==='exec'?['exSum','exNext']:which==='rel'?[0,1,2].flatMap(i=>['relD'+i,'relW'+i]):which==='ng'?[0,1,2,3,4].map(i=>'ngC'+i):which==='ac'?[1,2,3,4,5].flatMap(k=>['acT'+k,'acD'+k,'acW'+k]):['an_'+c,'pb1_'+c,'pa1_'+c,'pb2_'+c,'pa2_'+c];
+  const keys=which==='exec'?['exSum','exNext']:which==='rel'?[0,1,2].flatMap(i=>['relD'+i,'relW'+i]):which==='ng'?[0,1,2,3,4].map(i=>'ngC'+i):which==='sp'?Object.keys(o).filter(k=>k.startsWith('spC_')):which==='ac'?[1,2,3,4,5].flatMap(k=>['acT'+k,'acD'+k,'acW'+k]):['an_'+c,'pb1_'+c,'pa1_'+c,'pb2_'+c,'pa2_'+c];
   if(keys.some(k=>o[k])&&!confirm('직접 작성한 내용을 지우고 일보 집계로 다시 작성할까요?'))return;
   keys.forEach(k=>delete o[k]);o.ua=now();commit0();renderReport();
 }
