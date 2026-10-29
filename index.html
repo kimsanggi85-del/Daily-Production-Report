@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v23.0 · 태진다이텍</title>
+<title>생산일보 통합관리 v23.1 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2468,7 +2468,7 @@ function pmFind(d){
   return out}
 function pmScan(d,qd){S.issues=S.issues||[];const have=new Set(S.issues.map(x=>x.key));let n=0;
   const Q=(qd&&qd.rise||[]).map(x=>({key:`qrise|${d}|${x.m}`,kind:'불량 급증',mc:'',pn:x.m,title:`${x.m} 검사 불량 ${fmt(x.d)} EA (${fmt(Math.round(x.ppm))} PPM)`,
-    detail:`최근 7일${isFinite(x.pp)&&x.pd?` · 전주 ${fmt(Math.round(x.pp))} PPM`:' · 전주 불량 없음'}${x.cu?' · '+x.cu:''}`,owner:'품질팀',due:addDay(d,3)}));
+    detail:`최근 7일 · 전주 ${x.pd?fmt(Math.round(x.pp))+' PPM':'불량 0'} (검사 ${fmt(x.pi)})${x.cu?' · '+x.cu:''}`,owner:'품질팀',due:addDay(d,3)}));
   pmFind(d).concat(Q).forEach(x=>{if(have.has(x.key))return;S.issues.push({id:uid(),...x,date:d,status:'열림',act:'',ua:now(),by:localStorage.getItem('tj_me')||''});have.add(x.key);n++});
   if(n)logAdd('이상 항목 등록',`${d} ${n}건`);return n}
 /* 품질 불량 — 품질팀 검사 실적(defect_history, 주간보고서와 같은 표) 최근 7일 vs 전주 7일
@@ -2493,8 +2493,9 @@ async function pmQuality(d){
       const y=mods[m]=mods[m]||{c:W(),p:W(),cu:c};add(y[k],r);
       if(k==='c'&&isNg(r))types[r.defect_type]=(types[r.defect_type]||0)+(+r.qty||0)});
     const ppm=o=>o.i?o.d/o.i*1e6:NaN;
-    const ml=Object.entries(mods).map(([m,y])=>({m,cu:y.cu,d:y.c.d,i:y.c.i,ppm:ppm(y.c),pp:ppm(y.p),pd:y.p.d})).filter(x=>x.d>0);
-    const rise=ml.filter(x=>x.d>=20&&(x.pd===0||(isFinite(x.pp)&&x.ppm>=x.pp*2))).sort((a,b)=>b.d-a.d);
+    const ml=Object.entries(mods).map(([m,y])=>({m,cu:y.cu,d:y.c.d,i:y.c.i,ppm:ppm(y.c),pp:ppm(y.p),pd:y.p.d,pi:y.p.i})).filter(x=>x.d>0);
+    // 급증 = 전주에도 검사한 기종 중 PPM 2배 이상(전주 불량 0 포함). 전주 검사가 없던 기종은 비교하지 않는다
+    const rise=ml.filter(x=>x.d>=20&&x.pi>0&&(x.pd===0||x.ppm>=x.pp*2)).sort((a,b)=>b.d-a.d);
     return{from:c0,to:d,n:rows.length,cur:{...cur,ppm:ppm(cur)},prev:{...prev,ppm:ppm(prev)},day:{...day,ppm:ppm(day)},
       cust:Object.entries(cust).map(([c,x])=>({c,d:x.c.d,ppm:ppm(x.c),pp:ppm(x.p)})).filter(x=>x.d>0).sort((a,b)=>b.d-a.d),
       types:Object.entries(types).sort((a,b)=>b[1]-a[1]),models:ml.sort((a,b)=>b.d-a.d).slice(0,10),rise:rise.slice(0,8)};
@@ -2523,7 +2524,7 @@ function pmBrief(d,st,qd){
      if(q.cust.length)T.push('  고객사: '+q.cust.slice(0,4).map(x=>`${x.c} ${fmt(Math.round(x.ppm||0))}${ar(x.ppm,x.pp)}`).join(' · '));
      if(q.types.length)T.push('  유형: '+q.types.slice(0,5).map(([k,v])=>`${k} ${fmt(v)}`).join(' · '));
      if(q.models.length)T.push('  기종: '+q.models.slice(0,4).map(x=>`${x.m} ${fmt(x.d)} (${fmt(Math.round(x.ppm||0))})`).join(' · '));
-     if(q.rise.length)T.push('  ⚠ 급증: '+q.rise.slice(0,4).map(x=>`${x.m} ${fmt(Math.round(x.ppm))} PPM${x.pd?` (전주 ${fmt(Math.round(x.pp))})`:' (전주 0)'}`).join(' · '));}
+     if(q.rise.length)T.push('  ⚠ 급증: '+q.rise.slice(0,4).map(x=>`${x.m} ${fmt(Math.round(x.ppm))} PPM (전주 ${x.pd?fmt(Math.round(x.pp)):'불량 0'})`).join(' · '));}
    else T.push(`  품질 검사 불량 조회 실패${qd&&qd.err?' ('+qd.err+')':''}`);
    const R7=S.recs.filter(r=>r.date>=addDay(d,-6)&&r.date<=d),gp={};
    R7.forEach(r=>{const v=(+r.ng||0)+(+r.ngp||0);if(!v)return;const x=gp[r.pn]=gp[r.pn]||{ng:0,q:0,notes:{}};x.ng+=v;if(r.note)x.notes[r.note]=(x.notes[r.note]||0)+1});
