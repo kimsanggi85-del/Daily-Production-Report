@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v22.2 · 태진다이텍</title>
+<title>생산일보 통합관리 v22.3 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2591,6 +2591,7 @@ async function loadMoldRep(mo){
   }catch(e){logErr=String(e.message||e)}
   let rh=null,rhErr='';
   try{if(!MRALL)MRALL=loadRepHist();rh=await MRALL}catch(e){MRALL=null;rhErr=String(e.message||e)}
+  if(!MOLDMAPP)MOLDMAPP=loadMoldMap();MOLDMAP=await MOLDMAPP;
   if(rh){
     const rows=rh.filter(x=>!x._deleted&&String(x['수리일자']||'').slice(0,7)===mo).map(mrRow);
     MOLDREP[mo]={ok:1,src:'금형수리 이력(repair_history_v2)',cats,rows,eq:all.filter(x=>isEq(x.category)).map(moldRow)};
@@ -2599,10 +2600,23 @@ async function loadMoldRep(mo){
   }else MOLDREP[mo]={ok:0,rows:[],err:rhErr||logErr};
   if(month===mo&&pg==='report')renderReport();
 }
-function mrRow(x){return moldRow({
-  machine_code:x._machine_name||(String(x['비고']||'').match(/\[생산현황\s*([^\]]*)\]/)||[])[1]||x._machine_code||'',
-  item_code:x['금형번호']||'',worker:x['담당자']||'',created_at:x._updatedAt||'',
-  payload:{type:x['수리유형']||'기타',content:x['수리내용']||'',work_date:x['수리일자']||''}})}
+/* 금형번호 → 품번: ① 수리 기록 비고 '[생산현황 02_200 · 품번 45624-2F010-U]' ② 금형 정기점검 마스터(mold_periodic_v1 › molds)
+   ③ 그대로(금형번호가 품번인 경우) */
+function mrRow(x){
+  const memo=String(x['비고']||''),mn=x['금형번호']||'';
+  const mc=x._machine_name||((memo.match(/\[생산현황\s*([^\]]*)\]/)||[])[1]||'').split('·')[0].trim()||x._machine_code||'';
+  const pm=(memo.match(/품번\s*[:：]?\s*([^\]\s·,]+)/)||[])[1];
+  const mm=MOLDMAP&&MOLDMAP[String(mn).toUpperCase().replace(/[^0-9A-Z]/g,'')];
+  return moldRow({machine_code:mc,item_code:pm||(mm&&mm.pn)||mn,cust:mm&&mm.cust,mold:mn,worker:x['담당자']||'',created_at:x._updatedAt||'',
+    payload:{type:x['수리유형']||'기타',content:x['수리내용']||'',work_date:x['수리일자']||''}})}
+let MOLDMAP=null,MOLDMAPP=null;
+async function loadMoldMap(){
+  for(const [u,k] of [[MR_URL,MR_KEY],[DT_URL,DT_KEY]]){
+    try{const r=await fetch(u+'/rest/v1/kv_store?key=eq.mold_periodic_v1&select=molds:value->molds',{headers:{'apikey':k,'Authorization':'Bearer '+k}});
+      if(!r.ok)continue;const js=await r.json();const L=(js[0]&&Array.isArray(js[0].molds))?js[0].molds:null;if(!L)continue;
+      const m={};L.forEach(x=>{const mn=String(x['금형번호']||'').toUpperCase().replace(/[^0-9A-Z]/g,'');if(mn&&x['품번'])m[mn]={pn:x['품번'],cust:x['고객사']&&x['고객사']!=='미등록'?x['고객사']:''}});
+      return m}catch(e){}}
+  return {}}
 async function loadRepHist(){
   const r=await fetch(MR_URL+'/rest/v1/kv_store?key=eq.repair_history_v2&select=value',{headers:{'apikey':MR_KEY,'Authorization':'Bearer '+MR_KEY}});
   if(!r.ok)throw new Error('금형수리 이력 '+r.status);
@@ -2622,9 +2636,9 @@ function moldRow(x){
   const raw=String(x.item_code||p.item_code||'');const nz=v=>String(v||'').toUpperCase().replace(/[^0-9A-Z]/g,'');
   const pn=((S.master.mesPn||{})[raw])||(S.master.items.find(i=>nz(i.pn)===nz(raw))||{}).pn
     ||(S.recs.find(r=>r.mold&&nz(r.mold)===nz(raw))||{}).pn||raw;
-  const cust=(S.master.items.find(i=>i.pn===pn)||{}).cust||(S.recs.find(r=>r.pn===pn&&r.cust)||{}).cust||'';
+  const cust=(S.master.items.find(i=>i.pn===pn)||{}).cust||(S.recs.find(r=>r.pn===pn&&r.cust)||{}).cust||x.cust||'';
   const ms=Date.parse(x.created_at);const dt=isFinite(ms)?new Date(ms+9*3600e3).toISOString().slice(0,10):'';
-  return{date:pick(['work_date','repair_date','date']).slice(0,10)||dt,mc:mm,code,pn,cust,type,txt,worker:x.worker||pick(['worker','repairer'])};
+  return{date:pick(['work_date','repair_date','date']).slice(0,10)||dt,mc:mm,code,pn,cust,type,txt,mold:x.mold||'',worker:x.worker||pick(['worker','repairer'])};
 }
 /* 금형수리 요약 (고객사 지정 시 그 고객사 품번만) */
 function moldSum(mo,cu){
@@ -3009,6 +3023,7 @@ async function weekClose(from){
       <button class="p s" onclick="weekCopy()">내용 복사</button><button class="s" onclick="weekPrint()">인쇄</button><button onclick="closeMask()">닫기</button></div>`;
   $('modal').innerHTML=head+'<div class="muted">작성 중…</div>';$('mask').classList.add('on');
   let rh=null;try{if(!MRALL)MRALL=loadRepHist();rh=await MRALL}catch(e){MRALL=null}
+  if(!MOLDMAPP)MOLDMAPP=loadMoldMap();MOLDMAP=await MOLDMAPP;
   const txt=weekText(from,to,pf,pt,rh);
   WEEKTXT=txt;
   $('modal').innerHTML=head+`<p class="muted" style="margin:0 0 6px">일보·금형수리 이력·고장이력대장으로 자동 작성했습니다. 아래 내용을 고쳐 쓴 뒤 복사·인쇄하세요.</p>
