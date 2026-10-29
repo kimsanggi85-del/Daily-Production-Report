@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v22.9 · 태진다이텍</title>
+<title>생산일보 통합관리 v23.0 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2480,11 +2480,14 @@ async function pmQuality(d){
     const [rows,m1,m2]=await Promise.all([
       get('defect_history',`select=defect_date,model_name,inspect_line,inspect_qty,defect_type,qty&defect_date=gte.${from}&defect_date=lte.${d}&order=defect_date.asc&limit=20000`),
       get('defect_model','select=model_name,customer&limit=2000').catch(()=>[]),get('general_model_tj','select=model_name,customer&limit=5000').catch(()=>[])]);
-    const cm={};[...m2,...m1].forEach(m=>{if(m.model_name)cm[m.model_name]=m.customer||''});
+    // 기종명 띄어쓰기·대소문자 차이(1179Outer / 1179 Outer)는 같은 기종으로 본다
+    const nk=v=>String(v||'').toUpperCase().replace(/\s+/g,'');
+    const cm={};[...m2,...m1].forEach(m=>{if(m.model_name)cm[nk(m.model_name)]=m.customer||''});
     const isNg=r=>r.defect_type&&r.defect_type!=='양품';
     const W=()=>({i:0,d:0});const add=(o,r)=>{o.i+=+r.inspect_qty||0;if(isNg(r))o.d+=+r.qty||0};
     const cur=W(),prev=W(),day=W(),cust={},types={},mods={};
-    rows.forEach(r=>{const k=r.defect_date>=c0?'c':'p',c=cm[r.model_name]||'미지정',m=r.model_name||'?';
+    const disp={};rows.forEach(r=>{const k=nk(r.model_name);if(k&&!disp[k])disp[k]=String(r.model_name).trim()});
+    rows.forEach(r=>{const k=r.defect_date>=c0?'c':'p',c=cm[nk(r.model_name)]||'미지정',m=disp[nk(r.model_name)]||'?';
       add(k==='c'?cur:prev,r);if(r.defect_date===d)add(day,r);
       const x=cust[c]=cust[c]||{c:W(),p:W()};add(x[k],r);
       const y=mods[m]=mods[m]||{c:W(),p:W(),cu:c};add(y[k],r);
@@ -2526,7 +2529,9 @@ function pmBrief(d,st,qd){
    R7.forEach(r=>{const v=(+r.ng||0)+(+r.ngp||0);if(!v)return;const x=gp[r.pn]=gp[r.pn]||{ng:0,q:0,notes:{}};x.ng+=v;if(r.note)x.notes[r.note]=(x.notes[r.note]||0)+1});
    R7.forEach(r=>{if(gp[r.pn])gp[r.pn].q+=+r.qty||0});
    const pl=Object.entries(gp).sort((a,b)=>b[1].ng-a[1].ng).slice(0,3);
-   if(pl.length)T.push('  공정(일보): '+pl.map(([pn,x])=>{const ty=autoNg(pn,x,R7).split('\n')[0].replace(/^유형:\s*/,'').split(' · 최다일')[0];return `${pn} ${fmt(x.ng)} (${fmt(Math.round(x.ng/(x.q||1)*1e6))} PPM${ty&&!/기록 없음/.test(ty)?', '+ty.slice(0,24):''})`}).join(' · '));}
+   // 공정 불량 유형은 이름만 (특기사항 수량은 일보 불량수와 기준이 달라 섞지 않는다)
+   if(pl.length)T.push('  공정(일보): '+pl.map(([pn,x])=>{const ty=[...new Set(Object.keys(x.notes).flatMap(t=>String(t).split(/\s*\/\s*|,/)).map(t=>t.replace(/[:：]?\s*\d[\d,]*\s*(EA|개)?\s*$/i,'').trim()).filter(t=>t&&!/^불량사유/.test(t)))].slice(0,2).join('·');
+     return `${pn} ${fmt(x.ng)} EA (${fmt(Math.round(x.ng/(x.q||1)*1e6))} PPM${ty?', '+ty:''})`}).join(' · '));}
   if(st&&(st.short||st.low)){T.push(`■ 재고 (재고수불부 ${String(st.at||'').slice(5,16).replace('T',' ')})`);
     const sh=st.short||[],lw=st.low||[];
     T.push(sh.length?`  안전재고 미달 ${st.nShort||sh.length}품목: `+sh.slice(0,5).map(x=>`${x.pn} ${fmt(x.cur)}/${fmt(x.sf)}${x.doi!=null?` (${x.doi.toFixed(1)}일)`:''}`).join(' · '):'  안전재고 미달 없음');
