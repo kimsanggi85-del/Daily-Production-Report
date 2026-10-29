@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v22.4 · 태진다이텍</title>
+<title>생산일보 통합관리 v22.5 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -401,6 +401,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
   <div class="navitem" data-g="view"><button type="button">현황 · 집계 ▾</button><div class="mega">
     <div class="mega-col">
       <a class="scr" data-pg="dash"><i>▦</i>현황판<em>DASHBOARD</em></a>
+      <a class="scr" data-pg="pm"><i>◎</i>생산관리<em>PRODUCTION CONTROL</em></a>
       <a class="act" data-fn="renderAll()"><i>🔄</i>다시 계산</a>
     </div>
     <div class="mega-col">
@@ -435,6 +436,7 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
   <div class="brand"><b>생산일보 통합관리</b><span>태진다이텍 · 프레스 생산실적</span><button type="button" class="x" onclick="tglNav(0)">✕</button></div>
   <a data-pg="entry" class="on"><i>✎</i>생산일보</a>
   <a data-pg="dash"><i>▦</i>현황판</a>
+  <a data-pg="pm"><i>◎</i>생산관리</a>
   <a data-pg="month"><i>Σ</i>월간 집계</a>
   <a data-pg="daily"><i>▤</i>품목별 일별표</a>
   <a data-pg="report"><i>▣</i>월간 보고서</a>
@@ -699,6 +701,20 @@ kbd{background:#EEF2F7;border:1px solid var(--line);border-radius:4px;padding:0 
     </div>
     <div id="rbBody"></div>
   </section>
+  <section class="pg" id="pg-pm">
+    <div class="panel"><div class="fl"><h3 style="margin:0">생산관리 브리핑</h3>
+      <input type="date" id="pm_d" onchange="renderPm()" style="width:150px" title="실적 기준일 (기본: 마지막 생산일)">
+      <span class="muted" id="pmStockAt" style="font-size:12px"></span><span class="grow"></span>
+      <button class="s" onclick="pmScanBtn()" title="기준일 실적에서 이상 항목을 찾아 이상 대응 목록에 올립니다">이상 항목 찾기</button>
+      <button class="p s" onclick="pmSend()" title="이 브리핑을 ntfy(taejincall)로 보냅니다">알림 보내기</button></div>
+      <pre id="pmBrief" style="white-space:pre-wrap;font:13px/1.7 'Malgun Gothic',sans-serif;background:#F7F9FB;border:1px solid var(--line2);border-radius:8px;padding:12px;margin:8px 0 0"></pre></div>
+    <div class="panel"><div class="fl"><h3 style="margin:0">이상 대응 추적</h3>
+      <select id="pm_f" onchange="renderPm()" style="width:130px"><option value="open">미결만</option><option value="late">기한 경과</option><option value="all">전체</option></select>
+      <span class="muted" id="pmIssCnt" style="font-size:12px"></span><span class="grow"></span>
+      <button class="s" onclick="pmIssNew()">직접 추가</button></div>
+      <div class="tw" style="max-height:60vh;margin-top:8px"><table id="tPmIss"></table></div></div>
+  </section>
+
   <section class="pg" id="pg-fail">
     <p class="muted" style="margin:0 0 8px;font-size:12px">설비·금형 고장 한 건당 한 줄 · IATF 8.5.1.5 TPM 기록</p>
     <div class="fl" style="margin-bottom:10px;flex-wrap:wrap">
@@ -878,7 +894,7 @@ const PN_FAM={'36 심팩300':{'1106':'IW/OW-BDA-1106-2','1113':'IW/OW-BDA-1113-2
 const PN_NAME={"IW/OW-BDA-1106-2":"Raceway 1106 CA/CB","IW/OW-BDA-1106-3":"Raceway 1106 CA/CB","IW/OW-BDA-1113-1":"Raceway 1113-1","IW/OW-BDA-1113-2":"Raceway 1113-2","IW/OW-BDA-1159B":"Raceway 1159B/C","IW/OW-BDA-1179-1":"Raceway 1179-1","IW/OW-BDA-1179-2":"Raceway 1179-2","IW/OW-BDA-1179-3":"Raceway 1179-3"};
 
 /* ===== 상태 ===== */
-let S={recs:[],del:{},master:null,seedVer:'',ua:'',fails:[]};
+let S={recs:[],del:{},master:null,seedVer:'',ua:'',fails:[],issues:[]};
 let month=new Date().toISOString().slice(0,7);
 let editId=null, pg='entry', sortKey='date', sortDir=-1;
 const $=id=>document.getElementById(id);
@@ -908,6 +924,7 @@ function load(){
   if(!S.master.mesPn)S.master.mesPn=Object.assign({},DEF_MESPN);
   if(!S.del)S.del={};
   if(!Array.isArray(S.fails))S.fails=[];
+  if(!Array.isArray(S.issues))S.issues=[];
   if(S.seedVer!==SEED_VER){
     const byId=new Map(S.recs.map(r=>[r.id,r]));
     SEED.forEach(r=>{if(S.del[r.id])return;const e=byId.get(r.id);if(!e)S.recs.push(r);else if(e.brk===undefined)e.brk=r.brk});
@@ -1026,6 +1043,9 @@ function mergeIn(srv){
   if(srv.fails){const fm=new Map((S.fails||[]).map(f=>[f.id,f]));
     srv.fails.forEach(f=>{if(S.del[f.id])return;const l=fm.get(f.id);if(!l||(f.ua||'')>=(l.ua||''))fm.set(f.id,f)});
     S.fails=[...fm.values()].filter(f=>!S.del[f.id])}
+  if(srv.issues){const im=new Map((S.issues||[]).map(f=>[f.id,f]));
+    srv.issues.forEach(f=>{if(S.del[f.id])return;const l=im.get(f.id);if(!l||(f.ua||'')>=(l.ua||''))im.set(f.id,f)});
+    S.issues=[...im.values()].filter(f=>!S.del[f.id])}
   if(srv.mig){S.mig=Object.assign(S.mig||{},srv.mig)}
   if(srv.log){const k=new Set((S.log||[]).map(x=>x.t+'|'+x.by+'|'+x.act));
     S.log=[...(S.log||[]),...srv.log.filter(x=>!k.has(x.t+'|'+x.by+'|'+x.act))].sort((a,b)=>b.t.localeCompare(a.t)).slice(0,300)}
@@ -1074,7 +1094,7 @@ function schedulePush(){clearTimeout(pushT);pushT=setTimeout(()=>push(),800);}
 async function push(manual){
   setSync('busy','서버에 올리는 중');
   try{
-    const body=[{key:KV_KEY,value:{recs:S.recs,del:S.del,master:S.master,rpt:S.rpt||{},mig:S.mig||{},log:S.log||[],fails:S.fails||[],rel:S.rel||{},appVer:(S.appVer&&vNum(S.appVer)>vNum(APP_VER)?S.appVer:APP_VER),ua:S.ua},updated_at:now()}];
+    const body=[{key:KV_KEY,value:{recs:S.recs,del:S.del,master:S.master,rpt:S.rpt||{},mig:S.mig||{},log:S.log||[],fails:S.fails||[],issues:S.issues||[],rel:S.rel||{},appVer:(S.appVer&&vNum(S.appVer)>vNum(APP_VER)?S.appVer:APP_VER),ua:S.ua},updated_at:now()}];
     const r=await fetch(SB_URL+'/rest/v1/kv_store?on_conflict=key',{method:'POST',headers:{...hdr,'Prefer':'resolution=merge-duplicates'},body:JSON.stringify(body)});
     if(!r.ok)throw new Error(r.status);
     setSync('ok','서버 연결됨');if(manual)toast('서버에 올렸습니다');
@@ -1083,13 +1103,13 @@ async function push(manual){
 
 /* ===== 공통 UI ===== */
 function toast(m){const t=$('toast');t.textContent=m;t.style.display='block';clearTimeout(t._t);t._t=setTimeout(()=>t.style.display='none',1800)}
-const PT_G={entry:'rep',dash:'view',month:'view',daily:'view',report:'rpt',mtbf:'rpt',master:'cfg',data:'cfg',fail:'cfg',help:'cfg'};
+const PT_G={entry:'rep',dash:'view',pm:'view',month:'view',daily:'view',report:'rpt',mtbf:'rpt',master:'cfg',data:'cfg',fail:'cfg',help:'cfg'};
 function go(p){pg=p;document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('on',a.dataset.pg===p));
   document.querySelectorAll('#pcTop .navitem').forEach(n=>n.classList.toggle('on',n.dataset.g===PT_G[p]));
   document.querySelectorAll('#pcTop .mega a.scr').forEach(a=>a.classList.toggle('on',a.dataset.pg===p));
   document.querySelectorAll('#pcTop .navitem.open').forEach(n=>n.classList.remove('open'));document.querySelectorAll('.pg').forEach(s=>s.classList.toggle('on',s.id==='pg-'+p));
-  $('title').textContent={dash:'현황판',entry:'생산일보 입력 · 이력',month:'월간 집계',daily:'품목별 일별표',report:'월간 보고서',master:'기준정보',data:'데이터 관리',fail:'고장이력대장',mtbf:'설비 신뢰성 MTBF · MTTR',help:'사용안내'}[p];
-  const mt=document.getElementById('mTtl'); if(mt)mt.textContent={dash:'현황판',entry:'생산일보',month:'월간 집계',daily:'품목별 일별표',report:'월간 보고서',master:'기준정보',data:'데이터 관리',fail:'고장이력대장',mtbf:'MTBF · MTTR',help:'사용안내'}[p]||'생산일보';
+  $('title').textContent={pm:'생산관리',dash:'현황판',entry:'생산일보 입력 · 이력',month:'월간 집계',daily:'품목별 일별표',report:'월간 보고서',master:'기준정보',data:'데이터 관리',fail:'고장이력대장',mtbf:'설비 신뢰성 MTBF · MTTR',help:'사용안내'}[p];
+  const mt=document.getElementById('mTtl'); if(mt)mt.textContent={pm:'생산관리',dash:'현황판',entry:'생산일보',month:'월간 집계',daily:'품목별 일별표',report:'월간 보고서',master:'기준정보',data:'데이터 관리',fail:'고장이력대장',mtbf:'MTBF · MTTR',help:'사용안내'}[p]||'생산일보';
   const _e=(p==='entry');
   $('title').style.display=_e?'none':'';
   if($('topMes'))$('topMes').style.display=_e?'flex':'none';
@@ -1144,7 +1164,7 @@ function overMsg(r){const c=calc(r);if(!(c.eff>1))return '';
 
 function renderAll(){
   $('monLbl').textContent=month.replace('-','년 ')+'월';
-  ({dash:renderDash,entry:renderEntry,month:renderMonth,daily:renderDaily,report:renderReport,master:renderMaster,data:renderData,fail:flRender,mtbf:rbRender,help:()=>{}})[pg]();
+  ({pm:renderPm,dash:renderDash,entry:renderEntry,month:renderMonth,daily:renderDaily,report:renderReport,master:renderMaster,data:renderData,fail:flRender,mtbf:rbRender,help:()=>{}})[pg]();
 }
 
 /* ===== 현황판 ===== */
@@ -2404,6 +2424,116 @@ function rptEdReset(){const o=rptGet();if(!o.ed||!Object.keys(o.ed).length)retur
   if(!confirm(`이 보고서에서 직접 고친 내용 ${Object.keys(o.ed).length}건을 지우고 자동 내용으로 되돌릴까요?`))return;
   delete o.ed;o.ua=now();commit0();renderReport()}
 document.addEventListener('focusout',e=>{const t=e.target;if(RPTEDIT&&t&&t.dataset&&t.dataset.ek&&t.closest('#rptBody'))rptEdSave(t)});
+
+/* ===== 생산관리 (브리핑 · 계획 진척 · 이상 대응 추적) =====
+   이상 대응 목록은 생산일보 데이터(kv_store tj_prod_daily_v1 › issues)에 저장.
+   재고는 재고수불부 앱을 매일 아침 자동 작업이 읽어 kv_store tj_pm_stock_v1 에 요약을 남긴 것을 보여 준다 */
+const addDay=(d,n)=>{const t=new Date(d+'T00:00:00');t.setDate(t.getDate()+n);return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0')};
+const dwOf=d=>'일월화수목금토'[new Date(d+'T00:00:00').getDay()];
+/* 그 달 계획 가동일 = 평일(빨간날 제외) */
+function workDaysOf(mo){const[y,m]=mo.split('-').map(Number);const L=[];
+  for(let i=1;i<=new Date(y,m,0).getDate();i++){const d=mo+'-'+String(i).padStart(2,'0');const w=new Date(y,m-1,i).getDay();if(w&&w!==6&&!HOLI[d])L.push(d)}return L}
+function pmLastDay(){const t=today();return S.recs.map(r=>r.date).filter(d=>d<t).sort().pop()||addDay(t,-1)}
+function pmAgg(L){let q=0,ng=0,ngp=0,net=0,run=0,cap=0,stop=0,work=0;L.forEach(r=>{const c=calc(r);q+=+r.qty||0;ng+=+r.ng||0;ngp+=+r.ngp||0;net+=c.net;run+=c.run;stop+=+r.stop||0;work+=+r.work||0;if(!c.single)cap+=c.cap});
+  return{q,ng,ngp,net,run,cap,stop,work,oper:net?run/net:NaN,eff:cap?q/cap:NaN,ppm:q?(ng+ngp)/q*1e6:NaN,n:L.length}}
+/* 월 계획 진척 (d 까지) */
+function pmProgress(d){
+  const mo=d.slice(0,7),PL=planOf(mo),tgt=+PL.tgt||0;
+  const L=S.recs.filter(r=>r.date.slice(0,7)===mo&&r.date<=d),cum=L.reduce((a,r)=>a+(+r.qty||0),0);
+  const done=[...new Set(L.map(r=>r.date))].sort(),WD=workDaysOf(mo),left=WD.filter(x=>x>d).length;
+  const last5=done.slice(-5),avg5=last5.length?S.recs.filter(r=>last5.includes(r.date)).reduce((a,r)=>a+(+r.qty||0),0)/last5.length:0;
+  const need=left?Math.max(0,tgt-cum)/left:0,fc=cum+avg5*left;
+  return{mo,tgt,cum,rate:tgt?cum/tgt:NaN,days:done.length,plan:WD.length,left,avg5,need,fc,fcRate:tgt?fc/tgt:NaN}}
+/* 기준일 이상 항목 → 이상 대응 목록 (같은 항목은 한 번만) */
+function pmFind(d){
+  const o=rptGet(),tgtP=+(o.tgtPpm||1500),L=S.recs.filter(r=>r.date===d),out=[];
+  const g={};L.forEach(r=>{const c=calc(r);const x=g[r.mc]=g[r.mc]||{q:0,cap:0,work:0,stop:0,f:0,fm:0,sr:''};x.q+=+r.qty||0;if(!c.single)x.cap+=c.cap;x.work+=+r.work||0;x.stop+=+r.stop||0;x.f+=+r.fcnt||0;x.fm+=+r.fmin||0;if(String(r.sr||'').length>x.sr.length)x.sr=r.sr||''});
+  const who=mc=>{const w=mainWorker(L,mc);return '생산팀'+(w?' '+w:'')};
+  // 설비고장 (대장 우선, 없으면 일보 고장 입력)
+  const FL=(S.fails||[]).filter(f=>f.date===d&&f.kind==='설비');const fmc=new Set();
+  FL.forEach(f=>{fmc.add(f.mc);out.push({key:`fail|${d}|${f.mc}|${f.id}`,kind:'설비고장',mc:f.mc,pn:'',title:`${f.mc} 설비고장 ${f.min||0}분`,detail:[f.sym,f.cause].filter(Boolean).join(' → '),owner:f.by||'설비보전',due:addDay(d,3)})});
+  Object.entries(g).forEach(([mc,x])=>{if(x.f>0&&!fmc.has(mc))out.push({key:`fail|${d}|${mc}`,kind:'설비고장',mc,pn:'',title:`${mc} 설비고장 ${x.f}건 ${x.fm}분`,detail:String(x.sr).split(/\s*\/\s*/).filter(s=>FAIL_EQ.some(k=>s.includes(k))||/고장|오작동|에러/.test(s)).join(' / ')||x.sr,owner:'설비보전',due:addDay(d,3)})});
+  // 효율 저조 (근무 5시간 이상, 효율 50% 미만)
+  Object.entries(g).forEach(([mc,x])=>{if(x.cap>0&&x.work>=300&&x.q/x.cap<.5){const sc=stopCats(L.filter(r=>r.mc===mc)).filter(([k])=>k!=='휴식·식사')[0];
+    out.push({key:`eff|${d}|${mc}`,kind:'효율 저조',mc,pn:'',title:`${mc} 효율 ${(x.q/x.cap*100).toFixed(0)}%`,detail:`정지 ${x.stop}분${sc?' · 1위 '+sc[0]+' '+sc[1]+'분':''}`,owner:who(mc),due:addDay(d,2)})}});
+  // 불량 (품번 PPM 이 목표의 2배·3,000 이상, 30EA 이상)
+  const gp={};L.forEach(r=>{const x=gp[r.pn]=gp[r.pn]||{q:0,ng:0,mc:r.mc,note:''};x.q+=+r.qty||0;x.ng+=(+r.ng||0)+(+r.ngp||0);if(r.note)x.note=r.note});
+  Object.entries(gp).forEach(([pn,x])=>{const p=x.q?x.ng/x.q*1e6:0;if(x.ng>=30&&p>=Math.max(tgtP*2,3000))
+    out.push({key:`ng|${d}|${pn}`,kind:'불량',mc:x.mc,pn,title:`${pn} 불량 ${fmt(x.ng)} EA (${fmt(Math.round(p))} PPM)`,detail:x.note,owner:'품질팀',due:addDay(d,3)})});
+  // 금형 파손 (금형수리 이력) · 반복 수리 (그 달 3건 이상)
+  const M=MOLDREP[d.slice(0,7)];
+  if(M&&M.ok){M.rows.filter(r=>r.date===d&&/파손|크랙/.test(r.type+' '+r.txt)).forEach(r=>out.push({key:`mold|${d}|${r.mold||r.pn}|${r.type}`,kind:'금형파손',mc:r.mc,pn:r.pn,title:`${r.pn}${r.mold&&r.mold!==r.pn?'('+r.mold+')':''} ${r.type}`,detail:String(r.txt).slice(0,80),owner:'금형팀'+(r.worker?' '+r.worker:''),due:addDay(d,7)}));
+    const cnt={};M.rows.filter(r=>r.date<=d).forEach(r=>{const k=r.mold||r.pn;cnt[k]=(cnt[k]||[]).concat(r)});
+    Object.entries(cnt).forEach(([k,A])=>{if(A.length>=3&&A.some(r=>r.date===d))out.push({key:`moldrep|${d.slice(0,7)}|${k}`,kind:'반복 금형수리',mc:A[0].mc,pn:A[0].pn,title:`${A[0].pn}${k!==A[0].pn?'('+k+')':''} 금형수리 ${A.length}건 (${+d.slice(5,7)}월)`,detail:moldWords(A),owner:'금형팀',due:addDay(d,7)})})}
+  return out}
+function pmScan(d){S.issues=S.issues||[];const have=new Set(S.issues.map(x=>x.key));let n=0;
+  pmFind(d).forEach(x=>{if(have.has(x.key))return;S.issues.push({id:uid(),...x,date:d,status:'열림',act:'',ua:now(),by:localStorage.getItem('tj_me')||''});have.add(x.key);n++});
+  if(n)logAdd('이상 항목 등록',`${d} ${n}건`);return n}
+function pmOpen(){return (S.issues||[]).filter(x=>x.status!=='완료'&&x.status!=='취소')}
+/* 브리핑 문장. st = 재고 요약 {at, short:[], low:[]} (없으면 생략) */
+function pmBrief(d,st){
+  const L=S.recs.filter(r=>r.date===d),A=pmAgg(L),P=pmProgress(d),o=rptGet();
+  const wait=L.filter(r=>r.src==='MES').length;
+  const T=[],t0=today();
+  T.push(`■ ${+d.slice(5,7)}/${+d.slice(8)}(${dwOf(d)}) 실적`);
+  T.push(L.length?`  생산 ${fmt(A.q)} EA · 가동율 ${pct(A.oper)} · 효율 ${pct(A.eff)} · 불량 ${fmt(Math.round(A.ppm||0))} PPM · 일보 ${L.length}줄${wait?` (현장 마감 전 MES 값 ${wait}줄)`:''}`:'  일보 없음');
+  T.push(`■ ${+P.mo.slice(5)}월 계획 진척`);
+  if(P.tgt){T.push(`  누계 ${fmt(P.cum)} / 목표 ${fmt(P.tgt)} EA (${pct(P.rate)}) · 가동 ${P.days}일 / 계획 ${P.plan}일`);
+    T.push(P.left?`  남은 ${P.left}일 일평균 ${fmt(Math.round(P.need))} EA 필요 · 최근 5일 평균 ${fmt(Math.round(P.avg5))} → 예상 ${pct(P.fcRate)} ${P.fcRate>=1?'달성':'⚠ 미달 '+fmt(Math.round(P.tgt-P.fc))+' EA'}`:`  ${P.rate>=1?'달성':'미달 '+fmt(Math.round(P.tgt-P.cum))+' EA'}`)}
+  else T.push(`  누계 ${fmt(P.cum)} EA · 목표 미입력 (기준정보 › 월 생산계획)`);
+  const F=pmFind(d);
+  T.push(`■ 이상 (${+d.slice(5,7)}/${+d.slice(8)})`);
+  T.push(F.length?F.slice(0,8).map(x=>`  · [${x.kind}] ${x.title}${x.detail?' — '+String(x.detail).slice(0,40):''}`).join('\n'):'  · 없음');
+  if(st&&(st.short||st.low)){T.push(`■ 재고 (재고수불부 ${String(st.at||'').slice(5,16).replace('T',' ')})`);
+    const sh=st.short||[],lw=st.low||[];
+    T.push(sh.length?`  안전재고 미달 ${st.nShort||sh.length}품목: `+sh.slice(0,5).map(x=>`${x.pn} ${fmt(x.cur)}/${fmt(x.sf)}${x.doi!=null?` (${x.doi.toFixed(1)}일)`:''}`).join(' · '):'  안전재고 미달 없음');
+    if(lw.length)T.push(`  재고 3일분 미만: `+lw.slice(0,5).map(x=>`${x.pn} ${x.doi.toFixed(1)}일`).join(' · '))}
+  const O=pmOpen(),late=O.filter(x=>x.due&&x.due<t0);
+  T.push(`■ 이상 대응 미결 ${O.length}건${late.length?` · 기한 경과 ${late.length}건`:''}`);
+  if(late.length)T.push(late.slice(0,5).map(x=>`  · ${x.due.slice(5).replace('-','/')} ${x.title} (${x.owner||'-'})`).join('\n'));
+  const N=[];
+  if(P.tgt&&P.left&&P.fcRate<1)N.push(`계획 미달 대응: 일 ${fmt(Math.round(P.need))} EA 필요 — 특근·병목 설비 우선 배치 검토`);
+  F.filter(x=>x.kind==='설비고장').slice(0,2).forEach(x=>N.push(`${x.mc} 설비 상태 확인·보전 조치`));
+  F.filter(x=>x.kind==='불량').slice(0,1).forEach(x=>N.push(`${x.pn} 초물·중물 검사 강화, 불량 원인 확인`));
+  F.filter(x=>x.kind==='금형파손'||x.kind==='반복 금형수리').slice(0,1).forEach(x=>N.push(`${x.pn} 금형 상태 확인 (금형팀)`));
+  if(st&&st.short&&st.short.length)N.push(`안전재고 미달 ${st.short[0].pn} 등 생산 우선순위 반영`);
+  if(late.length)N.push(`기한 경과 이상 대응 ${late.length}건 담당자 확인`);
+  if(wait)N.push(`현장 마감(실제양품) 미입력 ${wait}줄 확인`);
+  T.push('■ 오늘 확인할 일');T.push(N.length?N.map((x,i)=>`  ${i+1}. ${x}`).join('\n'):'  · 특이사항 없음');
+  let msg=T.join('\n');if(msg.length>3800)msg=msg.slice(0,3800)+'\n…';
+  return{title:`생산관리 브리핑 ${+d.slice(5,7)}/${+d.slice(8)}(${dwOf(d)}) · 진척 ${P.tgt?pct(P.rate):'-'}${F.length?` · 이상 ${F.length}`:''}`,msg};
+}
+let PMSTOCK=null;
+async function pmLoadStock(){try{const r=await fetch(SB_URL+'/rest/v1/kv_store?key=eq.tj_pm_stock_v1&select=value',{headers:hdr});if(r.ok){const j=await r.json();PMSTOCK=(j[0]&&j[0].value)||null}}catch(e){}}
+async function renderPm(){
+  if(!$('pm_d').value)$('pm_d').value=pmLastDay();
+  const d=$('pm_d').value;
+  if(PMSTOCK===null){PMSTOCK=false;pmLoadStock().then(()=>{if(pg==='pm')renderPm()})}
+  loadMoldRep(d.slice(0,7));
+  const B=pmBrief(d,PMSTOCK||null);
+  $('pmBrief').textContent=B.title+'\n\n'+B.msg;
+  $('pmStockAt').textContent=PMSTOCK&&PMSTOCK.at?`재고 기준 ${String(PMSTOCK.at).slice(5,16).replace('T',' ')} (매일 아침 자동)`:'재고 요약 없음 — 매일 아침 자동 작업 후 표시';
+  const f=$('pm_f').value,t0=today();
+  let L=(S.issues||[]).slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  if(f==='open')L=L.filter(x=>x.status!=='완료'&&x.status!=='취소');if(f==='late')L=L.filter(x=>x.status!=='완료'&&x.status!=='취소'&&x.due&&x.due<t0);
+  const O=pmOpen();$('pmIssCnt').textContent=`미결 ${O.length}건 · 기한 경과 ${O.filter(x=>x.due&&x.due<t0).length}건 · 전체 ${(S.issues||[]).length}건`;
+  const ST=['열림','조치중','완료','취소'];
+  $('tPmIss').innerHTML='<tr><th>발생일</th><th>구분</th><th>내용</th><th>담당</th><th>기한</th><th>상태</th><th style="min-width:220px">조치 내용</th></tr>'+(L.length?L.map(x=>{const late=x.status!=='완료'&&x.status!=='취소'&&x.due&&x.due<t0;
+    return `<tr${late?' style="background:rgba(200,67,58,.07)"':''}><td>${esc((x.date||'').slice(5))}</td><td><span class="tag ${x.kind==='설비고장'?'r':x.kind==='불량'?'a':''}">${esc(x.kind)}</span></td>
+    <td style="white-space:normal;min-width:220px"><b>${esc(x.title)}</b>${x.detail?`<div class=muted style="font-size:11px">${esc(x.detail)}</div>`:''}</td>
+    <td><input value="${esc(x.owner||'')}" onchange="pmIssSet('${x.id}','owner',this.value)" style="width:110px;padding:3px 5px"></td>
+    <td><input type=date value="${esc(x.due||'')}" onchange="pmIssSet('${x.id}','due',this.value)" style="width:140px;padding:3px 5px${late?';border-color:var(--red)':''}"></td>
+    <td><select onchange="pmIssSet('${x.id}','status',this.value)" style="width:84px;padding:3px 4px">${ST.map(v=>`<option${v===x.status?' selected':''}>${v}</option>`).join('')}</select></td>
+    <td><textarea onchange="pmIssSet('${x.id}','act',this.value)" style="width:100%;min-height:30px" placeholder="원인·조치·결과">${esc(x.act||'')}</textarea></td></tr>`}).join(''):'<tr><td colspan=7 class=empty>해당 항목이 없습니다</td></tr>');
+}
+function pmIssSet(id,k,v){const x=(S.issues||[]).find(i=>i.id===id);if(!x)return;x[k]=v;x.ua=now();if(k==='status'&&v==='완료')x.done=today();commit0();if(k==='status'||k==='due')renderPm()}
+function pmIssNew(){const t=prompt('이상 내용 (예: 47 심팩300 피더 이송 불량)');if(!t)return;
+  S.issues=S.issues||[];S.issues.push({id:uid(),key:'manual|'+uid(),kind:'직접',date:today(),mc:'',pn:'',title:t,detail:'',owner:'',due:addDay(today(),3),status:'열림',act:'',ua:now(),by:localStorage.getItem('tj_me')||''});commit0();renderPm()}
+function pmScanBtn(){const d=$('pm_d').value||pmLastDay();const n=pmScan(d);if(n)commit0();renderPm();toast(n?`${n}건을 이상 대응 목록에 올렸습니다`:'새로 올릴 이상 항목이 없습니다')}
+async function pmSend(){const d=$('pm_d').value||pmLastDay();const B=pmBrief(d,PMSTOCK||null);
+  if(!confirm(`이 브리핑을 ntfy(${NTFY_TOPIC})로 보낼까요?`))return;
+  try{const r=await fetch('https://ntfy.sh/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic:NTFY_TOPIC,title:B.title,message:B.msg,tags:['clipboard'],priority:3})});
+    toast(r.ok?'보냈습니다':'보내지 못했습니다 ('+r.status+')')}catch(e){toast('보내지 못했습니다')}}
 
 /* 보고서 집계 묶음 */
 function rptGroups(st,cu){
