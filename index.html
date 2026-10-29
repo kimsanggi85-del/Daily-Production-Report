@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v23.4 · 태진다이텍</title>
+<title>생산일보 통합관리 v23.5 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2536,7 +2536,9 @@ async function pmExtra(d){
     const mcOf=c=>(S.master.mesMc||{})[c]||c,pnOf=c=>(S.master.mesPn||{})[c]||c;
     const W={};const put=(mc,pn,wo,tq,st)=>{if(!pn)return;const k=mc+'|'+pn;const x=W[k]=W[k]||{mc,pn,wo:'',tq:0,st:''};if(wo&&!x.wo)x.wo=wo;if(tq)x.tq=tq;if(st&&(!x.st||st<x.st))x.st=st};
     dp.forEach(r=>put(mcOf(r.machine_code),pnOf(r.item_code),r.work_order_no,0,String(r.start_time||'').slice(0,5)));
-    ms.forEach(m=>{const st=String(m.updated_at||m.last_update||'').slice(0,10);if(m.current_item_code&&(!st||st===t||W[mcOf(m.machine_code)+'|'+pnOf(m.current_item_code)]))put(mcOf(m.machine_code),pnOf(m.current_item_code),m.work_order_no,+m.target_qty||0,'')});
+    // 작업지시번호 날짜 WO+연(2)+월(1~9,A~C)+일(2) — 오늘 작업지시이거나 지금 생산 중인 설비만 (옛 작업지시로 멈춰 있는 설비 제외)
+    const woDay=w=>{const m=String(w||'').match(/^WO(\d{2})([1-9ABC])(\d{2})/i);return m?`20${m[1]}-${String(parseInt(m[2],16)).padStart(2,'0')}-${m[3]}`:''};
+    ms.forEach(m=>{const wo=m.current_wo||m.work_order_no||'';if(m.current_item_code&&(woDay(wo)===t||m.is_producing===true||W[mcOf(m.machine_code)+'|'+pnOf(m.current_item_code)]))put(mcOf(m.machine_code),pnOf(m.current_item_code),wo,+m.target_qty||0,'')});
     out.wo={d:t,list:Object.values(W).sort((a,b)=>String(a.mc).localeCompare(String(b.mc),'ko',{numeric:true}))};
   }catch(e){out.wo={err:String(e.message||e)}}
   return out;
