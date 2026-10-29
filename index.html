@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v21.9 · 태진다이텍</title>
+<title>생산일보 통합관리 v22.0 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -3218,11 +3218,8 @@ function rptFix(){
   o.fix={at:today(),by:localStorage.getItem('tj_me')||'',base:closeDayOf(month),items};o.ua=now();commit0();renderReport();
   toast(`${+month.slice(5)}월 개선 활동 ${items.length}건을 확정했습니다 — 다음 달 보고서에서 이행 점검됩니다`);
 }
-/* 월 마감 기준일 — 그 달 마지막 평일(빨간날 제외). 2026-10 → 10/30(금) */
-function closeDayOf(mo){const[y,m]=mo.split('-').map(Number);
-  for(let d=new Date(y,m,0).getDate();d>0;d--){const ds=mo+'-'+String(d).padStart(2,'0');const w=new Date(y,m-1,d).getDay();
-    if(w!==0&&w!==6&&!HOLI[ds])return ds}
-  return mo+'-'+String(new Date(y,m,0).getDate()).padStart(2,'0')}
+/* 개선 활동 마감 기준일 — 매월 말일 (2026-10 → 10/31) */
+function closeDayOf(mo){const[y,m]=mo.split('-').map(Number);return mo+'-'+String(new Date(y,m,0).getDate()).padStart(2,'0')}
 /* 마감 후 자동 확정 — 전체 + 그 달 고객사별. 이미 확정한 보고서는 그대로 둔다 */
 function autoFixMonth(mo){
   if(!S.recs.some(r=>r.date.slice(0,7)===mo))return 0;

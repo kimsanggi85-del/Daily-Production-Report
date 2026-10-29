@@ -1,7 +1,7 @@
 // 생산일보 자동 마감 — 앱(index.html)의 '일보콜' 코드를 그대로 서버에서 실행해 일보에 저장한다.
 //   evening : 오늘 업무 종료(월·화·목·금 19:00 / 수·토·일·빨간날 17:00, 연장이면 최종 가동) 10분 뒤 1회
 //   morning : 07:00 — 전날 일보를 다시 마감 (늦게 들어온 작업자 마감 수량 반영, 누락 줄 추가)
-//             전날이 월 마감 기준일(마지막 평일)이면 그 달 개선 활동도 확정
+//             전날이 말일이면 그 달 개선 활동도 확정 (말일에 생산이 없어도 실행)
 // 사용: node scripts/auto_close.mjs [auto|evening|morning] [YYYY-MM-DD] [--dry] [--force]
 //   auto = 실행 시각으로 판단 (06~08시 → morning, 그 외 → evening)
 import { JSDOM, VirtualConsole } from "jsdom";
@@ -38,18 +38,22 @@ async function main() {
   const doneRow = await sb(`/rest/v1/kv_store?key=eq.${DONE_KEY}&select=value`);
   const done = (doneRow[0] && doneRow[0].value) || {};
   const rec = done[d] || {};
+  // 말일 익일 재마감 → 그 달 개선 활동 확정 (말일이 휴무여도 진행)
+  const monthEnd = mode === "morning" && new Date(Date.UTC(+d.slice(0, 4), +d.slice(5, 7), 0)).toISOString().slice(0, 10) === d;
+  const needFix = monthEnd && !rec.fixed;
 
   // ── 실행 여부 판단 (가벼운 조회만) ──
   const dp = await sb(`/rest/v1/daily_production?select=end_time&ymd=eq.${d}&order=end_time.desc&limit=1`);
-  if (!dp.length) return log("생산 자료 없음 → 건너뜀");
-  const lastEnd = String(dp[0].end_time || "").slice(0, 5) || offOf(d);
+  if (!dp.length && !needFix) return log("생산 자료 없음 → 건너뜀");
+  const lastEnd = String((dp[0] || {}).end_time || "").slice(0, 5) || offOf(d);
   if (mode === "evening" && !force) {
     if (rec.evening) return log(`이미 마감 (${rec.evening})`);
     const endRef = Math.max(toMin(offOf(d)), toMin(lastEnd));
     const nowMin = kst().getUTCHours() * 60 + kst().getUTCMinutes();
     if (nowMin < endRef + AFTER) return log(`아직 (종료 ${offOf(d)}, 최종 가동 ${lastEnd})`);
   }
-  if (mode === "morning" && !force && rec.morning) return log(`이미 재마감 (${rec.morning})`);
+  if (mode === "morning" && !force && rec.morning && !needFix) return log(`이미 재마감 (${rec.morning})`);
+  const doClose = dp.length && !(mode === "morning" && !force && rec.morning);
 
   // ── 앱 실행 ──
   const vc = new VirtualConsole();
@@ -72,17 +76,18 @@ async function main() {
   await ev("pull()");                       // 서버 최신본 받기 (앱 시작 pull 과 별개로 한 번 더 확실히)
   const before = ev(`S.recs.filter(r=>r.date==='${d}').length`);
 
-  const rows = await ev(`openMes('${d}',true)`);
-  if (!rows || !rows.length) { log("MES 자료 없음"); w.close(); return; }
-  const ok = ev(`MESROWS.filter(r=>r.use&&r.mc&&r.pn&&!String(r.pn).startsWith('@')&&(spmFor(r.mc,r.pn)||singleMc(r.mc)))`);
-  const hold = ev(`MESROWS.filter(r=>!(r.use&&r.mc&&r.pn&&!String(r.pn).startsWith('@')&&(spmFor(r.mc,r.pn)||singleMc(r.mc)))&&!r.dup&&!r.pending).map(r=>(r.code||'')+' '+(r.pnCode||'')+(r.mc?'':' 설비미지정')+(String(r.pn).startsWith('@')?' 품번미등록':''))`);
-  const wait = ev(`MESROWS.filter(r=>r.waitClose).length`);
-  const summary = ok.map((r) => `${r.mc} ${r.pn} ${r.qty}${r.upd ? " (갱신)" : ""}${r.closed ? "" : " (미마감)"}`);
+  const rows = doClose ? await ev(`openMes('${d}',true)`) : null;
+  if ((!rows || !rows.length) && !needFix) { log("MES 자료 없음"); w.close(); return; }
+  let ok = [], hold = [], wait = 0, summary = [], n = 0;
+  if (rows && rows.length) {
+  ok = ev(`MESROWS.filter(r=>r.use&&r.mc&&r.pn&&!String(r.pn).startsWith('@')&&(spmFor(r.mc,r.pn)||singleMc(r.mc)))`);
+  hold = ev(`MESROWS.filter(r=>!(r.use&&r.mc&&r.pn&&!String(r.pn).startsWith('@')&&(spmFor(r.mc,r.pn)||singleMc(r.mc)))&&!r.dup&&!r.pending).map(r=>(r.code||'')+' '+(r.pnCode||'')+(r.mc?'':' 설비미지정')+(String(r.pn).startsWith('@')?' 품번미등록':''))`);
+  wait = ev(`MESROWS.filter(r=>r.waitClose).length`);
+  summary = ok.map((r) => `${r.mc} ${r.pn} ${r.qty}${r.upd ? " (갱신)" : ""}${r.closed ? "" : " (미마감)"}`);
   log(`대상 ${ok.length}줄 · 보류 ${hold.length}줄 · 미마감 ${wait}줄 · 기존 일보 ${before}줄`);
   summary.forEach((s) => log("  ·", s));
   hold.forEach((s) => log("  보류:", s));
 
-  let n = 0;
   if (ok.length && !dry) {
     ev(`MESROWS=MESROWS.filter(r=>r.use&&r.mc&&r.pn&&!String(r.pn).startsWith('@')&&(spmFor(r.mc,r.pn)||singleMc(r.mc)))`);
     n = ev(`saveMes(true,'${d}')`);
@@ -92,12 +97,14 @@ async function main() {
     const st = ev("document.getElementById('syncState')&&document.getElementById('syncState').textContent||''");
     log(`일보 저장 ${n}건${st ? " · " + st : ""}`);
   }
-  // 월 마감 기준일(마지막 평일)의 익일 재마감 뒤 그 달 개선 활동 확정 → 다음 달 보고서 '전월 개선활동 이행 점검'
-  if (!dry && mode === "morning" && ev(`closeDayOf('${d.slice(0, 7)}')`) === d) {
+  } else log("일보 마감 생략(생산 없음·이미 재마감) → 개선 활동만 확정");
+  // 말일 익일 재마감 뒤 그 달 개선 활동 확정 → 다음 달 보고서 '전월 개선활동 이행 점검'
+  if (!dry && needFix) {
     await ev(`loadMoldRep('${d.slice(0, 7)}')`);
     const nf = ev(`autoFixMonth('${d.slice(0, 7)}')`);
-    log(`개선 활동 자동 확정 ${nf}개 보고서 (마감 ${d})`);
+    log(`개선 활동 자동 확정 ${nf}개 보고서 (말일 ${d})`);
     if (nf) { ev("clearTimeout(pushT)"); await ev("push()"); }
+    rec.fixed = kst().toISOString().slice(11, 16);
   }
   if (!dry) {
     rec[mode] = kst().toISOString().slice(11, 16); rec.n = n; rec.wait = wait;
