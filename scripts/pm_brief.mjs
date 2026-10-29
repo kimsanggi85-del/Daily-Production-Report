@@ -3,6 +3,7 @@
 //   ② 재고수불부 앱(kimsanggi85-del/stock_ledger)을 읽기 전용으로 실행: 품목별 현재고·안전재고·재고일수 (최근 90일 출하·생산 품목만)
 //      → 요약을 kv_store 'tj_pm_stock_v1' 에 남김 (생산일보 앱 생산관리 화면 표시용)
 //   ②' 품질 검사 불량(defect_history, 품질팀 주간보고서와 같은 표) 최근 7일 vs 전주 — 급증 기종은 이상 대응 목록(품질팀)
+//   ②'' 유출불량(유효성 평가 kv tj_effect_eval_v1)·일상점검(p_machine_check·p_mold_check) — 점검 NG 는 이상 대응 목록
 //   ③ ntfy(taejincall)로 브리핑 발송, 발송 기록은 kv_store 'tj_prod_autoclose_v1' 의 그 날짜 brief
 // 사용: node scripts/pm_brief.mjs [YYYY-MM-DD(실적 기준일)] [--dry] [--force]
 import { JSDOM, VirtualConsole } from "jsdom";
@@ -90,6 +91,8 @@ async function main() {
 
   const qd = await ev(`pmQuality('${d}')`);
   log(qd.err ? `품질 불량 조회 실패: ${qd.err}` : `품질 불량 ${qd.n}행 · 최근 7일 ${qd.cur.d} EA · 급증 ${qd.rise.length}기종`);
+  qd.extra = await ev(`pmExtra('${d}')`);
+  { const x = qd.extra; log(`유출불량 ${x.claim.err ? '실패 ' + x.claim.err : (x.claim.recent || []).length + '건(30일)'} · 설비점검 ${x.mchk.err ? '실패 ' + x.mchk.err : x.mchk.n + '대 NG ' + x.mchk.ng.length + ' 미점검 ' + x.mchk.miss.length} · 금형점검 ${x.dchk.err ? '실패 ' + x.dchk.err : x.dchk.n + '건 NG ' + x.dchk.ng.length}`); }
   w.__qd = qd;
   const n = dry ? 0 : ev(`pmScan('${d}',window.__qd)`);
   if (n) { ev("clearTimeout(pushT)"); await ev("push()"); log(`이상 대응 목록 ${n}건 등록`); }

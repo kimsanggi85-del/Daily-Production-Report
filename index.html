@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v23.1 · 태진다이텍</title>
+<title>생산일보 통합관리 v23.2 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2469,7 +2469,10 @@ function pmFind(d){
 function pmScan(d,qd){S.issues=S.issues||[];const have=new Set(S.issues.map(x=>x.key));let n=0;
   const Q=(qd&&qd.rise||[]).map(x=>({key:`qrise|${d}|${x.m}`,kind:'불량 급증',mc:'',pn:x.m,title:`${x.m} 검사 불량 ${fmt(x.d)} EA (${fmt(Math.round(x.ppm))} PPM)`,
     detail:`최근 7일 · 전주 ${x.pd?fmt(Math.round(x.pp))+' PPM':'불량 0'} (검사 ${fmt(x.pi)})${x.cu?' · '+x.cu:''}`,owner:'품질팀',due:addDay(d,3)}));
-  pmFind(d).concat(Q).forEach(x=>{if(have.has(x.key))return;S.issues.push({id:uid(),...x,date:d,status:'열림',act:'',ua:now(),by:localStorage.getItem('tj_me')||''});have.add(x.key);n++});
+  const X=qd&&qd.extra||{};
+  const K=[...((X.mchk&&X.mchk.ng)||[]).map(x=>({key:`mchk|${d}|${x.m}`,kind:'일상점검 NG',mc:x.m,pn:'',title:`${x.m} 설비 일상점검 NG ${x.n||''}`.trim(),detail:x.memo,owner:'설비보전',due:addDay(d,2)})),
+    ...((X.dchk&&X.dchk.ng)||[]).map(x=>({key:`dchk|${d}|${x.m}|${x.mold}`,kind:'일상점검 NG',mc:x.m,pn:x.mold,title:`${x.m} 금형 일상점검 NG${x.mold?' ('+x.mold+')':''}`,detail:x.memo,owner:'금형팀',due:addDay(d,2)}))];
+  pmFind(d).concat(Q,K).forEach(x=>{if(have.has(x.key))return;S.issues.push({id:uid(),...x,date:d,status:'열림',act:'',ua:now(),by:localStorage.getItem('tj_me')||''});have.add(x.key);n++});
   if(n)logAdd('이상 항목 등록',`${d} ${n}건`);return n}
 /* 품질 불량 — 품질팀 검사 실적(defect_history, 주간보고서와 같은 표) 최근 7일 vs 전주 7일
    고객사는 기종 마스터(defect_model · general_model_tj) 로 찾는다 */
@@ -2500,6 +2503,33 @@ async function pmQuality(d){
       cust:Object.entries(cust).map(([c,x])=>({c,d:x.c.d,ppm:ppm(x.c),pp:ppm(x.p)})).filter(x=>x.d>0).sort((a,b)=>b.d-a.d),
       types:Object.entries(types).sort((a,b)=>b[1]-a[1]),models:ml.sort((a,b)=>b.d-a.d).slice(0,10),rise:rise.slice(0,8)};
   }catch(e){return{err:String(e.message||e)}}
+}
+/* 유출불량(유효성 평가 앱 kv tj_effect_eval_v1) · 일상점검(설비 p_machine_check · 금형 p_mold_check) — 읽기만 */
+async function pmExtra(d){
+  const h={'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY},t0=today();
+  const get=async(t,q)=>{const r=await fetch(SB_URL+'/rest/v1/'+t+'?'+q,{headers:h});if(!r.ok)throw new Error(t+' '+r.status);return r.json()};
+  const out={};
+  try{const j=await get('kv_store','key=eq.tj_effect_eval_v1&select=value');const v=(j[0]&&j[0].value)||{},del=v.del||{};
+    const R=(v.recs||[]).filter(r=>r&&!del[r.id]&&r.occDate);
+    const done=r=>(r.appr&&r.appr.approve)||(r.legacy&&(r.scores||[]).length===9&&r.scores.every(x=>x!==null&&x!==''&&x!==undefined));
+    const full=r=>(r.scores||[]).length===9&&r.scores.every(x=>x!==null&&x!==''&&x!==undefined);
+    const f30=addDay(d,-29);
+    out.claim={recent:R.filter(r=>r.occDate>=f30&&r.occDate<=d).sort((a,b)=>b.occDate.localeCompare(a.occDate))
+        .map(r=>({d:r.occDate,cu:(r.cust||'')+(r.site?' '+r.site:''),part:r.part||'',qty:r.qty||'',cause:String(r.cause||'').split('\n')[0].slice(0,30)})),
+      wait:R.filter(r=>!full(r)).length,appr:R.filter(r=>full(r)&&!done(r)).length,
+      late:R.filter(r=>!done(r)&&r.dueDate&&r.dueDate<t0).map(r=>({d:r.dueDate,part:r.part,cu:r.cust})),
+      actLate:R.flatMap(r=>(r.acts||[]).filter(a=>!a.done&&a.due&&a.due<t0).map(a=>({d:a.due,part:r.part,t:a.text,o:a.owner})))};
+  }catch(e){out.claim={err:String(e.message||e)}}
+  const num=s=>{const m=String(s||'').match(/^\s*(\d+)/);return m?String(+m[1]):''};
+  try{const M=await get('p_machine_check',`select=machine,inspector,result,ng_count,memo&check_date=eq.${d}&limit=500`);
+    const ran=[...new Set(S.recs.filter(r=>r.date===d).map(r=>r.mc))],chk=new Set(M.map(x=>num(x.machine)));
+    out.mchk={n:new Set(M.map(x=>x.machine)).size,ng:M.filter(x=>x.result==='NG'||+x.ng_count>0).map(x=>({m:x.machine,memo:String(x.memo||'').slice(0,30),n:+x.ng_count||0})),
+      miss:ran.filter(mc=>num(mc)&&!chk.has(num(mc)))};
+  }catch(e){out.mchk={err:String(e.message||e)}}
+  try{const D=await get('p_mold_check',`select=machine,mold_no,result,ng_count,memo&check_date=eq.${d}&limit=500`);
+    out.dchk={n:D.length,ng:D.filter(x=>x.result==='NG'||+x.ng_count>0).map(x=>({m:x.machine,mold:x.mold_no||'',memo:String(x.memo||'').slice(0,30)}))};
+  }catch(e){out.dchk={err:String(e.message||e)}}
+  return out;
 }
 function pmOpen(){return (S.issues||[]).filter(x=>x.status!=='완료'&&x.status!=='취소')}
 /* 브리핑 문장. st = 재고 요약 {at, short:[], low:[]} (없으면 생략) */
@@ -2533,6 +2563,15 @@ function pmBrief(d,st,qd){
    // 공정 불량 유형은 이름만 (특기사항 수량은 일보 불량수와 기준이 달라 섞지 않는다)
    if(pl.length)T.push('  공정(일보): '+pl.map(([pn,x])=>{const ty=[...new Set(Object.keys(x.notes).flatMap(t=>String(t).split(/\s*\/\s*|,/)).map(t=>t.replace(/[:：]?\s*\d[\d,]*\s*(EA|개)?\s*$/i,'').trim()).filter(t=>t&&!/^불량사유/.test(t)))].slice(0,2).join('·');
      return `${pn} ${fmt(x.ng)} EA (${fmt(Math.round(x.ng/(x.q||1)*1e6))} PPM${ty?', '+ty:''})`}).join(' · '));}
+  {const X=qd&&qd.extra;const md=`${+d.slice(5,7)}/${+d.slice(8)}`;
+   if(X){const c=X.claim;T.push('■ 유출불량 (최근 30일)');
+     if(c&&!c.err){T.push(c.recent.length?`  발생 ${c.recent.length}건: `+c.recent.slice(0,4).map(r=>`${+r.d.slice(5,7)}/${+r.d.slice(8)} ${r.cu} ${r.part}${r.qty?' '+r.qty+'EA':''}${r.cause?' — '+r.cause:''}`).join(' · '):'  발생 없음');
+       T.push(`  유효성 평가 대기 ${c.wait} · 결재 대기 ${c.appr}${c.late.length?` · 평가 기한 경과 ${c.late.length}`:''}${c.actLate.length?` · 후속조치 기한 경과 ${c.actLate.length}`:''}`)}
+     else T.push(`  조회 실패${c&&c.err?' ('+c.err+')':''}`);
+     T.push(`■ 일상점검 (${md})`);
+     const m=X.mchk,k=X.dchk;
+     T.push(m&&!m.err?`  설비 ${m.n}대 점검 · NG ${m.ng.length}${m.ng.length?': '+m.ng.slice(0,3).map(x=>x.m+(x.memo?' ('+x.memo+')':'')).join(', '):''}${m.miss.length?` · 가동했는데 미점검 ${m.miss.length}대: `+m.miss.slice(0,6).join(', '):''}`:`  설비 점검 조회 실패${m&&m.err?' ('+m.err+')':''}`);
+     T.push(k&&!k.err?`  금형 ${k.n}건 점검 · NG ${k.ng.length}${k.ng.length?': '+k.ng.slice(0,3).map(x=>x.m+(x.mold?' '+x.mold:'')+(x.memo?' ('+x.memo+')':'')).join(', '):''}`:`  금형 점검 조회 실패${k&&k.err?' ('+k.err+')':''}`)}}
   if(st&&(st.short||st.low)){T.push(`■ 재고 (재고수불부 ${String(st.at||'').slice(5,16).replace('T',' ')})`);
     const sh=st.short||[],lw=st.low||[];
     T.push(sh.length?`  안전재고 미달 ${st.nShort||sh.length}품목: `+sh.slice(0,5).map(x=>`${x.pn} ${fmt(x.cur)}/${fmt(x.sf)}${x.doi!=null?` (${x.doi.toFixed(1)}일)`:''}`).join(' · '):'  안전재고 미달 없음');
@@ -2545,6 +2584,10 @@ function pmBrief(d,st,qd){
   F.filter(x=>x.kind==='설비고장').slice(0,2).forEach(x=>N.push(`${x.mc} 설비 상태 확인·보전 조치`));
   F.filter(x=>x.kind==='불량').slice(0,1).forEach(x=>N.push(`${x.pn} 초물·중물 검사 강화, 불량 원인 확인`));
   F.filter(x=>x.kind==='금형파손'||x.kind==='반복 금형수리').slice(0,1).forEach(x=>N.push(`${x.pn} 금형 상태 확인 (금형팀)`));
+  {const X=qd&&qd.extra||{};
+   if(X.mchk&&X.mchk.miss&&X.mchk.miss.length)N.push(`일상점검 미점검 ${X.mchk.miss.slice(0,3).join(', ')}${X.mchk.miss.length>3?' 외':''} — 점검 누락 확인`);
+   if(X.mchk&&X.mchk.ng&&X.mchk.ng.length)N.push(`설비 일상점검 NG ${X.mchk.ng[0].m} 조치 확인 (설비보전)`);
+   if(X.claim&&X.claim.actLate&&X.claim.actLate.length)N.push(`유출불량 후속조치 기한 경과 ${X.claim.actLate.length}건 (${X.claim.actLate[0].part})`);}
   if(qd&&qd.rise&&qd.rise.length)N.push(`불량 급증 ${qd.rise[0].m}${qd.rise.length>1?` 외 ${qd.rise.length-1}기종`:''} 원인 확인 (품질팀)`);
   if(st&&st.short&&st.short.length)N.push(`안전재고 미달 ${st.short[0].pn} 등 생산 우선순위 반영`);
   if(late.length)N.push(`기한 경과 이상 대응 ${late.length}건 담당자 확인`);
@@ -2560,7 +2603,7 @@ async function renderPm(){
   const d=$('pm_d').value;
   if(PMSTOCK===null){PMSTOCK=false;pmLoadStock().then(()=>{if(pg==='pm')renderPm()})}
   loadMoldRep(d.slice(0,7));
-  if(PMQ[d]===undefined){PMQ[d]=null;pmQuality(d).then(q=>{PMQ[d]=q;if(pg==='pm')renderPm()})}
+  if(PMQ[d]===undefined){PMQ[d]=null;Promise.all([pmQuality(d),pmExtra(d)]).then(([q,x])=>{PMQ[d]=Object.assign(q||{},{extra:x});if(pg==='pm')renderPm()})}
   const B=pmBrief(d,PMSTOCK||null,PMQ[d]||{err:'불러오는 중'});
   $('pmBrief').textContent=B.title+'\n\n'+B.msg;
   $('pmStockAt').textContent=PMSTOCK&&PMSTOCK.at?`재고 기준 ${String(PMSTOCK.at).slice(5,16).replace('T',' ')} (매일 08:30 자동)`:'재고 요약 없음 — 매일 08:30 자동 작업 후 표시';
