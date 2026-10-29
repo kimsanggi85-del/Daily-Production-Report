@@ -2,6 +2,7 @@
 //   ① 생산일보 앱(index.html)을 그대로 실행: 마지막 생산일 실적·월 계획 진척·이상 항목 → 이상 대응 목록(issues) 등록
 //   ② 재고수불부 앱(kimsanggi85-del/stock_ledger)을 읽기 전용으로 실행: 품목별 현재고·안전재고·재고일수 (최근 90일 출하·생산 품목만)
 //      → 요약을 kv_store 'tj_pm_stock_v1' 에 남김 (생산일보 앱 생산관리 화면 표시용)
+//   ②' 품질 검사 불량(defect_history, 품질팀 주간보고서와 같은 표) 최근 7일 vs 전주 — 급증 기종은 이상 대응 목록(품질팀)
 //   ③ ntfy(taejincall)로 브리핑 발송, 발송 기록은 kv_store 'tj_prod_autoclose_v1' 의 그 날짜 brief
 // 사용: node scripts/pm_brief.mjs [YYYY-MM-DD(실적 기준일)] [--dry] [--force]
 import { JSDOM, VirtualConsole } from "jsdom";
@@ -87,9 +88,12 @@ async function main() {
   try { st = await stockSummary(); log(`재고 ${st.n}품목 · 안전재고 미달 ${st.nShort} · 3일분 미만 ${st.low.length}`); }
   catch (e) { log("재고 요약 실패:", e.message); try { st = await kvGet(STOCK_KEY); } catch (e2) {} }
 
-  const n = dry ? 0 : ev(`pmScan('${d}')`);
+  const qd = await ev(`pmQuality('${d}')`);
+  log(qd.err ? `품질 불량 조회 실패: ${qd.err}` : `품질 불량 ${qd.n}행 · 최근 7일 ${qd.cur.d} EA · 급증 ${qd.rise.length}기종`);
+  w.__qd = qd;
+  const n = dry ? 0 : ev(`pmScan('${d}',window.__qd)`);
   if (n) { ev("clearTimeout(pushT)"); await ev("push()"); log(`이상 대응 목록 ${n}건 등록`); }
-  const B = ev(`pmBrief('${d}',${JSON.stringify(st)})`);
+  const B = ev(`pmBrief('${d}',${JSON.stringify(st)},window.__qd)`);
   log(B.title); console.log(B.msg);
   w.close();
   if (dry) return log("(dry) 발송·저장하지 않음");

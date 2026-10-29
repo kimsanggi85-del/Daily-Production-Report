@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v22.8 · 태진다이텍</title>
+<title>생산일보 통합관리 v22.9 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2466,12 +2466,40 @@ function pmFind(d){
     const cnt={};M.rows.filter(r=>r.date<=d).forEach(r=>{const k=r.mold||r.pn;cnt[k]=(cnt[k]||[]).concat(r)});
     Object.entries(cnt).forEach(([k,A])=>{if(A.length>=3&&A.some(r=>r.date===d))out.push({key:`moldrep|${d.slice(0,7)}|${k}`,kind:'반복 금형수리',mc:A[0].mc,pn:A[0].pn,title:`${A[0].pn}${k!==A[0].pn?'('+k+')':''} 금형수리 ${A.length}건 (${+d.slice(5,7)}월)`,detail:moldWords(A),owner:'금형팀',due:addDay(d,7)})})}
   return out}
-function pmScan(d){S.issues=S.issues||[];const have=new Set(S.issues.map(x=>x.key));let n=0;
-  pmFind(d).forEach(x=>{if(have.has(x.key))return;S.issues.push({id:uid(),...x,date:d,status:'열림',act:'',ua:now(),by:localStorage.getItem('tj_me')||''});have.add(x.key);n++});
+function pmScan(d,qd){S.issues=S.issues||[];const have=new Set(S.issues.map(x=>x.key));let n=0;
+  const Q=(qd&&qd.rise||[]).map(x=>({key:`qrise|${d}|${x.m}`,kind:'불량 급증',mc:'',pn:x.m,title:`${x.m} 검사 불량 ${fmt(x.d)} EA (${fmt(Math.round(x.ppm))} PPM)`,
+    detail:`최근 7일${isFinite(x.pp)&&x.pd?` · 전주 ${fmt(Math.round(x.pp))} PPM`:' · 전주 불량 없음'}${x.cu?' · '+x.cu:''}`,owner:'품질팀',due:addDay(d,3)}));
+  pmFind(d).concat(Q).forEach(x=>{if(have.has(x.key))return;S.issues.push({id:uid(),...x,date:d,status:'열림',act:'',ua:now(),by:localStorage.getItem('tj_me')||''});have.add(x.key);n++});
   if(n)logAdd('이상 항목 등록',`${d} ${n}건`);return n}
+/* 품질 불량 — 품질팀 검사 실적(defect_history, 주간보고서와 같은 표) 최근 7일 vs 전주 7일
+   고객사는 기종 마스터(defect_model · general_model_tj) 로 찾는다 */
+async function pmQuality(d){
+  const from=addDay(d,-13),c0=addDay(d,-6),h={'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY};
+  const get=async(t,q)=>{const r=await fetch(SB_URL+'/rest/v1/'+t+'?'+q,{headers:h});if(!r.ok)throw new Error(t+' '+r.status);return r.json()};
+  try{
+    const [rows,m1,m2]=await Promise.all([
+      get('defect_history',`select=defect_date,model_name,inspect_line,inspect_qty,defect_type,qty&defect_date=gte.${from}&defect_date=lte.${d}&order=defect_date.asc&limit=20000`),
+      get('defect_model','select=model_name,customer&limit=2000').catch(()=>[]),get('general_model_tj','select=model_name,customer&limit=5000').catch(()=>[])]);
+    const cm={};[...m2,...m1].forEach(m=>{if(m.model_name)cm[m.model_name]=m.customer||''});
+    const isNg=r=>r.defect_type&&r.defect_type!=='양품';
+    const W=()=>({i:0,d:0});const add=(o,r)=>{o.i+=+r.inspect_qty||0;if(isNg(r))o.d+=+r.qty||0};
+    const cur=W(),prev=W(),day=W(),cust={},types={},mods={};
+    rows.forEach(r=>{const k=r.defect_date>=c0?'c':'p',c=cm[r.model_name]||'미지정',m=r.model_name||'?';
+      add(k==='c'?cur:prev,r);if(r.defect_date===d)add(day,r);
+      const x=cust[c]=cust[c]||{c:W(),p:W()};add(x[k],r);
+      const y=mods[m]=mods[m]||{c:W(),p:W(),cu:c};add(y[k],r);
+      if(k==='c'&&isNg(r))types[r.defect_type]=(types[r.defect_type]||0)+(+r.qty||0)});
+    const ppm=o=>o.i?o.d/o.i*1e6:NaN;
+    const ml=Object.entries(mods).map(([m,y])=>({m,cu:y.cu,d:y.c.d,i:y.c.i,ppm:ppm(y.c),pp:ppm(y.p),pd:y.p.d})).filter(x=>x.d>0);
+    const rise=ml.filter(x=>x.d>=20&&(x.pd===0||(isFinite(x.pp)&&x.ppm>=x.pp*2))).sort((a,b)=>b.d-a.d);
+    return{from:c0,to:d,n:rows.length,cur:{...cur,ppm:ppm(cur)},prev:{...prev,ppm:ppm(prev)},day:{...day,ppm:ppm(day)},
+      cust:Object.entries(cust).map(([c,x])=>({c,d:x.c.d,ppm:ppm(x.c),pp:ppm(x.p)})).filter(x=>x.d>0).sort((a,b)=>b.d-a.d),
+      types:Object.entries(types).sort((a,b)=>b[1]-a[1]),models:ml.sort((a,b)=>b.d-a.d).slice(0,10),rise:rise.slice(0,8)};
+  }catch(e){return{err:String(e.message||e)}}
+}
 function pmOpen(){return (S.issues||[]).filter(x=>x.status!=='완료'&&x.status!=='취소')}
 /* 브리핑 문장. st = 재고 요약 {at, short:[], low:[]} (없으면 생략) */
-function pmBrief(d,st){
+function pmBrief(d,st,qd){
   const L=S.recs.filter(r=>r.date===d),A=pmAgg(L),P=pmProgress(d),o=rptGet();
   const wait=L.filter(r=>r.src==='MES').length;
   const T=[],t0=today();
@@ -2484,6 +2512,21 @@ function pmBrief(d,st){
   const F=pmFind(d);
   T.push(`■ 이상 (${+d.slice(5,7)}/${+d.slice(8)})`);
   T.push(F.length?F.slice(0,8).map(x=>`  · [${x.kind}] ${x.title}${x.detail?' — '+String(x.detail).slice(0,40):''}`).join('\n'):'  · 없음');
+  // 불량 현황 — 품질 검사(최근 7일) + 공정 불량(일보)
+  {const fd=x=>`${+x.slice(5,7)}/${+x.slice(8)}`,ar=(a,b)=>isFinite(a)&&isFinite(b)&&b?(a>=b*1.1?' ▲':a<=b*.9?' ▼':''):'';
+   T.push(`■ 불량 현황 (최근 7일 ${fd(addDay(d,-6))}~${fd(d)})`);
+   if(qd&&!qd.err&&qd.cur){const q=qd;
+     T.push(`  검사 ${fmt(q.cur.i)} · 불량 ${fmt(q.cur.d)} (${fmt(Math.round(q.cur.ppm||0))} PPM${isFinite(q.prev.ppm)?`, 전주 ${fmt(Math.round(q.prev.ppm))}${ar(q.cur.ppm,q.prev.ppm)}`:''})${q.day.i?` · 전일 ${fmt(q.day.d)} (${fmt(Math.round(q.day.ppm||0))} PPM)`:''}`);
+     if(q.cust.length)T.push('  고객사: '+q.cust.slice(0,4).map(x=>`${x.c} ${fmt(Math.round(x.ppm||0))}${ar(x.ppm,x.pp)}`).join(' · '));
+     if(q.types.length)T.push('  유형: '+q.types.slice(0,5).map(([k,v])=>`${k} ${fmt(v)}`).join(' · '));
+     if(q.models.length)T.push('  기종: '+q.models.slice(0,4).map(x=>`${x.m} ${fmt(x.d)} (${fmt(Math.round(x.ppm||0))})`).join(' · '));
+     if(q.rise.length)T.push('  ⚠ 급증: '+q.rise.slice(0,4).map(x=>`${x.m} ${fmt(Math.round(x.ppm))} PPM${x.pd?` (전주 ${fmt(Math.round(x.pp))})`:' (전주 0)'}`).join(' · '));}
+   else T.push(`  품질 검사 불량 조회 실패${qd&&qd.err?' ('+qd.err+')':''}`);
+   const R7=S.recs.filter(r=>r.date>=addDay(d,-6)&&r.date<=d),gp={};
+   R7.forEach(r=>{const v=(+r.ng||0)+(+r.ngp||0);if(!v)return;const x=gp[r.pn]=gp[r.pn]||{ng:0,q:0,notes:{}};x.ng+=v;if(r.note)x.notes[r.note]=(x.notes[r.note]||0)+1});
+   R7.forEach(r=>{if(gp[r.pn])gp[r.pn].q+=+r.qty||0});
+   const pl=Object.entries(gp).sort((a,b)=>b[1].ng-a[1].ng).slice(0,3);
+   if(pl.length)T.push('  공정(일보): '+pl.map(([pn,x])=>{const ty=autoNg(pn,x,R7).split('\n')[0].replace(/^유형:\s*/,'').split(' · 최다일')[0];return `${pn} ${fmt(x.ng)} (${fmt(Math.round(x.ng/(x.q||1)*1e6))} PPM${ty&&!/기록 없음/.test(ty)?', '+ty.slice(0,24):''})`}).join(' · '));}
   if(st&&(st.short||st.low)){T.push(`■ 재고 (재고수불부 ${String(st.at||'').slice(5,16).replace('T',' ')})`);
     const sh=st.short||[],lw=st.low||[];
     T.push(sh.length?`  안전재고 미달 ${st.nShort||sh.length}품목: `+sh.slice(0,5).map(x=>`${x.pn} ${fmt(x.cur)}/${fmt(x.sf)}${x.doi!=null?` (${x.doi.toFixed(1)}일)`:''}`).join(' · '):'  안전재고 미달 없음');
@@ -2496,6 +2539,7 @@ function pmBrief(d,st){
   F.filter(x=>x.kind==='설비고장').slice(0,2).forEach(x=>N.push(`${x.mc} 설비 상태 확인·보전 조치`));
   F.filter(x=>x.kind==='불량').slice(0,1).forEach(x=>N.push(`${x.pn} 초물·중물 검사 강화, 불량 원인 확인`));
   F.filter(x=>x.kind==='금형파손'||x.kind==='반복 금형수리').slice(0,1).forEach(x=>N.push(`${x.pn} 금형 상태 확인 (금형팀)`));
+  if(qd&&qd.rise&&qd.rise.length)N.push(`불량 급증 ${qd.rise[0].m}${qd.rise.length>1?` 외 ${qd.rise.length-1}기종`:''} 원인 확인 (품질팀)`);
   if(st&&st.short&&st.short.length)N.push(`안전재고 미달 ${st.short[0].pn} 등 생산 우선순위 반영`);
   if(late.length)N.push(`기한 경과 이상 대응 ${late.length}건 담당자 확인`);
   if(wait)N.push(`현장 마감(실제양품) 미입력 ${wait}줄 확인`);
@@ -2503,14 +2547,15 @@ function pmBrief(d,st){
   let msg=T.join('\n');if(msg.length>3800)msg=msg.slice(0,3800)+'\n…';
   return{title:`생산관리 브리핑 ${+d.slice(5,7)}/${+d.slice(8)}(${dwOf(d)}) · 진척 ${P.tgt?pct(P.rate):'-'}${F.length?` · 이상 ${F.length}`:''}`,msg};
 }
-let PMSTOCK=null;
+let PMSTOCK=null,PMQ={};
 async function pmLoadStock(){try{const r=await fetch(SB_URL+'/rest/v1/kv_store?key=eq.tj_pm_stock_v1&select=value',{headers:hdr});if(r.ok){const j=await r.json();PMSTOCK=(j[0]&&j[0].value)||null}}catch(e){}}
 async function renderPm(){
   if(!$('pm_d').value)$('pm_d').value=pmLastDay();
   const d=$('pm_d').value;
   if(PMSTOCK===null){PMSTOCK=false;pmLoadStock().then(()=>{if(pg==='pm')renderPm()})}
   loadMoldRep(d.slice(0,7));
-  const B=pmBrief(d,PMSTOCK||null);
+  if(PMQ[d]===undefined){PMQ[d]=null;pmQuality(d).then(q=>{PMQ[d]=q;if(pg==='pm')renderPm()})}
+  const B=pmBrief(d,PMSTOCK||null,PMQ[d]||{err:'불러오는 중'});
   $('pmBrief').textContent=B.title+'\n\n'+B.msg;
   $('pmStockAt').textContent=PMSTOCK&&PMSTOCK.at?`재고 기준 ${String(PMSTOCK.at).slice(5,16).replace('T',' ')} (매일 08:30 자동)`:'재고 요약 없음 — 매일 08:30 자동 작업 후 표시';
   const f=$('pm_f').value,t0=today();
@@ -2529,8 +2574,8 @@ async function renderPm(){
 function pmIssSet(id,k,v){const x=(S.issues||[]).find(i=>i.id===id);if(!x)return;x[k]=v;x.ua=now();if(k==='status'&&v==='완료')x.done=today();commit0();if(k==='status'||k==='due')renderPm()}
 function pmIssNew(){const t=prompt('이상 내용 (예: 47 심팩300 피더 이송 불량)');if(!t)return;
   S.issues=S.issues||[];S.issues.push({id:uid(),key:'manual|'+uid(),kind:'직접',date:today(),mc:'',pn:'',title:t,detail:'',owner:'',due:addDay(today(),3),status:'열림',act:'',ua:now(),by:localStorage.getItem('tj_me')||''});commit0();renderPm()}
-function pmScanBtn(){const d=$('pm_d').value||pmLastDay();const n=pmScan(d);if(n)commit0();renderPm();toast(n?`${n}건을 이상 대응 목록에 올렸습니다`:'새로 올릴 이상 항목이 없습니다')}
-async function pmSend(){const d=$('pm_d').value||pmLastDay();const B=pmBrief(d,PMSTOCK||null);
+function pmScanBtn(){const d=$('pm_d').value||pmLastDay();const n=pmScan(d,PMQ[d]);if(n)commit0();renderPm();toast(n?`${n}건을 이상 대응 목록에 올렸습니다`:'새로 올릴 이상 항목이 없습니다')}
+async function pmSend(){const d=$('pm_d').value||pmLastDay();const B=pmBrief(d,PMSTOCK||null,PMQ[d]);
   if(!confirm(`이 브리핑을 ntfy(${NTFY_TOPIC})로 보낼까요?`))return;
   try{const r=await fetch('https://ntfy.sh/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic:NTFY_TOPIC,title:B.title,message:B.msg,tags:['clipboard'],priority:3})});
     toast(r.ok?'보냈습니다':'보내지 못했습니다 ('+r.status+')')}catch(e){toast('보내지 못했습니다')}}
