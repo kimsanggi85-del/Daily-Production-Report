@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v23.2 · 태진다이텍</title>
+<title>생산일보 통합관리 v23.3 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2529,6 +2529,16 @@ async function pmExtra(d){
   try{const D=await get('p_mold_check',`select=machine,mold_no,result,ng_count,memo&check_date=eq.${d}&limit=500`);
     out.dchk={n:D.length,ng:D.filter(x=>x.result==='NG'||+x.ng_count>0).map(x=>({m:x.machine,mold:x.mold_no||'',memo:String(x.memo||'').slice(0,30)}))};
   }catch(e){out.dchk={err:String(e.message||e)}}
+  // 금일 작업지시 — MES 설비 현재 상태(machine_status) + 오늘 실적(daily_production). 자주검사 성적서 작성 대상
+  try{const t=today(),dh={'apikey':DT_KEY,'Authorization':'Bearer '+DT_KEY};
+    const g2=async(tb,q)=>{const r=await fetch(DT_URL+'/rest/v1/'+tb+'?'+q,{headers:dh});if(!r.ok)throw new Error(tb+' '+r.status);return r.json()};
+    const [ms,dp]=await Promise.all([g2('machine_status','select=*&order=machine_code.asc'),g2('daily_production',`select=machine_code,item_code,work_order_no,start_time&ymd=eq.${t}&limit=500`).catch(()=>[])]);
+    const mcOf=c=>(S.master.mesMc||{})[c]||c,pnOf=c=>(S.master.mesPn||{})[c]||c;
+    const W={};const put=(mc,pn,wo,tq,st)=>{if(!pn)return;const k=mc+'|'+pn;const x=W[k]=W[k]||{mc,pn,wo:'',tq:0,st:''};if(wo&&!x.wo)x.wo=wo;if(tq)x.tq=tq;if(st&&(!x.st||st<x.st))x.st=st};
+    dp.forEach(r=>put(mcOf(r.machine_code),pnOf(r.item_code),r.work_order_no,0,String(r.start_time||'').slice(0,5)));
+    ms.forEach(m=>{const st=String(m.updated_at||m.last_update||'').slice(0,10);if(m.current_item_code&&(!st||st===t||W[mcOf(m.machine_code)+'|'+pnOf(m.current_item_code)]))put(mcOf(m.machine_code),pnOf(m.current_item_code),m.work_order_no,+m.target_qty||0,'')});
+    out.wo={d:t,list:Object.values(W).sort((a,b)=>String(a.mc).localeCompare(String(b.mc),'ko',{numeric:true}))};
+  }catch(e){out.wo={err:String(e.message||e)}}
   return out;
 }
 function pmOpen(){return (S.issues||[]).filter(x=>x.status!=='완료'&&x.status!=='취소')}
@@ -2565,13 +2575,16 @@ function pmBrief(d,st,qd){
      return `${pn} ${fmt(x.ng)} EA (${fmt(Math.round(x.ng/(x.q||1)*1e6))} PPM${ty?', '+ty:''})`}).join(' · '));}
   {const X=qd&&qd.extra;const md=`${+d.slice(5,7)}/${+d.slice(8)}`;
    if(X){const c=X.claim;T.push('■ 유출불량 (최근 30일)');
-     if(c&&!c.err){T.push(c.recent.length?`  발생 ${c.recent.length}건: `+c.recent.slice(0,4).map(r=>`${+r.d.slice(5,7)}/${+r.d.slice(8)} ${r.cu} ${r.part}${r.qty?' '+r.qty+'EA':''}${r.cause?' — '+r.cause:''}`).join(' · '):'  발생 없음');
+     if(c&&!c.err){T.push(c.recent.length?`  발생 ${c.recent.length}건: `+c.recent.slice(0,4).map(r=>`${+r.d.slice(5,7)}/${+r.d.slice(8)} ${r.cu} ${r.part}${r.qty?' '+r.qty+(/^\s*[\d,]+\s*$/.test(String(r.qty))?'EA':''):''}${r.cause?' — '+r.cause:''}`).join(' · '):'  발생 없음');
        T.push(`  유효성 평가 대기 ${c.wait} · 결재 대기 ${c.appr}${c.late.length?` · 평가 기한 경과 ${c.late.length}`:''}${c.actLate.length?` · 후속조치 기한 경과 ${c.actLate.length}`:''}`)}
      else T.push(`  조회 실패${c&&c.err?' ('+c.err+')':''}`);
      T.push(`■ 일상점검 (${md})`);
      const m=X.mchk,k=X.dchk;
      T.push(m&&!m.err?`  설비 ${m.n}대 점검 · NG ${m.ng.length}${m.ng.length?': '+m.ng.slice(0,3).map(x=>x.m+(x.memo?' ('+x.memo+')':'')).join(', '):''}${m.miss.length?` · 가동했는데 미점검 ${m.miss.length}대: `+m.miss.slice(0,6).join(', '):''}`:`  설비 점검 조회 실패${m&&m.err?' ('+m.err+')':''}`);
-     T.push(k&&!k.err?`  금형 ${k.n}건 점검 · NG ${k.ng.length}${k.ng.length?': '+k.ng.slice(0,3).map(x=>x.m+(x.mold?' '+x.mold:'')+(x.memo?' ('+x.memo+')':'')).join(', '):''}`:`  금형 점검 조회 실패${k&&k.err?' ('+k.err+')':''}`)}}
+     T.push(k&&!k.err?`  금형 ${k.n}건 점검 · NG ${k.ng.length}${k.ng.length?': '+k.ng.slice(0,3).map(x=>x.m+(x.mold?' '+x.mold:'')+(x.memo?' ('+x.memo+')':'')).join(', '):''}`:`  금형 점검 조회 실패${k&&k.err?' ('+k.err+')':''}`)
+     const wo=X.wo;
+     if(wo){T.push(`■ 금일 작업지시 (${+wo.d.slice(5,7)}/${+wo.d.slice(8)} · 자주검사 성적서 대상)`);
+       T.push(wo.err?`  조회 실패 (${wo.err})`:wo.list.length?wo.list.slice(0,14).map(x=>`  · ${x.mc} ${x.pn}${x.wo?' ['+x.wo+']':''}${x.tq?' 목표 '+fmt(x.tq):''}${x.st?' '+x.st+'~':''}`).join('\n')+(wo.list.length>14?`\n  외 ${wo.list.length-14}건`:''):'  아직 작업지시 없음')}}}
   if(st&&(st.short||st.low)){T.push(`■ 재고 (재고수불부 ${String(st.at||'').slice(5,16).replace('T',' ')})`);
     const sh=st.short||[],lw=st.low||[];
     T.push(sh.length?`  안전재고 미달 ${st.nShort||sh.length}품목: `+sh.slice(0,5).map(x=>`${x.pn} ${fmt(x.cur)}/${fmt(x.sf)}${x.doi!=null?` (${x.doi.toFixed(1)}일)`:''}`).join(' · '):'  안전재고 미달 없음');
