@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v22.3 · 태진다이텍</title>
+<title>생산일보 통합관리 v22.4 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2337,13 +2337,13 @@ function moldRepHtml(no,cu){
   const cL=Object.entries(byC).sort((a,b)=>b[1]-a[1]);
   // 반복 수리 (같은 품번 3건 이상)
   const rep=MS.byPn.filter(([,n])=>n>=3).map(([pn,n])=>{const L=MS.L.filter(r=>r.pn===pn).sort((a,b)=>b.date.localeCompare(a.date));
-    return{pn,n,cust:L[0].cust,mc:[...new Set(L.map(r=>r.mc))].join(', '),dates:L.map(r=>r.date.slice(5).replace('-','/')).join(' '),
+    return{pn,n,cust:L[0].cust,mold:[...new Set(L.map(r=>r.mold).filter(Boolean))].join(', '),mc:[...new Set(L.map(r=>r.mc))].join(', '),dates:L.map(r=>r.date.slice(5).replace('-','/')).join(' '),
       type:[...new Set(L.map(r=>r.type))].join(', '),w:moldWords(L),last:L[0].txt}});
   const unk=[...new Set(MS.L.filter(r=>!r.cust).map(r=>r.pn))];
   const pvN=MP?MP.n:0;
   return `<div class="rpt-sec pgnew">${hd}
     <div class="kpis exec" style="margin-bottom:8px">
-      <div><small>금형수리</small><b>${MS.n}</b><em>건 · 전월 ${pvN}건 ${d(MS.n,pvN)}</em></div>
+      <div><small>금형수리</small><b>${MS.n}</b><em>건 · 전월 ${pvN}건 ${d(MS.n,pvN)}${MR.dup&&!cu?` · 발생 기록 중복 ${MR.dup}건 제외`:''}</em></div>
       <div><small>수리 금형(품번)</small><b>${MS.byPn.length}</b><em>종 · 반복(3건↑) ${rep.length}종</em></div>
       <div><small>수리 설비</small><b>${MS.byMc.length}</b><em>대 · 최다 ${esc((MS.byMc[0]||[''])[0])} ${(MS.byMc[0]||[0,0])[1]}건</em></div>
       <div><small>주요 작업</small><b style="font-size:15px">${esc(moldWords(MS.L)||'-')}</b><em>수리 내용 단어 빈도</em></div>
@@ -2355,8 +2355,8 @@ function moldRepHtml(no,cu){
       <div><h4>품번별 (상위 10)</h4>${svgHBars(MS.byPn.slice(0,10).map(([k,v])=>({l:k,v,txt:`${v}건${pvP[k]?` <span class=muted>(전월 ${pvP[k]})</span>`:''}`,c:v>=3?'#C8433A':C.bar})),{lw:130,tw:110})}</div>
     </div>
     <h4 style="margin-top:10px">반복 수리 금형 <span class="muted" style="font-weight:400;font-size:12px">같은 품번 3건 이상 · 원인 분석·PM 주기 재설정 대상</span></h4>
-    ${rep.length?`<table style="font-size:12px"><tr><th>품번</th><th>고객사</th><th>설비</th><th class=num>건수</th><th>수리일</th><th>유형</th><th>주요 작업</th><th>최근 수리 내용</th></tr>
-      ${rep.map(x=>`<tr><td><b>${esc(x.pn)}</b></td><td>${esc(x.cust||'미확인')}</td><td>${esc(x.mc)}</td><td class=num><b style="color:var(--red)">${x.n}</b></td><td style="font-size:11px">${esc(x.dates)}</td><td>${esc(x.type)}</td><td>${esc(x.w)}</td><td style="font-size:11px">${esc(String(x.last).slice(0,80))}</td></tr>`).join('')}</table>`
+    ${rep.length?`<table style="font-size:12px"><tr><th>품번 / 금형번호</th><th>고객사</th><th>설비</th><th class=num>건수</th><th>수리일</th><th>유형</th><th>주요 작업</th><th>최근 수리 내용</th></tr>
+      ${rep.map(x=>`<tr><td><b>${esc(x.pn)}</b>${x.mold&&x.mold!==x.pn?`<div class=muted style="font-size:11px">${esc(x.mold)}</div>`:''}</td><td>${esc(x.cust||'미확인')}</td><td>${esc(x.mc)}</td><td class=num><b style="color:var(--red)">${x.n}</b></td><td style="font-size:11px">${esc(x.dates)}</td><td>${esc(x.type)}</td><td>${esc(x.w)}</td><td style="font-size:11px">${esc(String(x.last).slice(0,80))}</td></tr>`).join('')}</table>`
       :'<div class="muted">없음</div>'}
     ${!cu&&unk.length?`<div class="noprint" style="margin-top:8px;padding:6px 10px;border:1px solid var(--amber);border-radius:6px;font-size:12px">
       <b style="color:var(--amber)">고객사 미확인 ${byC['고객사 미확인']}건 · 품번 ${unk.length}종</b> — 품목 마스터에 없는 품번이라 고객사별 분석에서 빠집니다. 기준정보 › 품목 마스터에 등록하거나 MES 품번 매칭을 확인하세요.<br>
@@ -2593,8 +2593,9 @@ async function loadMoldRep(mo){
   try{if(!MRALL)MRALL=loadRepHist();rh=await MRALL}catch(e){MRALL=null;rhErr=String(e.message||e)}
   if(!MOLDMAPP)MOLDMAPP=loadMoldMap();MOLDMAP=await MOLDMAPP;
   if(rh){
-    const rows=rh.filter(x=>!x._deleted&&String(x['수리일자']||'').slice(0,7)===mo).map(mrRow);
-    MOLDREP[mo]={ok:1,src:'금형수리 이력(repair_history_v2)',cats,rows,eq:all.filter(x=>isEq(x.category)).map(moldRow)};
+    const D=mrDedup(rh.filter(x=>!x._deleted&&String(x['수리일자']||'').slice(0,7)===mo));
+    const rows=D.keep.map(mrRow);
+    MOLDREP[mo]={ok:1,src:'금형수리 이력(repair_history_v2)',dup:D.drop,cats,rows,eq:all.filter(x=>isEq(x.category)).map(moldRow)};
   }else if(!logErr){
     MOLDREP[mo]={ok:1,src:'점검로그(mes_check_log)',cats,rows:all.filter(x=>isRep(x.category)).map(moldRow),eq:all.filter(x=>isEq(x.category)).map(moldRow),warn:rhErr};
   }else MOLDREP[mo]={ok:0,rows:[],err:rhErr||logErr};
@@ -2609,6 +2610,13 @@ function mrRow(x){
   const mm=MOLDMAP&&MOLDMAP[String(mn).toUpperCase().replace(/[^0-9A-Z]/g,'')];
   return moldRow({machine_code:mc,item_code:pm||(mm&&mm.pn)||mn,cust:mm&&mm.cust,mold:mn,worker:x['담당자']||'',created_at:x._updatedAt||'',
     payload:{type:x['수리유형']||'기타',content:x['수리내용']||'',work_date:x['수리일자']||''}})}
+/* 같은 날·같은 금형·같은 유형에 '금형파손 발생'처럼 발생만 알린 기록과 실제 수리 기록이 함께 있으면 발생 기록은 뺀다
+   (생산현황에서 발생 시 자동 등록 + 금형팀 수리 등록이 겹침). 발생 기록끼리만 있으면 하나만 남긴다 */
+function mrDedup(L){const isOcc=x=>/^\s*\S*\s*발생\s*(\(\s*\d{1,2}:\d{2}\s*\))?\s*$/.test(String(x['수리내용']||''))||!String(x['수리내용']||'').trim();
+  const G={};L.forEach(x=>{const k=[String(x['금형번호']||'').toUpperCase(),x['수리일자'],x['수리유형']].join('|');(G[k]=G[k]||[]).push(x)});
+  const keep=[];let drop=0;
+  Object.values(G).forEach(A=>{const real=A.filter(x=>!isOcc(x));if(real.length){keep.push(...real);drop+=A.length-real.length}else{keep.push(A[0]);drop+=A.length-1}});
+  return{keep,drop}}
 let MOLDMAP=null,MOLDMAPP=null;
 async function loadMoldMap(){
   for(const [u,k] of [[MR_URL,MR_KEY],[DT_URL,DT_KEY]]){
@@ -3060,7 +3068,7 @@ function weekText(from,to,pf,pt,rh){
   const gp={};L.forEach(r=>{const v=(+r.ng||0)+(+r.ngp||0);const x=gp[r.pn]=gp[r.pn]||{ng:0,q:0,notes:{},name:r.name,cust:r.cust};x.ng+=v;x.q+=+r.qty||0;if(r.note)x.notes[r.note]=(x.notes[r.note]||0)+1});
   const ngl=Object.entries(gp).filter(([,x])=>x.ng>0).sort((a,b)=>b[1].ng-a[1].ng).slice(0,3);
   // 금형수리 · 설비고장
-  const MR=(rh||[]).filter(x=>!x._deleted&&String(x['수리일자']||'')>=from&&String(x['수리일자']||'')<=to).map(mrRow);
+  const MR=mrDedup((rh||[]).filter(x=>!x._deleted&&String(x['수리일자']||'')>=from&&String(x['수리일자']||'')<=to)).keep.map(mrRow);
   const MRp=(rh||[]).filter(x=>!x._deleted&&String(x['수리일자']||'')>=pf&&String(x['수리일자']||'')<=pt).length;
   const cnt=f=>{const c={};MR.forEach(r=>{const k=f(r);if(k)c[k]=(c[k]||0)+1});return Object.entries(c).sort((a,b)=>b[1]-a[1])};
   const mPn=cnt(r=>r.pn),mTy=cnt(r=>r.type);
