@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v21.8 · 태진다이텍</title>
+<title>생산일보 통합관리 v21.9 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2724,6 +2724,7 @@ function execHtml(){
   // 비어 있으면 자동 문장 (고쳐 쓰면 저장된 내용 우선)
   const taA=(k,def,ph)=>{const v=o[k]||def||'';return `<textarea rows=${taRows(v)} onchange="rptSet('${k}',this.value)" placeholder="${ph||'자동 작성할 자료가 없습니다'}">${esc(v)}</textarea>`};
   loadMoldRep(month);loadMoldRep(prevMonth(month));
+  if(!o.fix&&today()>closeDayOf(month)&&MOLDREP[month]&&MOLDREP[month].ok&&autoFixMonth(month))commit0();
   const AX=autoExec(cu);
   const MR=MOLDREP[month]||{};
   const mrNote=MR.busy?'금형수리 이력 읽는 중…':MR.ok?`금형수리 이력 ${MR.rows.length}건 반영 (${esc(MR.src||'')})${!MR.rows.length?' · 분류: '+Object.keys(MR.cats||{}).join(', '):''}`:`금형수리 이력을 읽지 못함 (${esc(String(MR.err||''))})`;
@@ -2926,7 +2927,7 @@ function execHtml(){
   </div>
 
   <div class="rpt-sec pgnew">
-    <h3>8. 개선 활동 <button class="s noprint" onclick="rptSuggest()" style="font-size:11px;padding:2px 8px;margin-left:6px">자동 작성</button><button class="s noprint" onclick="rptFix()" style="font-size:11px;padding:2px 8px;margin-left:4px" title="이 내용을 이번 달 개선 활동으로 저장 — 다음 달 보고서에서 이행 점검">개선 활동 확정</button>${o.fix?`<span class="muted noprint" style="font-weight:400;font-size:11px;margin-left:6px">확정 ${esc(o.fix.at)}</span>`:''}</h3>
+    <h3>8. 개선 활동 <button class="s noprint" onclick="rptSuggest()" style="font-size:11px;padding:2px 8px;margin-left:6px">자동 작성</button><button class="s noprint" onclick="rptFix()" style="font-size:11px;padding:2px 8px;margin-left:4px" title="이 내용을 이번 달 개선 활동으로 저장 — 다음 달 보고서에서 이행 점검">개선 활동 확정</button><span class="muted noprint" style="font-weight:400;font-size:11px;margin-left:6px">${o.fix?`확정 ${esc(o.fix.at)}${o.fix.auto?' (자동)':''} · 마감 ${esc((o.fix.base||'').slice(5).replace('-','/'))} 기준`:`마감 ${closeDayOf(month).slice(5).replace('-','/')} 다음날 자동 확정`}</span></h3>
     <table><tr><th style="width:26%">항목</th><th style="width:37%">조치 내용</th><th>담당 / 기한</th></tr>
     ${(()=>{const AR=acRows(cu);return [1,2,3,4,5].map(k=>{const own=o['acT'+k]||o['acD'+k]||o['acW'+k];const d=own?['','','']:(AR[k-1]||['','','']);   // 한 줄이라도 고쳐 쓰면 그 줄은 저장 내용만
       return `<tr><td>${taA('acT'+k,d[0])}</td><td>${taA('acD'+k,d[1])}</td><td>${taA('acW'+k,d[2])}</td></tr>`}).join('')})()}
@@ -3205,14 +3206,33 @@ function prevCheck(cu){
     return{...x,a,b,eff,due:dueOf(x.w,pm),cmp:a&&b?`${a.txt} → ${b.txt}`:'수치 비교 대상 아님'}});
   return{pm,fixed:F,rows};
 }
-function rptFix(){
-  const cu=$('p_cust').value,o=rptGet(),AR=acRows(cu);
-  if(o.fix&&!confirm(`${o.fix.at}에 확정한 개선 활동이 있습니다. 지금 내용으로 다시 확정할까요?`))return;
-  const items=[1,2,3,4,5].map(k=>{const own=o['acT'+k]||o['acD'+k]||o['acW'+k];const A=AR[k-1]||[];
+/* 보고서 8번에 보이는 개선 활동 (직접 고친 줄은 저장 내용, 나머지는 자동) */
+function fixItems(cu,o){const AR=acRows(cu);
+  return [1,2,3,4,5].map(k=>{const own=o['acT'+k]||o['acD'+k]||o['acW'+k];const A=AR[k-1]||[];
     const t=own?(o['acT'+k]||''):(A[0]||''),d=own?(o['acD'+k]||''):(A[1]||''),w=own?(o['acW'+k]||''):(A[2]||'');
-    return t?{t,d,w,m:(A[0]===t||String(t).split(' ')[0]===String(A[0]||'').split(' ')[0])?(A[3]||null):null}:null}).filter(Boolean);
-  o.fix={at:today(),by:localStorage.getItem('tj_me')||'',items};o.ua=now();commit0();renderReport();
+    return t?{t,d,w,m:(A[0]===t||String(t).split(' ')[0]===String(A[0]||'').split(' ')[0])?(A[3]||null):null}:null}).filter(Boolean)}
+function rptFix(){
+  const cu=$('p_cust').value,o=rptGet();
+  if(o.fix&&!confirm(`${o.fix.at}에 확정한 개선 활동이 있습니다. 지금 내용으로 다시 확정할까요?`))return;
+  const items=fixItems(cu,o);
+  o.fix={at:today(),by:localStorage.getItem('tj_me')||'',base:closeDayOf(month),items};o.ua=now();commit0();renderReport();
   toast(`${+month.slice(5)}월 개선 활동 ${items.length}건을 확정했습니다 — 다음 달 보고서에서 이행 점검됩니다`);
+}
+/* 월 마감 기준일 — 그 달 마지막 평일(빨간날 제외). 2026-10 → 10/30(금) */
+function closeDayOf(mo){const[y,m]=mo.split('-').map(Number);
+  for(let d=new Date(y,m,0).getDate();d>0;d--){const ds=mo+'-'+String(d).padStart(2,'0');const w=new Date(y,m-1,d).getDay();
+    if(w!==0&&w!==6&&!HOLI[ds])return ds}
+  return mo+'-'+String(new Date(y,m,0).getDate()).padStart(2,'0')}
+/* 마감 후 자동 확정 — 전체 + 그 달 고객사별. 이미 확정한 보고서는 그대로 둔다 */
+function autoFixMonth(mo){
+  if(!S.recs.some(r=>r.date.slice(0,7)===mo))return 0;
+  S.rpt=S.rpt||{};let n=0;
+  const custs=['',...new Set(S.recs.filter(r=>r.date.slice(0,7)===mo&&r.cust).map(r=>r.cust))];
+  withMonth(mo,()=>custs.forEach(cu=>{const key=mo+'|'+(cu||'전체');const o=S.rpt[key]=S.rpt[key]||{};
+    if(o.fix)return;const items=fixItems(cu,o);if(!items.length)return;
+    o.fix={at:today(),by:'자동(마감)',base:closeDayOf(mo),auto:1,items};o.ua=now();n++}));
+  if(n)logAdd('개선 활동 자동 확정',`${mo} 마감(${closeDayOf(mo).slice(5)}) 기준 ${n}개 보고서`);
+  return n;
 }
 function prevCheckHtml(cu,o,taA){
   const C=prevCheck(cu);if(!C.rows.length)return '';
@@ -3228,7 +3248,7 @@ function prevCheckHtml(cu,o,taA){
       <td>${taA('chkN'+i,'','실행 내용·효과')}</td></tr>`}).join('');
   const nI=C.rows.filter(r=>r.eff==='개선').length,nN=C.rows.filter(r=>r.eff==='미개선').length;
   return `<h3 style="margin-top:14px">8-1. 전월 개선활동 이행 점검 <span class="muted" style="font-weight:400;font-size:12px">${pmN}월 개선 활동 → ${mN}월 수치 비교 · 개선 ${nI}건 · 미개선 ${nN}건${nN?' (이번 달 개선 활동으로 이월)':''}</span></h3>
-    ${C.fixed?`<div class="muted" style="font-size:11px">${pmN}월 확정 ${esc(C.fixed.at)}${C.fixed.by?' · '+esc(C.fixed.by):''}</div>`
+    ${C.fixed?`<div class="muted" style="font-size:11px">${pmN}월 확정 ${esc(C.fixed.at)}${C.fixed.by?' · '+esc(C.fixed.by):''}${C.fixed.base?` · 마감 ${esc(C.fixed.base.slice(5).replace('-','/'))} 기준`:''}</div>`
       :`<div class="noprint" style="font-size:11px;color:var(--amber)">${pmN}월 개선 활동이 확정되지 않아 ${pmN}월 자료로 다시 뽑은 항목입니다. ${pmN}월 보고서에서 [개선 활동 확정]을 누르면 그 내용으로 고정됩니다.</div>`}
     <table style="font-size:12px"><tr><th style="width:30%">항목 / 조치 내용</th><th>담당 / 기한</th><th style="width:22%">${pmN}월 → ${mN}월</th><th>효과</th><th>진행</th><th style="width:20%">비고</th></tr>${rows}</table>`;
 }

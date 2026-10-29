@@ -1,6 +1,7 @@
 // 생산일보 자동 마감 — 앱(index.html)의 '일보콜' 코드를 그대로 서버에서 실행해 일보에 저장한다.
 //   evening : 오늘 업무 종료(월·화·목·금 19:00 / 수·토·일·빨간날 17:00, 연장이면 최종 가동) 10분 뒤 1회
 //   morning : 07:00 — 전날 일보를 다시 마감 (늦게 들어온 작업자 마감 수량 반영, 누락 줄 추가)
+//             전날이 월 마감 기준일(마지막 평일)이면 그 달 개선 활동도 확정
 // 사용: node scripts/auto_close.mjs [auto|evening|morning] [YYYY-MM-DD] [--dry] [--force]
 //   auto = 실행 시각으로 판단 (06~08시 → morning, 그 외 → evening)
 import { JSDOM, VirtualConsole } from "jsdom";
@@ -90,6 +91,13 @@ async function main() {
     await ev("push()");
     const st = ev("document.getElementById('syncState')&&document.getElementById('syncState').textContent||''");
     log(`일보 저장 ${n}건${st ? " · " + st : ""}`);
+  }
+  // 월 마감 기준일(마지막 평일)의 익일 재마감 뒤 그 달 개선 활동 확정 → 다음 달 보고서 '전월 개선활동 이행 점검'
+  if (!dry && mode === "morning" && ev(`closeDayOf('${d.slice(0, 7)}')`) === d) {
+    await ev(`loadMoldRep('${d.slice(0, 7)}')`);
+    const nf = ev(`autoFixMonth('${d.slice(0, 7)}')`);
+    log(`개선 활동 자동 확정 ${nf}개 보고서 (마감 ${d})`);
+    if (nf) { ev("clearTimeout(pushT)"); await ev("push()"); }
   }
   if (!dry) {
     rec[mode] = kst().toISOString().slice(11, 16); rec.n = n; rec.wait = wait;
