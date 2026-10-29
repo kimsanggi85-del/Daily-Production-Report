@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v22.5 · 태진다이텍</title>
+<title>생산일보 통합관리 v22.6 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2512,7 +2512,7 @@ async function renderPm(){
   loadMoldRep(d.slice(0,7));
   const B=pmBrief(d,PMSTOCK||null);
   $('pmBrief').textContent=B.title+'\n\n'+B.msg;
-  $('pmStockAt').textContent=PMSTOCK&&PMSTOCK.at?`재고 기준 ${String(PMSTOCK.at).slice(5,16).replace('T',' ')} (매일 아침 자동)`:'재고 요약 없음 — 매일 아침 자동 작업 후 표시';
+  $('pmStockAt').textContent=PMSTOCK&&PMSTOCK.at?`재고 기준 ${String(PMSTOCK.at).slice(5,16).replace('T',' ')} (매일 08:00 자동)`:'재고 요약 없음 — 매일 08:00 자동 작업 후 표시';
   const f=$('pm_f').value,t0=today();
   let L=(S.issues||[]).slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   if(f==='open')L=L.filter(x=>x.status!=='완료'&&x.status!=='취소');if(f==='late')L=L.filter(x=>x.status!=='완료'&&x.status!=='취소'&&x.due&&x.due<t0);

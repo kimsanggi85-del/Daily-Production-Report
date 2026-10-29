@@ -1,7 +1,8 @@
 name: 생산일보 자동 마감
 
 # 업무 종료 10분 뒤 자동 마감: 월·화·목·금 19:10 / 수 17:10 (토·일·빨간날 17:10, 연장이면 최종 가동 10분 뒤)
-# 다음날 07:00 전날 재마감 (늦게 들어온 작업자 마감 반영) → 이어서 생산관리 브리핑(ntfy)
+# 다음날 07:00 전날 재마감 (늦게 들어온 작업자 마감 반영)
+# 08:00 생산관리 브리핑(ntfy) — 23:00 UTC
 # GitHub 예약 실행은 10분 간격이면 대부분 건너뛰므로 정해진 시각 + 예비 실행만 둔다 (이미 마감한 날은 스크립트가 건너뜀)
 # 시각(UTC = KST-9): 17:10 = 08:10 / 19:10 = 10:10 / 07:00 = 22:00(전날)
 on:
@@ -12,6 +13,7 @@ on:
     - cron: "40 10 * * 1,2,4,5"   # 19:40 예비
     - cron: "10 11-14 * * *"      # 20:10~23:10 연장·지연 예비
     - cron: "0 22 * * *"
+    - cron: "0 23 * * *"          # 08:00 생산관리 브리핑
   workflow_dispatch:
     inputs:
       mode:
@@ -48,14 +50,15 @@ jobs:
           MODE="${{ github.event.inputs.mode || 'auto' }}"
           # 07:00 예약 실행은 GitHub 지연이 있어도 morning 으로 고정
           if [ "${{ github.event.schedule }}" = "0 22 * * *" ]; then MODE=morning; fi
+          if [ "${{ github.event.schedule }}" = "0 23 * * *" ]; then MODE=brief; fi
           ARGS="$MODE ${{ github.event.inputs.date }}"
           [ "${{ github.event.inputs.dry }}" = "true" ] && ARGS="$ARGS --dry"
           [ "${{ github.event.inputs.force }}" = "true" ] && ARGS="$ARGS --force"
           if [ "$MODE" != "brief" ]; then node scripts/auto_close.mjs $ARGS; fi
           echo "MODE=$MODE" >> "$GITHUB_ENV"
       - name: 생산관리 브리핑
-        # 07:00 재마감 뒤 (또는 수동 실행 brief) — 실패해도 마감 결과에는 영향 없음
-        if: ${{ always() && (github.event.schedule == '0 22 * * *' || github.event.inputs.mode == 'brief' || github.event.inputs.mode == 'morning') }}
+        # 08:00 예약 실행 (또는 수동 실행 brief) — 마감과 별도 실행
+        if: ${{ always() && (github.event.schedule == '0 23 * * *' || github.event.inputs.mode == 'brief') }}
         run: |
           ARGS="${{ github.event.inputs.mode == 'brief' && github.event.inputs.date || '' }}"
           [ "${{ github.event.inputs.dry }}" = "true" ] && ARGS="$ARGS --dry"
