@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v22.1 · 태진다이텍</title>
+<title>생산일보 통합관리 v22.2 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -4312,20 +4312,31 @@ function failOpen(mo){
   if(!/^\d{4}-\d{2}$/.test(m)){if(mo===undefined)return;toast('YYYY-MM 형식으로 입력하세요');return}
   FAILMO=m;
   FAILROWS=S.recs.filter(r=>r.date.slice(0,7)===m).sort((a,b)=>a.date.localeCompare(b.date)||String(a.mc).localeCompare(String(b.mc),'ko',{numeric:true}))
-    .map(r=>({id:r.id,date:r.date,mc:r.mc,pn:r.pn,stop:+r.stop||0,sr:r.sr||'',note:r.note||'',
+    .map(r=>({id:r.id,date:r.date,mc:r.mc,pn:r.pn,qty:+r.qty||0,stop:+r.stop||0,sr:r.sr||'',note:r.note||'',
       run:calc(r).run,fcnt:+r.fcnt||0,fmin:+r.fmin||0,
       susp:FAIL_KW.some(k=>((r.sr||'')+(r.note||'')).includes(k)),
       kd:flKind((r.sr||'')+' '+(r.note||''))}));
   if(!FAILROWS.length){toast(m+' 일보가 없습니다');return}
+  failGroup();
   const n=failAuto(false);
   $('mask').classList.add('on');drawFail();
   if(n)toast(`설비고장 ${n}줄을 정지사유로 추정해 채웠습니다 — 확인 후 저장하세요`);
 }
 function failSet(i,k,v){const r=FAILROWS[i];if(!r)return;r[k]=+v||0;r.auto=false;drawFail()}
+/* 같은 날·같은 설비 줄 묶음 — MES 정지사유는 설비 단위라 품번 줄마다 같은 사유가 반복된다.
+   고장은 생산수량이 가장 큰 대표 줄 하나에 싣고(고장이력대장 반영과 같은 규칙), 정지시간 한도는 그 설비의 그날 정지 합계 */
+function failGroup(){const G={};
+  FAILROWS.forEach(r=>{(G[r.date+'|'+r.mc]=G[r.date+'|'+r.mc]||[]).push(r)});
+  Object.values(G).forEach(L=>{const main=L.slice().sort((a,b)=>b.qty-a.qty||b.stop-a.stop)[0];const gs=L.reduce((a,r)=>a+r.stop,0);
+    L.forEach(r=>{r.g=L;r.gstop=gs;r.main=r===main;r.mainPn=main.pn})})}
+const failGSum=r=>r.g.reduce((a,x)=>a+(+x.fmin||0),0);
 /* 정지사유로 설비고장 건수·시간 추정 — '설비이상 40분 / 소재교환 10분' 처럼 분이 적힌 설비 계열 사유는 그 분을,
    없으면 정지시간에서 계획정지 표준시간을 뺀 값을 쓴다. 금형 계열은 설비고장이 아니므로 채우지 않는다 */
 function failGuess(r){
-  if(!r.susp||!(r.kd==='설비'||r.kd==='혼합'))return null;
+  if(!r.main)return null;
+  const susp=r.g.some(x=>x.susp),kd=r.g.map(x=>x.kd).find(k=>k==='설비'||k==='혼합');
+  if(!susp||!kd)return null;
+  r={...r,sr:r.g.map(x=>x.sr).sort((a,b)=>b.length-a.length)[0],stop:r.gstop};
   const segs=String(r.sr||'').split(/\s*\/\s*|,/).filter(Boolean);
   const eq=segs.filter(x=>(FAIL_EQ.some(k=>x.includes(k))||/고장|오작동|에러|멈춤/.test(x))&&!FAIL_MD.some(k=>x.includes(k)));
   const mins=eq.map(x=>{const mm=x.match(/(\d+)\s*분/);return mm?+mm[1]:0});
@@ -4337,7 +4348,7 @@ function failGuess(r){
   return{fcnt:Math.max(1,eq.length),fmin:min,why};
 }
 function failAuto(all){let n=0;
-  FAILROWS.forEach(r=>{if(!all&&(r.fcnt||r.fmin))return;const g=failGuess(r);if(!g)return;
+  FAILROWS.forEach(r=>{if(!all&&r.g.some(x=>x.fcnt||x.fmin))return;const g=failGuess(r);if(!g)return;
     r.fcnt=g.fcnt;r.fmin=g.fmin;r.why=g.why;r.auto=true;n++});
   return n}
 function failAutoBtn(){const n=failAuto(false);drawFail();toast(n?`${n}줄을 추정해 채웠습니다`:'새로 추정할 줄이 없습니다 (이미 적은 줄은 그대로 둡니다)')}
@@ -4351,14 +4362,14 @@ function drawFail(){
   const run=FAILROWS.reduce((a,r)=>a+r.run,0);
   const fc=f.reduce((a,r)=>a+r.fcnt,0), fm=f.reduce((a,r)=>a+r.fmin,0);
   const hh=x=>(x/60).toFixed(1);
-  const bad=FAILROWS.filter(r=>r.fmin>r.stop||(r.fcnt>0&&r.fmin===0));
+  const bad=FAILROWS.filter(r=>(r.fmin>0&&failGSum(r)>r.gstop)||(r.fcnt>0&&r.fmin===0));
   const rows=L.map(r=>`<tr${r.fcnt?` style="background:${r.auto?'rgba(80,140,230,.08)':'rgba(255,176,32,.08)'}"`:''}>
     <td style="white-space:nowrap">${esc(r.date.slice(5))}</td><td style="white-space:nowrap">${esc(r.mc)}<div>${r.kd?`<span class="tag ${KC[r.kd]}">${r.kd}</span>`:''}</div></td><td class=muted style="font-size:11px;word-break:break-all">${esc(r.pn)}</td>
     <td class=num>${r.stop}</td>
     <td style="font-size:12px;white-space:normal;word-break:keep-all;overflow-wrap:anywhere">${esc(r.sr).replace(new RegExp('('+FAIL_KW.join('|')+')','g'),'<b style="color:var(--amber)">$1</b>')}${r.note?`<div class=muted style="font-size:11px">${esc(r.note)}</div>`:''}</td>
     <td style="white-space:nowrap"><input type=number min=0 value="${r.fcnt||''}" onchange="failSet(${FAILROWS.indexOf(r)},'fcnt',this.value)" style="width:52px;padding:3px 5px" placeholder="0"></td>
-    <td style="white-space:nowrap"><input type=number min=0 value="${r.fmin||''}" onchange="failSet(${FAILROWS.indexOf(r)},'fmin',this.value)" style="width:64px;padding:3px 5px${r.fmin>r.stop?';border-color:var(--red)':''}" placeholder="분"></td>
-    <td style="font-size:11px;white-space:normal">${r.auto?`<span class="tag" style="background:#E3EEFB;color:#23456E">추정</span> <span class=muted>${esc(r.why||'')}</span>`:''}</td></tr>`).join('');
+    <td style="white-space:nowrap"><input type=number min=0 value="${r.fmin||''}" onchange="failSet(${FAILROWS.indexOf(r)},'fmin',this.value)" style="width:64px;padding:3px 5px${r.fmin>0&&failGSum(r)>r.gstop?';border-color:var(--red)':''}" placeholder="분"></td>
+    <td style="font-size:11px;white-space:normal">${r.auto?`<span class="tag" style="background:#E3EEFB;color:#23456E">추정</span> <span class=muted>${esc(r.why||'')}</span>`:''}${r.g.length>1?`<div class=muted>${r.main?`같은 날 ${r.g.length}줄 정지 합계 ${r.gstop}분`:`같은 날 설비 고장은 ${esc(r.mainPn)} 줄에 합산`}</div>`:''}${r.fmin>0&&failGSum(r)>r.gstop?`<div style="color:var(--red)">고장정지 합계 ${failGSum(r)}분 &gt; 그날 정지 ${r.gstop}분</div>`:''}</td></tr>`).join('');
   $('modal').style.width='min(1400px,100%)';
   $('modal').innerHTML=`<div class="fl" style="margin-bottom:10px">
     <h2 style="margin:0">설비고장 소급 입력 · ${FAILMO}</h2>
@@ -4379,7 +4390,7 @@ function drawFail(){
   <div class="tw" style="max-height:60vh;overflow:auto"><table style="width:100%;table-layout:auto"><tr><th>일자</th><th>설비</th><th style="min-width:90px">품번</th><th class=num>정지(분)</th><th style="min-width:260px">정지사유</th><th>고장<br>건수</th><th>고장정지<br>(분)</th><th style="min-width:180px">추정 근거</th></tr>
   ${rows||'<tr><td colspan=8 class=empty>해당 줄이 없습니다</td></tr>'}</table></div>
   <div class="fl" style="margin-top:12px"><button class="p" onclick="failSave()" ${bad.length?'disabled':''}>저장</button>
-    ${bad.length?`<span class="muted" style="color:var(--red)">고장정지가 정지시간보다 크거나, 건수만 적고 시간이 빈 줄이 있습니다</span>`:'<span class="muted">저장하면 월간보고서 4-1 설비 신뢰성에 반영됩니다</span>'}</div>`;
+    ${bad.length?`<span class="muted" style="color:var(--red)">고장정지가 그 설비의 그날 정지 합계보다 크거나, 건수만 적고 시간이 빈 줄이 있습니다 (빨간 칸)</span>`:'<span class="muted">저장하면 월간보고서 4-1 설비 신뢰성에 반영됩니다</span>'}</div>`;
 }
 function failSave(){
   let n=0;
