@@ -4,6 +4,9 @@
 //             전날이 말일이면 그 달 개선 활동도 확정 (말일에 생산이 없어도 실행)
 // 사용: node scripts/auto_close.mjs [auto|evening|morning] [YYYY-MM-DD] [--dry] [--force]
 //   auto = 실행 시각으로 판단 (06~08시 → morning, 그 외 → evening)
+// GitHub 예약 실행은 몇 시간씩 늦게 돌 때가 있다 (19:10 예약이 다음날 00:00 에 실행된 적 있음)
+//   → 날짜를 안 주면 자정~06시 evening 은 전날을 마감하고,
+//     최근 며칠 중 저녁 마감·재마감이 모두 빠진 날이 있으면 그날을 먼저 재마감(morning)한다
 import { JSDOM, VirtualConsole } from "jsdom";
 import fs from "node:fs";
 import path from "node:path";
@@ -21,8 +24,9 @@ const kst = () => new Date(Date.now() + 9 * 3600e3);
 const kstDate = (ms = 0) => new Date(Date.now() + 9 * 3600e3 + ms).toISOString().slice(0, 10);
 let mode = pos[0] || "auto";
 if (mode === "auto") { const h = kst().getUTCHours(); mode = h >= 6 && h < 9 ? "morning" : "evening"; }
-const d = pos[1] || (mode === "morning" ? kstDate(-86400e3) : kstDate());
+let d = pos[1] || (mode === "morning" || kst().getUTCHours() < 6 ? kstDate(-86400e3) : kstDate());
 const log = (...a) => console.log(`[${mode} ${d}]`, ...a);
+const CATCH_DAYS = 4;                      // 빠진 마감을 찾아볼 기간(일)
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const html = fs.readFileSync(path.join(here, "..", "index.html"), "utf8");
@@ -37,6 +41,19 @@ const offOf = (dt) => { const w = new Date(dt + "T00:00:00Z").getUTCDay(); retur
 async function main() {
   const doneRow = await sb(`/rest/v1/kv_store?key=eq.${DONE_KEY}&select=value`);
   const done = (doneRow[0] && doneRow[0].value) || {};
+  // 예약 실행이 늦어 빠진 날 보충 — 날짜를 직접 준 실행은 그대로 둔다
+  if (!pos[1] && !force) {
+    for (let k = CATCH_DAYS; k >= 1; k--) {
+      const x = kstDate(-k * 86400e3);
+      if (x >= d) continue;
+      const r0 = done[x] || {};
+      if (r0.evening || r0.morning) continue;
+      const has = await sb(`/rest/v1/daily_production?select=ymd&ymd=eq.${x}&limit=1`);
+      if (!has.length) continue;
+      console.log(`[${mode} ${d}] ${x} 마감 기록 없음 → ${x} 재마감 먼저 실행`);
+      mode = "morning"; d = x; break;
+    }
+  }
   const rec = done[d] || {};
   // 말일 익일 재마감 → 그 달 개선 활동 확정 (말일이 휴무여도 진행)
   const monthEnd = mode === "morning" && new Date(Date.UTC(+d.slice(0, 4), +d.slice(5, 7), 0)).toISOString().slice(0, 10) === d;
