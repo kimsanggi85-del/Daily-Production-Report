@@ -5,6 +5,8 @@ name: 생산일보 자동 마감
 # 08:30 생산관리 브리핑(ntfy) — 23:30 UTC
 # 09:30 금일 작업지시(ntfy, 자주검사 성적서 대상) — 00:30 UTC
 # GitHub 예약 실행은 10분 간격이면 대부분 건너뛰므로 정해진 시각 + 예비 실행만 둔다 (이미 마감한 날은 스크립트가 건너뜀)
+# GitHub 예약 실행은 몇 시간씩 늦을 수 있어, 마감(17:10·19:10·20~23시·07:00)은 Supabase pg_cron 이 정시에
+#   workflow_dispatch 로 실행한다 (supabase/sql/auto_close_cron.sql). 아래 schedule 은 예비.
 # 시각(UTC = KST-9): 17:10 = 08:10 / 19:10 = 10:10 / 07:00 = 22:00(전날)
 on:
   schedule:
