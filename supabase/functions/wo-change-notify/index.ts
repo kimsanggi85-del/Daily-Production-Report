@@ -2,13 +2,13 @@
 //  MES 설비 현재 상태(SmartFactory machine_status)의 설비별 품번·작업지시번호를 직전 확인값과 비교해
 //  바뀐 설비가 있으면 알린다 → 초물 자주검사 성적서 작성 대상
 //  09:30 이전은 기준값만 갱신하고 알리지 않는다 (아침 작업지시는 09:30 '금일 작업지시' 알림으로 한꺼번에)
-//  직전 확인값: 이 프로젝트 kv_store 'tj_wo_watch_v1'
+//  직전 확인값: 이 프로젝트(SmartFactory) kv_store 'tj_wo_watch_v1'
 //  초물 검사 미실시: 생산 중(is_producing)인데 그 작업지시로 생산을 시작한 지 30분이 지나도 초물(inspect_top)이 'N' 이면
 //  작업지시마다 한 번 알린다 (08:30 부터). 값이 비어 있는(null) 설비는 검사 기록 대상이 아닌 것으로 보고 제외
 //  ?dry=1 보내지 않고 판단 결과만, ?now=HH:MM 시각 가정(시험용)
 const DT_URL = "https://omngtyewdaqpphnzeate.supabase.co";
 const DT_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9tbmd0eWV3ZGFxcHBobnplYXRlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4ODk4ODksImV4cCI6MjA5MDQ2NTg4OX0.Zxur3t02JHtOcXforCMSwO3i2mMaf5sViE0tXXUC0-s";
-const SB_URL = Deno.env.get("SUPABASE_URL") || "https://ebthltdmxpzlkfwvdloz.supabase.co";
+const SB_URL = Deno.env.get("SUPABASE_URL") || "https://omngtyewdaqpphnzeate.supabase.co";
 const SB_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const STATE_KEY = "tj_wo_watch_v1";
 const NTFY_TOPIC = "taejincall";
