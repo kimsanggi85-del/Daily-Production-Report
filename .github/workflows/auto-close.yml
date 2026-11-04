@@ -16,8 +16,8 @@ on:
     - cron: "40 10 * * 1,2,4,5"   # 19:40 예비
     - cron: "10 11-14 * * *"      # 20:10~23:10 연장·지연 예비
     - cron: "0 22 * * *"
-    - cron: "30 23 * * *"         # 08:30 생산관리 브리핑
-    - cron: "30 0 * * *"          # 09:30 금일 작업지시
+    - cron: "30 23 * * 0-4"       # 08:30 생산관리 브리핑 (평일만 — 주말 알림 없음, UTC 일~목 = KST 월~금)
+    - cron: "30 0 * * 1-5"        # 09:30 금일 작업지시 (평일만)
   workflow_dispatch:
     inputs:
       mode:
@@ -54,8 +54,8 @@ jobs:
           MODE="${{ github.event.inputs.mode || 'auto' }}"
           # 07:00 예약 실행은 GitHub 지연이 있어도 morning 으로 고정
           if [ "${{ github.event.schedule }}" = "0 22 * * *" ]; then MODE=morning; fi
-          if [ "${{ github.event.schedule }}" = "30 23 * * *" ]; then MODE=brief; fi
-          if [ "${{ github.event.schedule }}" = "30 0 * * *" ]; then MODE=wo; fi
+          if [ "${{ github.event.schedule }}" = "30 23 * * 0-4" ]; then MODE=brief; fi
+          if [ "${{ github.event.schedule }}" = "30 0 * * 1-5" ]; then MODE=wo; fi
           ARGS="$MODE ${{ github.event.inputs.date }}"
           [ "${{ github.event.inputs.dry }}" = "true" ] && ARGS="$ARGS --dry"
           [ "${{ github.event.inputs.force }}" = "true" ] && ARGS="$ARGS --force"
@@ -63,7 +63,7 @@ jobs:
           echo "MODE=$MODE" >> "$GITHUB_ENV"
       - name: 생산관리 브리핑
         # 08:30 예약 실행 (또는 수동 실행 brief) — 마감과 별도 실행
-        if: ${{ always() && (github.event.schedule == '30 23 * * *' || github.event.schedule == '30 0 * * *' || github.event.inputs.mode == 'brief' || github.event.inputs.mode == 'wo') }}
+        if: ${{ always() && (github.event.schedule == '30 23 * * 0-4' || github.event.schedule == '30 0 * * 1-5' || github.event.inputs.mode == 'brief' || github.event.inputs.mode == 'wo') }}
         run: |
           ARGS="${{ github.event.inputs.mode == 'brief' && github.event.inputs.date || '' }}"
           [ "${{ github.event.inputs.dry }}" = "true" ] && ARGS="$ARGS --dry"

@@ -95,3 +95,28 @@ select cron.schedule('prod-close-check-1950', '50 10 * * *', $$select public.che
 select cron.schedule('prod-close-check-2340', '40 14 * * *', $$select public.check_auto_close('today')$$);      -- 23:40 (연장)
 select cron.schedule('prod-close-check-0740', '40 22 * * *', $$select public.check_auto_close('yesterday')$$);  -- 07:40
 select cron.schedule('prod-close-check-0940', '40 0 * * *',  $$select public.check_auto_close('yesterday')$$);  -- 09:40
+
+-- ── 주말(토·일, KST) 알림 끄기 (2026-11-05) ──
+-- 알림 예약 명령을 run_if_weekday 로 감싸 주말에는 건너뛴다. 자동 마감(일보 저장) 자체는 특근 대비 그대로 둔다.
+create or replace function public.run_if_weekday(p_cmd text) returns text
+language plpgsql security definer set search_path = public, extensions as $$
+begin
+  if extract(isodow from now() at time zone 'Asia/Seoul') >= 6 then return '주말 → 건너뜀'; end if;
+  execute p_cmd;
+  return '실행';
+end $$;
+revoke all on function public.run_if_weekday(text) from public, anon, authenticated;
+
+do $$
+declare j record;
+begin
+  for j in select jobid, command from cron.job
+           where jobname in ('cnt-day-notify','eval-reminder-daily','patrol-5s-hourly','pm-uncheck-hourly','mold_loc_notify_daily',
+                             'prod-close-notify','prod-close-notify-morning',
+                             'prod-close-check-1750','prod-close-check-1950','prod-close-check-2340','prod-close-check-0740','prod-close-check-0940',
+                             'wo-change-notify','wo-change-kick')
+             and command not like '%run_if_weekday%'
+  loop
+    perform cron.alter_job(j.jobid, command := 'select public.run_if_weekday(' || quote_literal(rtrim(trim(j.command), ';')) || ')');
+  end loop;
+end $$;
