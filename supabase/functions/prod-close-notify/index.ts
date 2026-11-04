@@ -5,7 +5,7 @@
 //  수량 = 작업자 마감 실제양품 → (미마감) 일보 → MES 타발
 //  ?d=YYYY-MM-DD 날짜 지정, ?dry=1 보내지 않고 판단·내용만, ?now=HH:MM 시각 가정(시험용)
 //  [2026-10-27 Supabase 통합] SB_URL/SB_KEY 를 과장님 DB(ebthltd…) → SmartFactory 로 변경 (kv_store·daily_production 이 SmartFactory 로 이전됨)
-//  [2026-11-05] 저녁 마감 알림 끝에 하루 마무리 인사 (요일별, 금요일·특근은 따로)
+//  [2026-11-05] 저녁 마감 알림 끝에 하루 마무리 인사 (요일별, 금요일·특근은 따로), 08:00 재발송에는 아침 인사
 //  주말 알림 끄기는 pg_cron 쪽(run_if_weekday)에서 한다
 const SB_URL = "https://omngtyewdaqpphnzeate.supabase.co";
 const SB_KEY = "sb_publishable_9j2YkkL-7ul1TrhH-NjVdQ_vWDG2-1D";
@@ -32,6 +32,19 @@ const GREET = [
   "오늘도 정성껏 만들어 주셔서 감사합니다. 따뜻한 저녁 되세요.",
   "모두 수고하셨습니다. 오늘 하루도 무사히 마쳤습니다 👏",
 ];
+
+// 아침 재발송 인사 — 앱(index.html) morningGreet 과 같은 문구·같은 순서
+const MORNING_GREET = [
+  "좋은 아침입니다. 오늘 하루도 고생하십시오 🙂",
+  "오늘 하루도 안전하게, 힘내십시오! 💪",
+  "오늘도 무사고! 함께 힘내 봅시다.",
+  "오늘 하루도 잘 부탁드립니다. 안전이 최우선입니다.",
+  "상쾌한 아침입니다. 오늘도 좋은 하루 되십시오.",
+];
+const morningGreet = (d: string) => {
+  if (new Date(d + "T00:00:00Z").getUTCDay() === 1) return "새로운 한 주 시작입니다. 이번 주도 안전하게 힘내십시오! 💪";
+  return MORNING_GREET[Math.floor(Date.parse(d + "T00:00:00Z") / 86400e3) % MORNING_GREET.length];
+};
 
 const toMin = (t: string) => { const [h, m] = String(t).split(":").map(Number); return (h || 0) * 60 + (m || 0); };
 const offOf = (d: string) => { const w = new Date(d + "T00:00:00Z").getUTCDay(); return (HOLI[d] || w === 0 || w === 3 || w === 6) ? "17:00" : "19:00"; };
@@ -138,7 +151,7 @@ Deno.serve(async (req) => {
     });
     let msg = out.join("\n");
     if (msg.length > 3400) msg = msg.slice(0, 3400) + "\n…";
-    if (!morning) msg += "\n\n" + greetOf(d);   // 하루 마무리 인사 (익일 재발송에는 넣지 않음)
+    msg += "\n\n" + (morning ? morningGreet(kstNow().slice(0, 10)) : greetOf(d));   // 저녁: 마무리 인사 / 아침 재발송: 아침 인사
     const wd = new Date(d + "T00:00:00Z").getUTCDay();
     const dw = "일월화수목금토"[wd];
     const tg = HOLI[d] ? "공휴일 특근 · " + HOLI[d] : wd === 6 ? "토요일 특근" : wd === 0 ? "일요일 특근" : "";

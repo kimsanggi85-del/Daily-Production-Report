@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v23.7 · 태진다이텍</title>
+<title>생산일보 통합관리 v23.8 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2043,6 +2043,15 @@ function closeGreet(d){
   if(HOLI[d]||wd===0||wd===6)return '쉬는 날까지 나와 주셔서 정말 감사합니다. 고생 많으셨습니다.';
   if(wd===5)return '한 주 동안 고생 많으셨습니다. 편안한 주말 보내세요 🙂';
   return CLOSE_GREET[Math.floor(Date.parse(d+'T00:00:00Z')/86400e3)%CLOSE_GREET.length];
+}
+/* 아침 알림 인사 (08:00 마감 재발송·08:30 브리핑·09:30 작업지시) — k 로 알림마다 다른 문구 */
+const MORNING_GREET=['좋은 아침입니다. 오늘 하루도 고생하십시오 🙂','오늘 하루도 안전하게, 힘내십시오! 💪',
+  '오늘도 무사고! 함께 힘내 봅시다.','오늘 하루도 잘 부탁드립니다. 안전이 최우선입니다.',
+  '상쾌한 아침입니다. 오늘도 좋은 하루 되십시오.'];
+function morningGreet(d,k){
+  const wd=new Date(d+'T00:00:00Z').getUTCDay();
+  if(wd===1&&!k)return '새로운 한 주 시작입니다. 이번 주도 안전하게 힘내십시오! 💪';
+  return MORNING_GREET[(Math.floor(Date.parse(d+'T00:00:00Z')/86400e3)+(k||0))%MORNING_GREET.length];
 }
 async function notifyClose(d,n,w){
   try{

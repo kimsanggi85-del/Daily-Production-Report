@@ -85,6 +85,7 @@ async function main() {
     const x = await ev(`pmExtra(today())`);
     w.__wo = x.wo;
     const M = ev("pmWoMsg(window.__wo)");
+    if (M.n) M.msg += "\n\n" + ev("morningGreet(today(),2)");   // 아침 인사 (브리핑과 다른 문구)
     w.close();
     log(M.title); console.log(M.msg);
     if (!M.n) return log("작업지시 없음 → 발송하지 않음");
@@ -116,6 +117,7 @@ async function main() {
   const n = dry ? 0 : ev(`pmScan('${d}',window.__qd)`);
   if (n) { ev("clearTimeout(pushT)"); await ev("push()"); log(`이상 대응 목록 ${n}건 등록`); }
   const B = ev(`pmBrief('${d}',${JSON.stringify(st)},window.__qd)`);
+  B.msg += "\n\n" + ev("morningGreet(today(),1)");   // 아침 인사
   log(B.title); console.log(B.msg);
   w.close();
   if (dry) return log("(dry) 발송·저장하지 않음");
