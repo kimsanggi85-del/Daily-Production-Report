@@ -1,6 +1,6 @@
 -- 작업지시 변경 즉시 알림 (SmartFactory)
 -- machine_status 의 작업지시(current_wo)·품번(current_item_code)이 바뀌면 표시해 두고,
--- pg_cron 'wo-change-kick'(20초마다)이 표시가 있을 때만 wo-change-notify 를 호출한다.
+-- pg_cron 'wo-change-kick'(1분마다, 07:00~20:59 KST)이 표시가 있을 때만 wo-change-notify 를 호출한다.
 --  · 여러 설비가 한꺼번에 바뀌어도 한 번만 호출 (알림 중복 방지)
 --  · 5분 주기 실행(wo-change-notify)은 초물 미실시 확인용으로 유지, 같은 순간이면 kick 은 건너뜀
 --  · 07:00~20:59 KST 에만 호출. 09:30 전 기준값만 갱신하는 판단은 함수가 한다.
@@ -49,4 +49,4 @@ revoke all on function public.wo_change_kick() from public, anon, authenticated;
 revoke all on function public.wo_change_mark() from public, anon, authenticated;
 
 select cron.unschedule(jobname) from cron.job where jobname = 'wo-change-kick';
-select cron.schedule('wo-change-kick', '20 seconds', $$select public.wo_change_kick()$$);
+select cron.schedule('wo-change-kick', '* 22,23,0-11 * * *', $$select public.wo_change_kick()$$);  -- UTC 22~11시 = KST 07~20시
