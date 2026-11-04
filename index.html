@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v23.6 · 태진다이텍</title>
+<title>생산일보 통합관리 v23.7 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2028,10 +2028,21 @@ function closeMsg(d,n,w){
     out.push(`[${c}] ${fm(g.t)} EA`);
     Object.entries(g.p).filter(([,q])=>q>0).sort((a,b)=>b[1]-a[1]).forEach(([p,q])=>out.push(`· ${p} ${fm(q)}`));
   });
-  let msg=out.join('\n');if(msg.length>3500)msg=msg.slice(0,3500)+'\n…';
+  let msg=out.join('\n');if(msg.length>3400)msg=msg.slice(0,3400)+'\n…';
+  msg+='\n\n'+closeGreet(d);   // 하루 마무리 인사 (자동 마감 알림과 같은 문구)
   const dw='일월화수목금토'[new Date(d+'T00:00:00').getDay()];
   const tg=shiftTag(d);
   return{title:`생산일보 마감 ${d.slice(5).replace('-','/')}(${dw})${/특근/.test(tg)?' · '+tg:''}`,msg,warn:0};
+}
+/* 하루 마무리 인사 — supabase/functions/prod-close-notify 와 같은 문구·같은 순서 */
+const CLOSE_GREET=['오늘 하루도 고생 많으셨습니다. 편안한 저녁 보내세요 🙂','오늘도 안전하게 마무리해 주셔서 감사합니다. 푹 쉬세요.',
+  '하루 동안 수고 많으셨습니다. 내일도 안전하게 힘내요!','오늘도 정성껏 만들어 주셔서 감사합니다. 따뜻한 저녁 되세요.',
+  '모두 수고하셨습니다. 오늘 하루도 무사히 마쳤습니다 👏'];
+function closeGreet(d){
+  const wd=new Date(d+'T00:00:00Z').getUTCDay();
+  if(HOLI[d]||wd===0||wd===6)return '쉬는 날까지 나와 주셔서 정말 감사합니다. 고생 많으셨습니다.';
+  if(wd===5)return '한 주 동안 고생 많으셨습니다. 편안한 주말 보내세요 🙂';
+  return CLOSE_GREET[Math.floor(Date.parse(d+'T00:00:00Z')/86400e3)%CLOSE_GREET.length];
 }
 async function notifyClose(d,n,w){
   try{
