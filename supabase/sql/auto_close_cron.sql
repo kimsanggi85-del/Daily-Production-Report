@@ -120,3 +120,8 @@ begin
     perform cron.alter_job(j.jobid, command := 'select public.run_if_weekday(' || quote_literal(rtrim(trim(j.command), ';')) || ')');
   end loop;
 end $$;
+
+-- 생산관리 브리핑 정시 실행 (GitHub 예약 실행이 2~4시간 늦어 pg_cron 으로 옮김). 이미 보낸 날은 스크립트가 건너뜀
+select cron.unschedule(jobname) from cron.job where jobname like 'prod-brief-%';
+select cron.schedule('prod-brief-0830', '30 23 * * 0,1,3,4', $$select public.trigger_auto_close('brief')$$);  -- 08:30 월·화·목·금
+select cron.schedule('prod-brief-0800', '0 23 * * 2',        $$select public.trigger_auto_close('brief')$$);  -- 08:00 수
