@@ -67,6 +67,18 @@ async function stockSummary() {
   return res;
 }
 
+// ntfy 본문 한도 4,096바이트(한글 3바이트/자) — 넘치면 줄 단위로 자르고 남은 줄 수 표시 (넘치면 ntfy 가 500 으로 거절)
+function clip(s, max = 3900) {
+  const enc = new TextEncoder(), sz = (t) => enc.encode(t).length;
+  if (sz(s) <= max) return s;
+  // '■ 오늘 확인할 일' 부터 끝(아침 인사)까지는 항상 남기고, 앞 내용을 줄 단위로 자른다
+  const k = s.lastIndexOf("■ 오늘 확인할 일");
+  const tail = k >= 0 ? s.slice(k) : "", head = k >= 0 ? s.slice(0, k) : s;
+  const lines = head.replace(/\n+$/, "").split("\n"), out = [];
+  let size = sz(tail) + 120;
+  for (const l of lines) { const b = sz(l + "\n"); if (size + b > max) break; out.push(l); size += b; }
+  return out.join("\n") + `\n  … 외 ${lines.length - out.length}줄 (앱 생산관리 화면에서 확인)\n` + tail;
+}
 async function main() {
   // ① 생산일보
   const html = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "index.html"), "utf8");
@@ -124,8 +136,8 @@ async function main() {
   if (dry) return log("(dry) 발송·저장하지 않음");
   if (st && st.at) await kvPut(STOCK_KEY, st);
   const r = await fetch("https://ntfy.sh/", { method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ topic: NTFY_TOPIC, title: B.title, message: B.msg, tags: ["clipboard"], priority: 3 }) });
-  if (!r.ok) throw new Error("ntfy " + r.status);
+    body: JSON.stringify({ topic: NTFY_TOPIC, title: B.title, message: clip(B.msg), tags: ["clipboard"], priority: 3 }) });
+  if (!r.ok) throw new Error("ntfy " + r.status + " " + (await r.text()).slice(0, 160));
   const done2 = (await kvGet(DONE_KEY)) || {};
   done2[d] = { ...(done2[d] || {}), brief: new Date(Date.now() + 9 * 3600e3).toISOString().slice(11, 16) };
   await kvPut(DONE_KEY, Object.fromEntries(Object.entries(done2).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 40)));
