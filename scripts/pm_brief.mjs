@@ -61,7 +61,8 @@ async function stockSummary() {
       return{pn:it.pn,nm:it.nm||'',cu:it.cu||'',cur,sf,day:Math.round(day),doi:day>0?Math.round(cur/day*10)/10:null,act:!!act[base]}}).filter(x=>x.act);   // 최근 90일 출하·생산이 있는 품목만
     const short=L.filter(x=>x.sf>0&&x.cur<x.sf).sort((a,b)=>(a.cur/a.sf)-(b.cur/b.sf));
     const low=L.filter(x=>x.doi!=null&&x.doi<3&&!(x.sf>0&&x.cur<x.sf)).sort((a,b)=>a.doi-b.doi);
-    return{at:new Date().toISOString(),n:L.length,nShort:short.length,short:short.slice(0,15),low:low.slice(0,15)}})()`);
+    const all={};L.forEach(x=>{all[String(x.pn).replace(/\\s*\\[2F\\]\\s*$/,'')]=[x.cur,x.sf,x.doi]});   // 생산 중 품목 재고 표시용 (품번→[현재고,안전재고,재고일수])
+    return{at:new Date().toISOString(),n:L.length,nShort:short.length,short:short.slice(0,15),low:low.slice(0,15),all}})()`);
   w.close();
   return res;
 }
