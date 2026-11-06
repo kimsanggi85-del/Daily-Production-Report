@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v24.0 · 태진다이텍</title>
+<title>생산일보 통합관리 v24.1 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2613,10 +2613,7 @@ function pmBrief(d,st,qd){
    if(pl.length)T.push('  공정 최다: '+pl.map(([pn,x])=>{const ty=[...new Set(Object.keys(x.notes).flatMap(t=>String(t).split(/\s*\/\s*|,/)).map(t=>t.replace(/[:：]?\s*\d[\d,]*\s*(EA|개)?\s*$/i,'').trim()).filter(t=>t&&!/^불량사유/.test(t)))].slice(0,2).join('·');
      return `${pn} ${fmt(x.ng)} EA (${fmt(Math.round(x.ng/(x.q||1)*1e6))} PPM${ty?', '+ty:''})`}).join(' · '));}
   {const X=qd&&qd.extra;const md=`${+d.slice(5,7)}/${+d.slice(8)}`;
-   if(X){const c=X.claim;T.push('■ 유출불량 (최근 30일)');
-     if(c&&!c.err){T.push(c.recent.length?`  발생 ${c.recent.length}건: `+c.recent.slice(0,4).map(r=>`${+r.d.slice(5,7)}/${+r.d.slice(8)} ${r.cu} ${r.part}${r.qty?' '+r.qty+(/^\s*[\d,]+\s*$/.test(String(r.qty))?'EA':''):''}${r.cause?' — '+r.cause:''}`).join(' · '):'  발생 없음');
-       T.push(`  유효성 평가 대기 ${c.wait} · 결재 대기 ${c.appr}${c.late.length?` · 평가 기한 경과 ${c.late.length}`:''}${c.actLate.length?` · 후속조치 기한 경과 ${c.actLate.length}`:''}`)}
-     else T.push(`  조회 실패${c&&c.err?' ('+c.err+')':''}`);
+   if(X){   // 유출불량은 브리핑에서 뺀다 (사용자 지시)
      T.push(`■ 일상점검 (${md})`);
      const m=X.mchk,k=X.dchk;
      T.push(m&&!m.err?`  설비 ${m.n}대 점검 · NG ${m.ng.length}${m.ng.length?': '+m.ng.slice(0,3).map(x=>x.m+(x.memo?' ('+x.memo+')':'')).join(', '):''}${m.miss.length?` · 가동했는데 미점검 ${m.miss.length}대: `+m.miss.slice(0,6).join(', '):''}`:`  설비 점검 조회 실패${m&&m.err?' ('+m.err+')':''}`);
@@ -2642,7 +2639,7 @@ function pmBrief(d,st,qd){
   {const X=qd&&qd.extra||{};
    if(X.mchk&&X.mchk.miss&&X.mchk.miss.length)N.push(`일상점검 미점검 ${X.mchk.miss.slice(0,3).join(', ')}${X.mchk.miss.length>3?' 외':''} — 점검 누락 확인`);
    if(X.mchk&&X.mchk.ng&&X.mchk.ng.length)N.push(`설비 일상점검 NG ${X.mchk.ng[0].m} 조치 확인 (설비보전)`);
-   if(X.claim&&X.claim.actLate&&X.claim.actLate.length)N.push(`유출불량 후속조치 기한 경과 ${X.claim.actLate.length}건 (${X.claim.actLate[0].part})`);}
+   }
   if(qd&&qd.rise&&qd.rise.length)N.push(`불량 급증 ${qd.rise[0].m}${qd.rise.length>1?` 외 ${qd.rise.length-1}기종`:''} 원인 확인 (품질팀)`);
   N.push('일일 재고조사 실시 (재고수불부 실사 결과 입력)');
   if(late.length)N.push(`기한 경과 이상 대응 ${late.length}건 담당자 확인`);
