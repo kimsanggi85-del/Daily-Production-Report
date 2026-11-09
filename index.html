@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v24.4 · 태진다이텍</title>
+<title>생산일보 통합관리 v24.5 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -1461,7 +1461,7 @@ async function openMes(dateArg,quiet){
       let last={status:'연결실패',text:''},zero='';
       for(const [f,tag] of tries){
         try{const r=await fetch(DT_URL+'/rest/v1/daily_production?select=*&'+f+'&limit=800',{headers:dh});
-          if(r.ok){const j=await r.json();if(j.length)return{ok:true,rows:j,status:200,filter:tag};last={status:200,text:'0건'};zero=zero||tag;continue}
+          if(r.ok){const j=await r.json();if(j.length)return{ok:true,rows:j,status:200,filter:tag};last={status:200,text:'0건'};zero=zero||tag;break}   // [v24.5] 컬럼이 있으면 0건이어도 멈춤 (없는 컬럼 조회로 DB 오류가 쌓이던 문제)
           last={status:r.status,text:(await r.text()).slice(0,120)};
           if(r.status!==400)break;
         }catch(e){last={status:'연결실패',text:String(e.message||e)}}
@@ -1496,7 +1496,7 @@ async function openMes(dateArg,quiet){
       return{ok:false,rows:[],...last};
     };
     // 점검앱은 생산마감을 mes_check_log(category=prod)에도 남긴다 — 예비 경로
-    const q5=DT_URL+'/rest/v1/mes_check_log?select=machine_code,item_code,worker,payload,created_at&category=eq.prod&payload->production_snapshot->>work_date=eq.'+d+'&order=created_at.desc&limit=300';
+    const q5=DT_URL+'/rest/v1/mes_check_log?select=machine_code,item_code,worker:created_by,payload,created_at&category=eq.prod&payload->production_snapshot->>work_date=eq.'+d+'&order=created_at.desc&limit=300';
     const dh={'apikey':DT_KEY,'Authorization':'Bearer '+DT_KEY};
     const [r1,r3,r4,r5]=await Promise.all([dpFetch(),
       fetch(q3,{headers:dh}).catch(()=>null),closeFetch(),fetch(q5,{headers:dh}).catch(()=>null)]);
@@ -2866,7 +2866,7 @@ async function loadMoldRep(mo){
   MOLDREP[mo]={busy:1,rows:[]};
   const[y,m]=mo.split('-').map(Number);const nx=new Date(y,m,1);
   const to=nx.getFullYear()+'-'+String(nx.getMonth()+1).padStart(2,'0')+'-01';
-  const q=DT_URL+'/rest/v1/mes_check_log?select=category,machine_code,item_code,worker,payload,created_at&category=neq.prod'
+  const q=DT_URL+'/rest/v1/mes_check_log?select=category,machine_code,item_code,worker:created_by,payload,created_at&category=neq.prod'
     +'&created_at=gte.'+mo+'-01T00:00:00%2B09:00&created_at=lt.'+to+'T00:00:00%2B09:00&order=created_at.asc&limit=5000';
   const eqRe=/설비|고장|equip|breakdown|machine|보전/i;
   const isRep=c=>{c=String(c||'');return /금형|mold|die/i.test(c)||(/수리|repair/i.test(c)&&!eqRe.test(c))};
