@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v24.3 · 태진다이텍</title>
+<title>생산일보 통합관리 v24.4 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -840,7 +840,7 @@ const DEF_MESMC={'003':'34 심팩250','004':'03 심팩150','005':'28 국일250',
 // MES 품번 → 앱 품번 (표기가 다른 것만)
 const DEF_MESPN={'54610-D3501-(BK)':'54610-D3501-(BK)',   // 세동 품번은 -(BK)/-(TR) 표기로 통일 (2026-11)
  '1958-365-2(2호)':'1958-365-2','AT3037-GC-00':'AT3037-GC-01','IW/OW-BDA-1159B':'IW/OW BDA 1159B'};
-const APP_VER='20.4';        // 서버에 기록해 두고, 옛 파일이 열리면 한 번 새로고침시킨다
+const APP_VER='24.4';        // 서버에 기록해 두고, 옛 파일이 열리면 한 번 새로고침시킨다
 const SPM_COMMON_ONLY=true;   // 공통값(설비 미지정)만 기준으로 쓴다
 const MES_FROM='2026-09-01'; // 8월까지 실적은 손대지 않음
 /* 근무 기준 — 08:00~19:00, 수요일·토요일 08:00~17:00
@@ -916,6 +916,7 @@ const workers=r=>[r.w1,r.w2,r.w3,r.w4].filter(Boolean);
 
 /* ===== 저장 ===== */
 let HAD_LOCAL_MASTER=false;
+let MASTER_BASE='';   // [v24.4] 이 기기가 마지막으로 받은(또는 올린) 서버 기준정보 시각 — 그 뒤 서버가 바뀌었으면 서버 것을 쓴다
 ['ver1','ver2'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent='v'+APP_VER});
 function load(){
   try{const j=JSON.parse(localStorage.getItem(LS_KEY));if(j&&j.recs){S=j;if(j.master&&(j.master.spmdb||[]).length)HAD_LOCAL_MASTER=true}}catch(e){}
@@ -1060,8 +1061,10 @@ function mergeIn(srv){
   // 기준정보는 서버가 정본 — 최신 쪽을 통째로 쓴다 (합치지 않는다)
   if(srv.master){
     const sm=srv.master, su=sm.ua||'', lu=(S.master&&S.master.ua)||'';
-    if(su>lu || !HAD_LOCAL_MASTER){   // 서버가 최신이거나 이 기기에 기준정보가 없으면 → 서버 것으로 교체
-      S.master=sm; HAD_LOCAL_MASTER=true;
+    // [v24.4] 처음 받을 때(MASTER_BASE 없음) · 서버가 더 최신 · 이 기기가 받은 뒤 다른 기기가 바꿨으면 → 서버 것으로 교체
+    //  (오래 열어 둔 화면이 옛 기준정보로 서버를 덮어쓰던 문제 방지)
+    if(su>lu || !HAD_LOCAL_MASTER || !MASTER_BASE || (su&&su>MASTER_BASE)){
+      S.master=sm; HAD_LOCAL_MASTER=true; MASTER_BASE=su;
       masterSeen=JSON.stringify(Object.assign({},sm,{ua:undefined}));
     }
     // 로컬이 최신이거나(su<lu) 옛 버전이 올린 자료(su='')는 무시하고 이 기기 것을 유지 → push로 서버를 바로잡는다
@@ -1079,7 +1082,7 @@ async function pull(manual){
     }
     setSync('ok','서버 연결됨');
     if(manual)toast('서버 자료를 받았습니다');
-    await push();
+    await push(false,true);
   }catch(e){setSync('err','서버 연결 실패 · 이 기기에 저장됨');if(manual)toast('서버에 연결할 수 없습니다');}
 }
 /* 버전 확인 — 서버에 적힌 버전이 이 파일보다 높으면 캐시를 비우고 한 번만 새로고침 */
@@ -1098,12 +1101,18 @@ function checkVer(srv){
   return false;
 }
 function schedulePush(){clearTimeout(pushT);pushT=setTimeout(()=>push(),800);}
-async function push(manual){
+async function push(manual,fresh){
   setSync('busy','서버에 올리는 중');
   try{
+    // [v24.4] 올리기 전에 서버 자료를 먼저 받아 합친다 (다른 기기·자동작업이 바꾼 것을 덮어쓰지 않게)
+    if(!fresh){
+      const g=await fetch(SB_URL+'/rest/v1/kv_store?key=eq.'+KV_KEY+'&select=value',{headers:hdr});
+      if(g.ok){const j=await g.json();if(j.length){if(checkVer(j[0].value))return;mergeIn(j[0].value);ensureMaster();saveLocal();}}
+    }
     const body=[{key:KV_KEY,value:{recs:S.recs,del:S.del,master:S.master,rpt:S.rpt||{},mig:S.mig||{},log:S.log||[],fails:S.fails||[],issues:S.issues||[],rel:S.rel||{},appVer:(S.appVer&&vNum(S.appVer)>vNum(APP_VER)?S.appVer:APP_VER),ua:S.ua},updated_at:now()}];
     const r=await fetch(SB_URL+'/rest/v1/kv_store?on_conflict=key',{method:'POST',headers:{...hdr,'Prefer':'resolution=merge-duplicates'},body:JSON.stringify(body)});
     if(!r.ok)throw new Error(r.status);
+    MASTER_BASE=(S.master&&S.master.ua)||MASTER_BASE;
     setSync('ok','서버 연결됨');if(manual)toast('서버에 올렸습니다');
   }catch(e){setSync('err','서버 연결 실패 · 이 기기에 저장됨');if(manual)toast('서버에 올리지 못했습니다');}
 }
@@ -5110,7 +5119,7 @@ fillSelectors();
 go('entry');
 pull().then(()=>setTimeout(async()=>{await autoEntry();autoSync()},3000));
 setInterval(()=>{if(!document.hidden){pull().then(()=>setTimeout(()=>autoSync(),2000))}},5*60*1000);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)setTimeout(()=>autoSync(),1500)});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)pull().then(()=>setTimeout(()=>autoSync(),1500))});   // [v24.4] 먼저 서버를 받고 동기화
 </script>
 </body>
 </html>
