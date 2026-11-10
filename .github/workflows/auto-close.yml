@@ -3,7 +3,7 @@ name: 생산일보 자동 마감
 # 업무 종료 10분 뒤 자동 마감: 월·화·목·금 19:10 / 수 17:10 (토·일·빨간날 17:10, 연장이면 최종 가동 10분 뒤)
 # 다음날 07:00 전날 재마감 (늦게 들어온 작업자 마감 반영)
 # 생산관리 브리핑(ntfy) 월·화·목·금 08:30 / 수 08:00 — Supabase pg_cron(prod-brief-*)이 정시에 workflow_dispatch, 아래 schedule 은 예비
-# 09:30 금일 작업지시(ntfy, 자주검사 성적서 대상) — 00:30 UTC
+# 09:30 금일 작업지시(ntfy, 자주검사 성적서 대상) — Supabase pg_cron(prod-wo-0930)이 정시에 workflow_dispatch, 아래 schedule 은 예비
 # GitHub 예약 실행은 10분 간격이면 대부분 건너뛰므로 정해진 시각 + 예비 실행만 둔다 (이미 마감한 날은 스크립트가 건너뜀)
 # GitHub 예약 실행은 몇 시간씩 늦을 수 있어, 마감(17:10·19:10·20~23시·07:00)은 Supabase pg_cron 이 정시에
 #   workflow_dispatch 로 실행한다 (supabase/sql/auto_close_cron.sql). 아래 schedule 은 예비.
