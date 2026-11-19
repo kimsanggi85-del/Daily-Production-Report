@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v24.5 · 태진다이텍</title>
+<title>생산일보 통합관리 v24.6 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -840,7 +840,7 @@ const DEF_MESMC={'003':'34 심팩250','004':'03 심팩150','005':'28 국일250',
 // MES 품번 → 앱 품번 (표기가 다른 것만)
 const DEF_MESPN={'54610-D3501-(BK)':'54610-D3501-(BK)',   // 세동 품번은 -(BK)/-(TR) 표기로 통일 (2026-11)
  '1958-365-2(2호)':'1958-365-2','AT3037-GC-00':'AT3037-GC-01','IW/OW-BDA-1159B':'IW/OW BDA 1159B'};
-const APP_VER='24.5';        // 서버에 기록해 두고, 옛 파일이 열리면 한 번 새로고침시킨다
+const APP_VER='24.6';        // 서버에 기록해 두고, 옛 파일이 열리면 한 번 새로고침시킨다
 const SPM_COMMON_ONLY=true;   // 공통값(설비 미지정)만 기준으로 쓴다
 const MES_FROM='2026-09-01'; // 8월까지 실적은 손대지 않음
 /* 근무 기준 — 08:00~19:00, 수요일·토요일 08:00~17:00
@@ -1452,6 +1452,7 @@ async function openMes(dateArg,quiet){
   if(!quiet){$('modal').innerHTML='<h2>일보콜</h2><p class="muted">'+d+' 자료를 읽는 중…</p>';
     $('mask').classList.add('on');}
   let led=[],use=[],dt=[],clo=[];
+  const unconf={};   // [v24.6] MES 정상 shot 0 · 전량 이상 shot → 불량 아님(실적 미확정) {설비|품번: 이상 shot}
   try{
     // 생산실적은 MES 모니터링 서버(daily_production)에서 바로 읽는다 — 점검앱과 같은 출처
     // 날짜 컬럼명·형식이 달라도 찾도록 여러 방법을 순서대로 시도
@@ -1517,6 +1518,9 @@ async function openMes(dateArg,quiet){
         name:r.item_name||'',start:r.start_time||'',end:r.end_time||''});
       // 불량 컬럼명이 설비·라인마다 다를 수 있어 쓰이는 이름을 순서대로 본다 (수량과 같은 방식)
       const ab=+(r.abnormal_shot??r.abnormal_qty??r.ng_shot??r.ng_qty??r.defect_shot??r.defect_qty??r.bad_shot??r.bad_qty??r.reject_qty??0)||0;
+      // [v24.6] 정상 shot 0인데 shot 전량이 이상이면 실제 불량이 아니라 MES가 실적을 인정하지 않은 것
+      //  (옛 작업지시 재사용·소재 투입 미등록 등) → 불량으로 넣지 않고 '실적 미확정'으로 표시
+      if(ab>0&&q>0&&r.normal_shot!=null&&+r.normal_shot===0&&ab>=q){const k=(r.machine_code||r.party||'')+'|'+(r.item_code||r.pn);unconf[k]=(unconf[k]||0)+ab;return;}
       if(ab>0)led.push({pn:r.item_code||r.pn,kind:'불량폐기',qty:ab,party:r.machine_code||r.party,lot:'',note:'불량사유 P10:'+ab});
     });}
     use=[];   // 소재사용 구간은 더 이상 쓰지 않음 (가동시간은 모니터링 run_min)
@@ -1682,7 +1686,8 @@ async function openMes(dateArg,quiet){
       qty:cz?(+cz.actual_qty||0):(+x.qty||0),ng,ngp,ab:bad[x.pn]||0,
       w1:(cz&&cz.worker)||(last?last.w1:'')||'',closer:(cz&&cz.worker)||'',prevW:last?last.w1:'',   // 마감한 사람 = 실제 배치자
       sr:dtTxt[code]||stopTxt[code]||moldTxt(code,(cz&&cz.mold_code)||'')||'',dtMin:dtMin[code],molds:moldSeq[code]||[],mold:(cz&&cz.mold_code)||'',fcnt:0,fmin:0,
-      note:[badNote[x.pn]||'',cz&&cz.memo?String(cz.memo):''].filter(Boolean).join(' / '),
+      note:[unconf[code+'|'+x.pn]?`MES 실적 미확정(정상 0·이상 ${unconf[code+'|'+x.pn]}) — 불량 아님, 작업지시·소재투입 확인`:'',badNote[x.pn]||'',cz&&cz.memo?String(cz.memo):''].filter(Boolean).join(' / '),
+      unconf:unconf[code+'|'+x.pn]||0,
       ledClosed:!!(cz&&cz.fromLedger),closed:!!cz,waitClose:!cz&&(+x.qty||0)>0,mesQty:(cz&&cz.mes_qty!=null)?(+cz.mes_qty||0):(+x.qty||0),czReason:cz?(cz.reason||''):'',pending:!!x.pending,use:(upd||!dup)&&!!mc&&!x.pending,dup:!!dup,dupId:dup?dup.id:'',upd};
   });
   // 오늘 업무 종료 전에는 현장 마감(실제양품)이 안 된 줄을 기본 선택하지 않는다 — 마감 전 일보가 잡히지 않게
@@ -1735,7 +1740,7 @@ function drawMes(d){
     <td><input type=number value="${r.stop}" onchange="mesSet(${r.i},'stop',this.value)" style="width:70px;padding:3px 5px"></td>
     <td><input type=number value="${r.fcnt||''}" onchange="mesSet(${r.i},'fcnt',this.value)" style="width:46px;padding:3px 5px" placeholder="0" title="설비 고장 건수"><input type=number value="${r.fmin||''}" onchange="mesSet(${r.i},'fmin',this.value)" style="width:56px;padding:3px 5px;margin-top:3px" placeholder="분" title="고장으로 선 시간(분)"></td>
     <td><input type=number value="${r.qty}" onchange="mesSet(${r.i},'qty',this.value)" style="width:90px;padding:3px 5px"></td>
-    <td class=num title="MES 불량폐기(품번 기준)">${fmt(r.ab)}</td>
+    <td class=num title="MES 불량폐기(품번 기준)">${fmt(r.ab)}${r.unconf?`<br><span style="color:#b45309;font-size:11px" title="MES 정상 shot 0 · 전량 이상 shot — 불량으로 넣지 않음. 작업지시·소재투입 확인">미확정 ${fmt(r.unconf)}</span>`:''}</td>
     <td><input type=number value="${r.ng}" onchange="mesSet(${r.i},'ng',this.value)" style="width:70px;padding:3px 5px"></td>
     <td><input type=number value="${r.ngp||''}" onchange="mesSet(${r.i},'ngp',this.value)" style="width:80px;padding:3px 5px" placeholder="0"></td>
     <td><input value="${esc(r.sr)}" onchange="mesSet(${r.i},'sr',this.value)" placeholder="정지사유" style="min-width:210px;padding:3px 5px"></td>
