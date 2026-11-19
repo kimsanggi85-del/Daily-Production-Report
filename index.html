@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v24.6 · 태진다이텍</title>
+<title>생산일보 통합관리 v24.7 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -840,7 +840,7 @@ const DEF_MESMC={'003':'34 심팩250','004':'03 심팩150','005':'28 국일250',
 // MES 품번 → 앱 품번 (표기가 다른 것만)
 const DEF_MESPN={'54610-D3501-(BK)':'54610-D3501-(BK)',   // 세동 품번은 -(BK)/-(TR) 표기로 통일 (2026-11)
  '1958-365-2(2호)':'1958-365-2','AT3037-GC-00':'AT3037-GC-01','IW/OW-BDA-1159B':'IW/OW BDA 1159B'};
-const APP_VER='24.6';        // 서버에 기록해 두고, 옛 파일이 열리면 한 번 새로고침시킨다
+const APP_VER='24.7';        // 서버에 기록해 두고, 옛 파일이 열리면 한 번 새로고침시킨다
 const SPM_COMMON_ONLY=true;   // 공통값(설비 미지정)만 기준으로 쓴다
 const MES_FROM='2026-09-01'; // 8월까지 실적은 손대지 않음
 /* 근무 기준 — 08:00~19:00, 수요일·토요일 08:00~17:00
@@ -1317,14 +1317,19 @@ function saveRec(cont){
   workers(r).forEach(w=>{if(!S.master.workers.includes(w))S.master.workers.push(w)});
   if(!S.master.items.find(i=>i.pn===r.pn))S.master.items.push({pn:r.pn,name:r.name,cust:r.cust});
   if(r.spm){S.master.spmdb=S.master.spmdb||[];if(!S.master.spmdb.find(x=>x.mc===r.mc&&x.pn===r.pn))S.master.spmdb.push({mc:r.mc,pn:r.pn,spm:r.spm});}
-  if(editId){const i=S.recs.findIndex(x=>x.id===editId);S.recs[i]={...S.recs[i],...r};toast('수정했습니다');}
+  let qtyFix=false;
+  if(editId){const i=S.recs.findIndex(x=>x.id===editId);const o=S.recs[i];
+    // 실적수량을 손으로 고치면 '조정'으로 표시 — 실제수량 자동갱신·익일 재마감이 MES 값으로 되돌리지 않게
+    if(o&&+r.qty!==+o.qty){r.src='조정';if(o.mes==null||o.mes==='')r.mes=+o.qty;
+      logAdd('생산수량 조정',`${r.date} · ${r.mc} ${r.pn}: ${fmt(o.qty)} → ${fmt(r.qty)} (일보 수정)`);qtyFix=true}
+    S.recs[i]={...o,...r};toast(qtyFix?'수정했습니다 · 수량 조정으로 고정':'수정했습니다');}
   else{
     // 이중등록 방지 — 일보의 고유 키는 생산일자·설비·품번 (작업자·수량이 달라도 같은 줄로 본다)
     const dup=S.recs.find(x=>x.date===r.date&&x.mc===r.mc&&x.pn===r.pn);
     if(dup&&!confirm(`같은 날짜·설비·품번의 일보가 이미 있습니다.\n\n${dup.date} · ${dup.mc} · ${dup.pn}\n작업자 ${dup.w1||'-'} · 실적 ${fmt(dup.qty)} · 근무 ${dup.work}분\n\n기존 줄을 고치려면 [취소] 후 이력에서 그 줄을 눌러 수정하세요.\n그래도 새 줄로 추가할까요? (이중등록이 됩니다)`))return;
     r.id=uid();S.recs.push(r);toast('저장했습니다');
   }
-  const d=r.date;commit();
+  const d=r.date;commit();if(qtyFix)pushCloseDay(d);
   if(cont){resetForm(true);$('f_date').value=d;$('f_mc').focus();}else{resetForm(true);$('f_date').value=d;$('formMask').classList.remove('on');renderEntry();}
 }
 function editRec(id){const r=S.recs.find(x=>x.id===id);if(!r)return;editId=id;
@@ -1679,7 +1684,7 @@ async function openMes(dateArg,quiet){
       if(spm0>0&&q0>0){runEst=Math.round(q0/spm0);
         if(runEst>=work-brk0)work=Math.max(work,Math.ceil((runEst+brk0+30)/10)*10);
         runEst=Math.min(work,runEst);noRun=false}}
-    const upd=!!(dup&&+dup.qty!==newQty);
+    const upd=!!(dup&&+dup.qty!==newQty&&dup.src!=='조정');   // 손으로 조정한 줄은 덮어쓰지 않는다
     return{i,code,pnCode:x.pn,name:nameMap[x.pn]||'',lot:x.lot||'',mc,pn:pn||'@'+x.pn,
       name2:(it&&it.name)||itemInfo(pn||x.pn).name||nameMap[x.pn]||'',cust:(it&&it.cust)||itemInfo(pn||x.pn).cust||'',run:Math.max(0,work-brk0-(stopM!=null?stopM:(runEst?Math.max(0,net0-runEst):0))),work,brk,runSrc,workSrc,closeEnd:closeEnd[code]||'',
       stop:(stopM!=null?stopM:(noRun?(last?last.stop:0):Math.max(0,work-brk0-(runEst||run)))),noRun,runEst,overRun,
