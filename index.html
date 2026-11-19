@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v24.7 · 태진다이텍</title>
+<title>생산일보 통합관리 v24.8 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -840,7 +840,7 @@ const DEF_MESMC={'003':'34 심팩250','004':'03 심팩150','005':'28 국일250',
 // MES 품번 → 앱 품번 (표기가 다른 것만)
 const DEF_MESPN={'54610-D3501-(BK)':'54610-D3501-(BK)',   // 세동 품번은 -(BK)/-(TR) 표기로 통일 (2026-11)
  '1958-365-2(2호)':'1958-365-2','AT3037-GC-00':'AT3037-GC-01','IW/OW-BDA-1159B':'IW/OW BDA 1159B'};
-const APP_VER='24.7';        // 서버에 기록해 두고, 옛 파일이 열리면 한 번 새로고침시킨다
+const APP_VER='24.8';        // 서버에 기록해 두고, 옛 파일이 열리면 한 번 새로고침시킨다
 const SPM_COMMON_ONLY=true;   // 공통값(설비 미지정)만 기준으로 쓴다
 const MES_FROM='2026-09-01'; // 8월까지 실적은 손대지 않음
 /* 근무 기준 — 08:00~19:00, 수요일·토요일 08:00~17:00
@@ -1417,6 +1417,9 @@ function mapPn(code,mc,d,allowLast){
   return '';
 }
 let MESROWS=[],MESDIAG={},MESCLO=[],MESDATE='';
+/* 작업지시번호의 날짜 — WO26B19P3721 → 2026-11-19 (월: 1~9, A=10, B=11, C=12) */
+function woDate(wo){const m=String(wo||'').match(/^WO(\d\d)([1-9ABC])(\d\d)/);if(!m)return '';
+  return '20'+m[1]+'-'+String(parseInt(m[2],16)).padStart(2,'0')+'-'+m[3]}
 const DAY_COLS=['ymd','work_date','prod_date','close_date','date'];   // 생산일자 컬럼 (updated_at·closed_at 같은 시각 컬럼은 제외)
 /* 오늘이고 아직 업무 종료 전인지 — 현장 마감 전 줄을 일보로 확정하지 않기 위해 */
 function beforeOff(d){
@@ -1697,6 +1700,10 @@ async function openMes(dateArg,quiet){
   });
   // 오늘 업무 종료 전에는 현장 마감(실제양품)이 안 된 줄을 기본 선택하지 않는다 — 마감 전 일보가 잡히지 않게
   if(beforeOff(d))MESROWS.forEach(r=>{if(!r.closed&&!r.upd&&r.use){r.use=false;r.wipHold=true}});
+  // 정상 shot 0 · 전량 이상 shot 이고 현장 마감도 없는 줄은 생산이 아니다 (전날 작업지시 잔량·세팅 타발) — 기본 선택하지 않는다
+  //  예: 11/19 01호기 45464-4G650(11/17 작업지시) 62타, 02호기 45524-26210(11/18 작업지시) 52타
+  MESROWS.forEach(r=>{if(r.unconf&&!r.closed&&!r.upd&&r.use&&(+r.qty||0)<=r.unconf){r.use=false;r.leftHold=true;
+    const wd=woDate(r.lot);r.prevWo=!!(wd&&wd<d)}});
   if(!quiet)drawMes(d);
   return MESROWS;
 }
@@ -1750,7 +1757,7 @@ function drawMes(d){
     <td><input type=number value="${r.ngp||''}" onchange="mesSet(${r.i},'ngp',this.value)" style="width:80px;padding:3px 5px" placeholder="0"></td>
     <td><input value="${esc(r.sr)}" onchange="mesSet(${r.i},'sr',this.value)" placeholder="정지사유" style="min-width:210px;padding:3px 5px"></td>
     <td><input value="${esc(r.note)}" onchange="mesSet(${r.i},'note',this.value)" placeholder="특기사항" style="min-width:170px;padding:3px 5px"></td>
-    <td style="font-size:11px">${r.closed?`<b style="color:${r.qty===0&&r.mesQty>0?'var(--red)':'var(--green)'}">현장 마감${r.qty===0&&r.mesQty>0?' · 실제양품 0 확인':''}</b>${r.mesQty&&r.mesQty!==r.qty?` <span class=muted>MES ${fmt(r.mesQty)}→${fmt(r.qty)}</span>`:''}${r.closer&&r.prevW&&r.closer!==r.prevW?` <span class=muted>· 작업자 ${esc(r.prevW)}→${esc(r.closer)}</span>`:''}${r.czReason?` <span class=muted>${esc(r.czReason)}</span>`:''}<br>`:''}${(()=>{const exp=spm*Math.max(0,r.run);const low=exp>0&&r.qty<exp*0.6&&!r.closed;return low?`<b style="color:var(--red)">실적 확인 (예상 ${fmt(exp)})</b> `:''})()}${r.waitClose?'<b style="color:var(--amber)">실제양품 미입력 · MES 값 사용</b><br>':''}${r.upd?`<b style="color:var(--amber)">수량 변경 → 덮어쓰기</b> <span class=muted>${fmt((S.recs.find(z=>z.id===r.dupId)||{}).qty||0)}→${fmt(r.qty)}</span>`:r.dup?'<span class=muted>이미 저장됨</span>':(!r.mc?'<b style="color:var(--red)">설비 지정 필요</b>':(r.pending?'<b style="color:var(--amber)">생산마감 미완료</b>':(r.noRun?'<b style="color:var(--amber)">MES 가동시간 없음 · 정지 확인</b>':(r.runEst?'<span class=muted>가동 = 실적÷SPM 추정</span>':(r.overRun?`<b style="color:var(--amber)">모니터링 가동 ${fmt(r.overRun)}분 — 하루 근무 초과, 실적÷SPM으로 계산</b>`:(r.runSrc==='모니터링'?'<span class=muted>가동·정지 = 모니터링 측정</span>':(r.pn.startsWith('@')?'<span class=muted>신규 품번 등록됨</span>':'')))))))}</td></tr>`;
+    <td style="font-size:11px">${r.closed?`<b style="color:${r.qty===0&&r.mesQty>0?'var(--red)':'var(--green)'}">현장 마감${r.qty===0&&r.mesQty>0?' · 실제양품 0 확인':''}</b>${r.mesQty&&r.mesQty!==r.qty?` <span class=muted>MES ${fmt(r.mesQty)}→${fmt(r.qty)}</span>`:''}${r.closer&&r.prevW&&r.closer!==r.prevW?` <span class=muted>· 작업자 ${esc(r.prevW)}→${esc(r.closer)}</span>`:''}${r.czReason?` <span class=muted>${esc(r.czReason)}</span>`:''}<br>`:''}${(()=>{const exp=spm*Math.max(0,r.run);const low=exp>0&&r.qty<exp*0.6&&!r.closed;return low?`<b style="color:var(--red)">실적 확인 (예상 ${fmt(exp)})</b> `:''})()}${r.waitClose?'<b style="color:var(--amber)">실제양품 미입력 · MES 값 사용</b><br>':''}${r.leftHold&&!r.use?`<b style="color:var(--amber)">${r.prevWo?'전일 작업지시 잔량':'세팅·이상 타발'} · 생산 아님(정상 0)</b>`:r.upd?`<b style="color:var(--amber)">수량 변경 → 덮어쓰기</b> <span class=muted>${fmt((S.recs.find(z=>z.id===r.dupId)||{}).qty||0)}→${fmt(r.qty)}</span>`:r.dup?'<span class=muted>이미 저장됨</span>':(!r.mc?'<b style="color:var(--red)">설비 지정 필요</b>':(r.pending?'<b style="color:var(--amber)">생산마감 미완료</b>':(r.noRun?'<b style="color:var(--amber)">MES 가동시간 없음 · 정지 확인</b>':(r.runEst?'<span class=muted>가동 = 실적÷SPM 추정</span>':(r.overRun?`<b style="color:var(--amber)">모니터링 가동 ${fmt(r.overRun)}분 — 하루 근무 초과, 실적÷SPM으로 계산</b>`:(r.runSrc==='모니터링'?'<span class=muted>가동·정지 = 모니터링 측정</span>':(r.pn.startsWith('@')?'<span class=muted>신규 품번 등록됨</span>':'')))))))}</td></tr>`;
   }).join('');
   const n=MESROWS.filter(r=>r.use).length;
   const nSel=MESROWS.filter(r=>r.mc&&!r.pending).length;      // 전체 선택 대상 줄 수
@@ -1773,8 +1780,8 @@ function drawMes(d){
       ? `<span class="tag a">모니터링 실적 0건 → MES 원장 ${dg.ledN||0}건 사용</span>`
       : `<span class="tag${dg.dp?'':' r'}">모니터링 실적 ${dg.dp||0}건${dg.dpFilter?' · '+dg.dpFilter:''}${(!dg.dp&&dg.dpAll)?` (표 전체 ${dg.dpAll}건)`:''}</span>`)+(nMon?`<span class="tag g">모니터링 마감 ${nMon}줄</span>`:'');
   const miss=missingDays().filter(x=>x!==d);
-  const nWip=MESROWS.filter(r=>r.wipHold&&!r.use).length;
-  const warn=[nWip?`오늘 업무 중 · 현장 마감 전 ${nWip}줄 선택 해제`:'',nClosed?`현장 마감 반영 ${nClosed}줄`:'',nWait?`실제양품 미입력 ${nWait}줄`:'',nNoMc?`설비 미지정 ${nNoMc}줄`:'',nPend?`생산마감 미완료 ${nPend}줄`:'',nNoRun?`가동시간 없음 ${nNoRun}줄`:'',nNoSpm?`SPM 입력 필요 ${nNoSpm}줄`:'',nNoCust?`고객사 미지정 ${nNoCust}줄`:'',nUpd?`덮어쓰기 ${nUpd}줄`:'',nDup?`이미 저장 ${nDup}줄`:''].filter(Boolean).join(' · ');
+  const nWip=MESROWS.filter(r=>r.wipHold&&!r.use).length, nLeft=MESROWS.filter(r=>r.leftHold&&!r.use).length;
+  const warn=[nWip?`오늘 업무 중 · 현장 마감 전 ${nWip}줄 선택 해제`:'',nLeft?`잔량·세팅 타발(정상 0) ${nLeft}줄 선택 해제`:'',nClosed?`현장 마감 반영 ${nClosed}줄`:'',nWait?`실제양품 미입력 ${nWait}줄`:'',nNoMc?`설비 미지정 ${nNoMc}줄`:'',nPend?`생산마감 미완료 ${nPend}줄`:'',nNoRun?`가동시간 없음 ${nNoRun}줄`:'',nNoSpm?`SPM 입력 필요 ${nNoSpm}줄`:'',nNoCust?`고객사 미지정 ${nNoCust}줄`:'',nUpd?`덮어쓰기 ${nUpd}줄`:'',nDup?`이미 저장 ${nDup}줄`:''].filter(Boolean).join(' · ');
   $('modal').innerHTML=`<div class="fl" style="margin-bottom:10px">
     <h2 style="margin:0">일보콜</h2>
     <button class="s" onclick="mesDay('${d}',-1)" title="전날">◀</button>
