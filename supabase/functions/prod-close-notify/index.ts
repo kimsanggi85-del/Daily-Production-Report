@@ -6,6 +6,7 @@
 //  ?d=YYYY-MM-DD 날짜 지정, ?dry=1 보내지 않고 판단·내용만, ?now=HH:MM 시각 가정(시험용)
 //  [2026-10-27 Supabase 통합] SB_URL/SB_KEY 를 과장님 DB(ebthltd…) → SmartFactory 로 변경 (kv_store·daily_production 이 SmartFactory 로 이전됨)
 //  [2026-11-05] 저녁 마감 알림 끝에 하루 마무리 인사 (요일별, 금요일·특근은 따로), 08:00 재발송에는 아침 인사
+//  [2026-11-20] 미마감 설비 수량은 MES 정상 타발만 (이상 타발 미등록)
 //  주말 알림 끄기는 pg_cron 쪽(run_if_weekday)에서 한다
 const SB_URL = "https://omngtyewdaqpphnzeate.supabase.co";
 const SB_KEY = "sb_publishable_9j2YkkL-7ul1TrhH-NjVdQ_vWDG2-1D";
@@ -51,6 +52,8 @@ const offOf = (d: string) => { const w = new Date(d + "T00:00:00Z").getUTCDay();
 const norm = (s: unknown) => String(s ?? "").toUpperCase().replace(/[^0-9A-Z]/g, "");
 const fm = (x: number) => Math.round(x).toLocaleString("ko-KR");
 const kstNow = () => new Date(Date.now() + 9 * 3600e3).toISOString();
+// MES 정상 타발만 실적으로 (이상 타발 미등록 — 앱 v24.9 mesGood 과 같은 기준)
+const good = (r: any) => r.normal_shot != null ? Math.max(0, +r.normal_shot || 0) : Math.max(0, (+r.shot_qty || 0) - (+r.abnormal_shot || 0));
 const greetOf = (d: string) => {
   const wd = new Date(d + "T00:00:00Z").getUTCDay();
   if (HOLI[d] || wd === 0 || wd === 6) return "쉬는 날까지 나와 주셔서 정말 감사합니다. 고생 많으셨습니다.";
@@ -84,7 +87,7 @@ Deno.serve(async (req) => {
     } else if (prev) return skip(`이미 발송 (${prev.t})`);
 
     // MES 실적 (모니터링 서버 → 없으면 공유 백엔드)
-    const q = `/rest/v1/daily_production?select=machine_code,item_code,shot_qty,end_time&ymd=eq.${d}&limit=1000`;
+    const q = `/rest/v1/daily_production?select=machine_code,item_code,shot_qty,normal_shot,abnormal_shot,end_time&ymd=eq.${d}&limit=1000`;
     let dp: any[] = [];
     try { dp = await getJson(DT_URL + q, DT_KEY); } catch (_) { /* 다음 경로 */ }
     if (!dp.length) dp = await getJson(SB_URL + q, SB_KEY);
@@ -99,7 +102,8 @@ Deno.serve(async (req) => {
     const act: Record<string, number> = {};
     clo.forEach((c) => { if (c.actual_qty != null) act[(c.machine_code || "") + "|" + c.item_code] = +c.actual_qty || 0; });
     const keyOf = (r: any) => (r.machine_code || "") + "|" + r.item_code;
-    const openActive = dp.filter((r) => !(keyOf(r) in act) && r.end_time && toMin(r.end_time) >= endRef - ACTIVE);
+    // 정상 타발 0(전일 작업지시 잔량·세팅 타발)은 생산이 아니므로 미마감으로 보지 않는다
+    const openActive = dp.filter((r) => !(keyOf(r) in act) && good(r) > 0 && r.end_time && toMin(r.end_time) >= endRef - ACTIVE);
 
     // 품번·고객사 매핑 (일보 앱 기준정보)
     const kv = await getJson(`${SB_URL}/rest/v1/kv_store?key=eq.${KV_KEY}&select=value`, SB_KEY);
@@ -127,9 +131,9 @@ Deno.serve(async (req) => {
       let qty: number;
       if (keyOf(r) in act) qty = act[keyOf(r)];
       else if (norm(pn) in dayRec && !same.some((x) => keyOf(x) in act)) {
-        const tot = same.reduce((a, x) => a + (+x.shot_qty || 0), 0);
-        qty = tot ? dayRec[norm(pn)] * ((+r.shot_qty || 0) / tot) : dayRec[norm(pn)] / same.length;
-      } else qty = +r.shot_qty || 0;
+        const tot = same.reduce((a, x) => a + good(x), 0);
+        qty = tot ? dayRec[norm(pn)] * (good(r) / tot) : dayRec[norm(pn)] / same.length;
+      } else qty = good(r);
       return { cust: custOf(pn), pn, qty, mc: r.machine_code };
     });
     const total = rows.reduce((a, r) => a + r.qty, 0);

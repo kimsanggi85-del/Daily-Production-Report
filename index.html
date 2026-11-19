@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v24.8 · 태진다이텍</title>
+<title>생산일보 통합관리 v24.9 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -840,7 +840,7 @@ const DEF_MESMC={'003':'34 심팩250','004':'03 심팩150','005':'28 국일250',
 // MES 품번 → 앱 품번 (표기가 다른 것만)
 const DEF_MESPN={'54610-D3501-(BK)':'54610-D3501-(BK)',   // 세동 품번은 -(BK)/-(TR) 표기로 통일 (2026-11)
  '1958-365-2(2호)':'1958-365-2','AT3037-GC-00':'AT3037-GC-01','IW/OW-BDA-1159B':'IW/OW BDA 1159B'};
-const APP_VER='24.8';        // 서버에 기록해 두고, 옛 파일이 열리면 한 번 새로고침시킨다
+const APP_VER='24.9';        // 서버에 기록해 두고, 옛 파일이 열리면 한 번 새로고침시킨다
 const SPM_COMMON_ONLY=true;   // 공통값(설비 미지정)만 기준으로 쓴다
 const MES_FROM='2026-09-01'; // 8월까지 실적은 손대지 않음
 /* 근무 기준 — 08:00~19:00, 수요일·토요일 08:00~17:00
@@ -1417,6 +1417,13 @@ function mapPn(code,mc,d,allowLast){
   return '';
 }
 let MESROWS=[],MESDIAG={},MESCLO=[],MESDATE='';
+/* MES 생산실적(daily_production) 한 줄의 정상 타발·이상 타발 — 일보 실적은 정상 타발만 쓴다 (이상 타발 미등록) */
+function mesAbn(r){return +(r.abnormal_shot??r.abnormal_qty??r.ng_shot??r.ng_qty??r.defect_shot??r.defect_qty??r.bad_shot??r.bad_qty??r.reject_qty??0)||0}
+function mesGood(r){
+  if(r.normal_shot!=null&&r.normal_shot!=='')return Math.max(0,+r.normal_shot||0);
+  const t=+(r.shot_qty??r.qty??r.prod_qty??r.actual_qty??r.total_qty??0)||0;
+  return Math.max(0,t-mesAbn(r));
+}
 /* 작업지시번호의 날짜 — WO26B19P3721 → 2026-11-19 (월: 1~9, A=10, B=11, C=12) */
 function woDate(wo){const m=String(wo||'').match(/^WO(\d\d)([1-9ABC])(\d\d)/);if(!m)return '';
   return '20'+m[1]+'-'+String(parseInt(m[2],16)).padStart(2,'0')+'-'+m[3]}
@@ -1520,16 +1527,13 @@ async function openMes(dateArg,quiet){
       }catch(e){}
     }
     // daily_production → 생산입고/불량 형식으로 변환 (뒤 로직 공용)
+    // [v24.9] MES 이상 타발은 일보에 등록하지 않는다 — 실적은 정상 타발만, 이상 타발은 불량으로도 넣지 않음
     if(dpSrc!=='원장'){led=[];dp.forEach(r=>{
-      const q=+(r.shot_qty??r.qty??r.prod_qty??r.actual_qty??r.total_qty??0)||0;
+      const q=mesGood(r), ab=mesAbn(r);
       led.push({pn:r.item_code||r.pn,kind:'생산입고',qty:q,party:r.machine_code||r.party,lot:r.work_order_no||'',note:'',
         name:r.item_name||'',start:r.start_time||'',end:r.end_time||''});
-      // 불량 컬럼명이 설비·라인마다 다를 수 있어 쓰이는 이름을 순서대로 본다 (수량과 같은 방식)
-      const ab=+(r.abnormal_shot??r.abnormal_qty??r.ng_shot??r.ng_qty??r.defect_shot??r.defect_qty??r.bad_shot??r.bad_qty??r.reject_qty??0)||0;
-      // [v24.6] 정상 shot 0인데 shot 전량이 이상이면 실제 불량이 아니라 MES가 실적을 인정하지 않은 것
-      //  (옛 작업지시 재사용·소재 투입 미등록 등) → 불량으로 넣지 않고 '실적 미확정'으로 표시
-      if(ab>0&&q>0&&r.normal_shot!=null&&+r.normal_shot===0&&ab>=q){const k=(r.machine_code||r.party||'')+'|'+(r.item_code||r.pn);unconf[k]=(unconf[k]||0)+ab;return;}
-      if(ab>0)led.push({pn:r.item_code||r.pn,kind:'불량폐기',qty:ab,party:r.machine_code||r.party,lot:'',note:'불량사유 P10:'+ab});
+      // 정상 0 · 전량 이상 타발 = 전일 작업지시 잔량·세팅 타발 → '실적 미확정'으로 표시만 (v24.8 에서 기본 선택 해제)
+      if(ab>0&&q===0){const k=(r.machine_code||r.party||'')+'|'+(r.item_code||r.pn);unconf[k]=(unconf[k]||0)+ab;}
     });}
     use=[];   // 소재사용 구간은 더 이상 쓰지 않음 (가동시간은 모니터링 run_min)
     dt=(r3&&r3.ok)?await r3.json():[];
@@ -4083,9 +4087,9 @@ async function syncRange(from,to,quiet){
     const cmap={};clo.forEach(x=>{if(x.actual_qty==null)return;const d=String(x.ymd||x.work_date||'').slice(0,10);
       cmap[d+'|'+(x.machine_code||'')+'|'+x.item_code]=x;});
     // ② 모니터링 생산실적 (마감이 없는 설비의 MES 수량)
-    const rp=await fetch(DT_URL+'/rest/v1/daily_production?select=ymd,machine_code,item_code,shot_qty&ymd=gte.'+from+'&ymd=lte.'+to+'&limit=5000',{headers:dh});
+    const rp=await fetch(DT_URL+'/rest/v1/daily_production?select=ymd,machine_code,item_code,shot_qty,normal_shot,abnormal_shot&ymd=gte.'+from+'&ymd=lte.'+to+'&limit=5000',{headers:dh});
     if(!rp.ok)throw new Error('생산실적 조회 '+rp.status);
-    const led=(await rp.json()).map(x=>({led_date:String(x.ymd).slice(0,10),party:x.machine_code,pn:x.item_code,qty:+x.shot_qty||0,note:''}));
+    const led=(await rp.json()).map(x=>({led_date:String(x.ymd).slice(0,10),party:x.machine_code,pn:x.item_code,qty:mesGood(x),note:''}));   // 정상 타발만
     const byDay={};led.forEach(x=>{(byDay[x.led_date]=byDay[x.led_date]||[]).push(x)});
     // 마감만 있고 원장에 없는 조합도 대상에 넣는다
     clo.forEach(x=>{const d=String(x.ymd||x.work_date||'').slice(0,10);if(!d)return;
