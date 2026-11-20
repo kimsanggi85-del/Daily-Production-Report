@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v25.0 · 태진다이텍</title>
+<title>생산일보 통합관리 v25.1 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -840,7 +840,7 @@ const DEF_MESMC={'003':'34 심팩250','004':'03 심팩150','005':'28 국일250',
 // MES 품번 → 앱 품번 (표기가 다른 것만)
 const DEF_MESPN={'54610-D3501-(BK)':'54610-D3501-(BK)',   // 세동 품번은 -(BK)/-(TR) 표기로 통일 (2026-11)
  '1958-365-2(2호)':'1958-365-2','AT3037-GC-00':'AT3037-GC-01','IW/OW-BDA-1159B':'IW/OW BDA 1159B'};
-const APP_VER='25.0';        // 서버에 기록해 두고, 옛 파일이 열리면 한 번 새로고침시킨다
+const APP_VER='25.1';        // 서버에 기록해 두고, 옛 파일이 열리면 한 번 새로고침시킨다
 const SPM_COMMON_ONLY=true;   // 공통값(설비 미지정)만 기준으로 쓴다
 const MES_FROM='2026-09-01'; // 8월까지 실적은 손대지 않음
 /* 근무 기준 — 08:00~19:00, 수요일·토요일 08:00~17:00
@@ -1329,7 +1329,7 @@ function saveRec(cont){
     if(dup&&!confirm(`같은 날짜·설비·품번의 일보가 이미 있습니다.\n\n${dup.date} · ${dup.mc} · ${dup.pn}\n작업자 ${dup.w1||'-'} · 실적 ${fmt(dup.qty)} · 근무 ${dup.work}분\n\n기존 줄을 고치려면 [취소] 후 이력에서 그 줄을 눌러 수정하세요.\n그래도 새 줄로 추가할까요? (이중등록이 됩니다)`))return;
     r.id=uid();S.recs.push(r);toast('저장했습니다');
   }
-  const d=r.date;commit();if(qtyFix)pushCloseDay(d);
+  const d=r.date;commit();if(qtyFix)pushCloseDay(d);else if(isSplitPn(r.pn))pushSplitClose(d);
   if(cont){resetForm(true);$('f_date').value=d;$('f_mc').focus();}else{resetForm(true);$('f_date').value=d;$('formMask').classList.remove('on');renderEntry();}
 }
 function editRec(id){const r=S.recs.find(x=>x.id===id);if(!r)return;editId=id;
@@ -1428,6 +1428,10 @@ function mesGood(r){
    기준정보 S.master.mesSplit 로 바꿀 수 있다 {MES 품번: [일보 품번, …]} */
 const DEF_MESSPLIT={'45631-26010 B/C':['45631-26010B','45631-26010C']};
 function mesSplitOf(code){const m={...DEF_MESSPLIT,...((S.master&&S.master.mesSplit)||{})};return m[code]||null}
+function isSplitPn(pn){const m={...DEF_MESSPLIT,...((S.master&&S.master.mesSplit)||{})};return Object.values(m).some(a=>a.includes(pn))}
+/* 마감 자료(production_close → 재고 앱 생산마감 보정)에 올릴 때 품번 바꾸기 — 최종 완성품 C 는 재고 품번 45631-26010 으로
+   (B 는 그대로 45631-26010B: 재고 앱이 MES 'B/C' 전표를 B 로 받으므로 현장 B 수량으로 보정된다) */
+const CLOSE_PN={'45631-26010C':'45631-26010'};
 /* 작업지시번호의 날짜 — WO26B19P3721 → 2026-11-19 (월: 1~9, A=10, B=11, C=12) */
 function woDate(wo){const m=String(wo||'').match(/^WO(\d\d)([1-9ABC])(\d\d)/);if(!m)return '';
   return '20'+m[1]+'-'+String(parseInt(m[2],16)).padStart(2,'0')+'-'+m[3]}
@@ -1632,6 +1636,8 @@ async function openMes(dateArg,quiet){
   const prod=led.filter(x=>x.kind==='생산입고'&&(+x.qty||0)!==0);
   const pk=new Set(prod.map(x=>(x.party||'')+'|'+x.pn));
   Object.values(cmap).forEach(x=>{
+    // 이 앱이 B/C 공용 작업지시 분으로 올린 마감 자료(45631-26010B · 45631-26010)는 B/C 줄에서 처리 — 따로 줄을 만들지 않음
+    if(x.source===CLOSE_SRC&&(isSplitPn(x.item_code)||Object.values(CLOSE_PN).includes(x.item_code)))return;
     if(prod.some(p=>p.pn===x.item_code&&((p.party||'')===(x.machine_code||'')||cCnt[x.item_code]===1)))return;
     prod.push({pn:x.item_code,kind:'생산입고',qty:+x.mes_qty||0,party:x.machine_code,lot:'',note:''});});
   // 불량폐기는 품번 기준이라 같은 품번 생산입고에 수량 비율로 나눔
@@ -1711,7 +1717,7 @@ async function openMes(dateArg,quiet){
     const out=[];
     MESROWS.forEach(r=>{const sp=mesSplitOf(r.pnCode);if(!sp){out.push(r);return}
       sp.forEach(pn=>{
-        const cz=(MESCLO||[]).find(x=>(x.machine_code||'')===r.code&&x.actual_qty!=null&&mesNorm(x.item_code)===mesNorm(pn));
+        const cz=(MESCLO||[]).find(x=>(x.machine_code||'')===r.code&&x.actual_qty!=null&&mesNorm(x.item_code)===mesNorm(CLOSE_PN[pn]||pn));
         const dup=S.recs.find(z=>z.date===d&&z.mc===r.mc&&z.pn===pn);
         const q=cz?(+cz.actual_qty||0):dup?(+dup.qty||0):0;
         const it=S.master.items.find(x=>x.pn===pn);
@@ -1891,6 +1897,7 @@ function saveMes(quiet,dateArg){
       sr:r.sr,note:r.note,mold:r.mold||'',fcnt:+r.fcnt||0,fmin:+r.fmin||0,reg:1,mes:(r.mesQty!=null?r.mesQty:r.qty),mesRun:r.run,src:r.closed?'마감':'MES',ua:now(),by:localStorage.getItem('tj_me')||''});
     n++;
   });
+  if(MESROWS.some(r=>r.use&&r.splitOf))pushSplitClose(d);   // B/C 공용 작업지시 → 재고 반영
   if(quiet){commit();return n}
   if($('f_date')&&d)$('f_date').value=d;
   const pend=MESROWS.filter(r=>r.use&&r.pending).length, wait=MESROWS.filter(r=>r.use&&r.waitClose).length;
@@ -2122,12 +2129,14 @@ function mesMcCode(mc){const m={...DEF_MESMC,...(S.master&&S.master.mesMc||{})};
 function mesPnCode(pn){const m={...DEF_MESPN,...(S.master&&S.master.mesPn||{})};for(const k in m)if(m[k]===pn)return k;return pn}
 // 하루치 일보를 설비·품번별로 합산해 production_close 에 업서트하고, 이 앱이 쓴 행 중 없어진 키는 지운다
 let _closeT={};
+/* B/C 공용 작업지시 품번(45631-26010B·C)만 마감 자료에 올린다 → 재고 앱이 B 재고·45631-26010(완성품 C) 재고를 현장 수량으로 보정 */
+function pushSplitClose(d){if(!d||d<MES_FROM)return;setTimeout(()=>_pushCloseDay(d,r=>isSplitPn(r.pn)),600)}
 function pushCloseDay(d){if(!d||d<MES_FROM)return;clearTimeout(_closeT[d]);_closeT[d]=setTimeout(()=>_pushCloseDay(d),600)}
-async function _pushCloseDay(d){
+async function _pushCloseDay(d,only){
   const dh={'apikey':DT_KEY,'Authorization':'Bearer '+DT_KEY,'Content-Type':'application/json'};
   const agg={};
-  S.recs.filter(r=>r.date===d&&r.mc&&r.pn).forEach(r=>{
-    const mc=mesMcCode(r.mc),pn=mesPnCode(r.pn),k=mc+'|'+pn;
+  S.recs.filter(r=>r.date===d&&r.mc&&r.pn&&(!only||only(r))).forEach(r=>{
+    const mc=mesMcCode(r.mc),pn=CLOSE_PN[r.pn]||mesPnCode(r.pn),k=mc+'|'+pn;
     const a=agg[k]=agg[k]||{ymd:d,machine_code:mc,item_code:pn,machine_name:r.mc,item_name:r.name||'',mes_qty:0,actual_qty:0,hasMes:false,reason:[],memo:[],worker:[]};
     a.actual_qty+=(+r.qty||0);
     if(r.mes!=null&&r.mes!==''){a.mes_qty+=(+r.mes||0);a.hasMes=true}
@@ -2143,12 +2152,12 @@ async function _pushCloseDay(d){
       const r=await fetch(DT_URL+'/rest/v1/production_close?on_conflict=ymd,machine_code,item_code',{method:'POST',headers:{...dh,'Prefer':'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(rows)});
       if(!r.ok)err='업서트 '+r.status+' '+(await r.text()).slice(0,100);else up=rows.length;
     }
-    // 이 앱이 쓴 행 중 지금 일보에 없는 키 정리
+    if(!only){   // 이 앱이 쓴 행 중 지금 일보에 없는 키 정리 (전체 반영 때만)
     const q=await fetch(DT_URL+'/rest/v1/production_close?select=machine_code,item_code&ymd=eq.'+d+'&source=eq.'+encodeURIComponent(CLOSE_SRC),{headers:dh});
     if(q.ok){const have=await q.json();const keep=new Set(rows.map(x=>x.machine_code+'|'+x.item_code));
       for(const x of have){if(keep.has(x.machine_code+'|'+x.item_code))continue;
         const r2=await fetch(DT_URL+'/rest/v1/production_close?ymd=eq.'+d+'&machine_code=eq.'+encodeURIComponent(x.machine_code)+'&item_code=eq.'+encodeURIComponent(x.item_code)+'&source=eq.'+encodeURIComponent(CLOSE_SRC),{method:'DELETE',headers:dh});
-        if(r2.ok)del++;}}
+        if(r2.ok)del++;}}}
   }catch(e){err=String(e.message||e)}
   const el=$('adj_msg');if(el)el.textContent=err?('모니터링 반영 실패: '+err):(`모니터링 반영 ${d} · ${up}건`+(del?` · 정리 ${del}건`:''));
   if(err)toast('모니터링 서버 반영 실패 — '+err);
