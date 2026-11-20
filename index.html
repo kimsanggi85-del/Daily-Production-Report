@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v25.2 · 태진다이텍</title>
+<title>생산일보 통합관리 v25.3 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -854,7 +854,7 @@ const DEF_MESMC={'003':'34 심팩250','004':'03 심팩150','005':'28 국일250',
 // MES 품번 → 앱 품번 (표기가 다른 것만)
 const DEF_MESPN={'54610-D3501-(BK)':'54610-D3501-(BK)',   // 세동 품번은 -(BK)/-(TR) 표기로 통일 (2026-11)
  '1958-365-2(2호)':'1958-365-2','AT3037-GC-00':'AT3037-GC-01','IW/OW-BDA-1159B':'IW/OW BDA 1159B'};
-const APP_VER='25.2';        // 서버에 기록해 두고, 옛 파일이 열리면 한 번 새로고침시킨다
+const APP_VER='25.3';        // 서버에 기록해 두고, 옛 파일이 열리면 한 번 새로고침시킨다
 const SPM_COMMON_ONLY=true;   // 공통값(설비 미지정)만 기준으로 쓴다
 const MES_FROM='2026-09-01'; // 8월까지 실적은 손대지 않음
 /* 근무 기준 — 08:00~19:00, 수요일·토요일 08:00~17:00
@@ -1560,6 +1560,13 @@ async function openMes(dateArg,quiet){
       // 정상 0 · 전량 이상 타발 = 전일 작업지시 잔량·세팅 타발 → '실적 미확정'으로 표시만 (v24.8 에서 기본 선택 해제)
       if(ab>0&&q===0){const k=(r.machine_code||r.party||'')+'|'+(r.item_code||r.pn);unconf[k]=(unconf[k]||0)+ab;}
     });}
+    // [v25.3] 불량은 MES 불량등록(불량이력조회 화면과 같은 값)에서 — 재고수불부 MES 불량폐기 전표(사유코드 P01~P12 포함)
+    //  설비 구분 없이 품번 단위라 같은 품번을 여러 설비가 돌리면 실적 비율로 나눈다 (아래 badSplit)
+    if(dpSrc!=='원장'){try{
+      const rb=await fetch(SB_URL+'/rest/v1/stock_ledger?select=pn,qty,note&led_date=eq.'+d+'&kind=eq.'+encodeURIComponent('불량폐기')
+        +'&src_key=like.'+encodeURIComponent('MES|')+'*&limit=500',{headers:hdr});
+      if(rb.ok)(await rb.json()).forEach(x=>{if(+x.qty>0)led.push({pn:x.pn,kind:'불량폐기',qty:+x.qty||0,party:'',lot:'',note:x.note||''})});
+    }catch(e){}}
     use=[];   // 소재사용 구간은 더 이상 쓰지 않음 (가동시간은 모니터링 run_min)
     dt=(r3&&r3.ok)?await r3.json():[];
     clo=r4.ok?r4.rows:[];MESCLO=clo.slice();
