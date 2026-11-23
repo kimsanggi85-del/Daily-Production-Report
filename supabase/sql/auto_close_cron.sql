@@ -129,3 +129,7 @@ select cron.schedule('prod-brief-0800', '0 23 * * 2',        $$select public.tri
 -- 09:30 금일 작업지시 알림 정시 실행 (GitHub 예약 실행이 7시간 넘게 늦은 적 있음 — 2026-11-10 16:39 발송). 이미 보낸 날은 스크립트가 건너뜀
 select cron.unschedule(jobname) from cron.job where jobname = 'prod-wo-0930';
 select cron.schedule('prod-wo-0930', '30 0 * * 1-5', $$select public.trigger_auto_close('wo')$$);  -- 09:30 월~금
+
+-- ── 2026-11-23: 이번 주(11/23~27)만 17시 종료 ──
+-- check_auto_close 의 off_t 판정에 "or d between date '2026-11-23' and date '2026-11-27'" 추가 (DB에 적용됨)
+-- 자동 마감(scripts/auto_close.mjs)·마감 알림(prod-close-notify) 은 EARLY_OFF 날짜 목록으로 처리
