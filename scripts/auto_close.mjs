@@ -36,7 +36,7 @@ async function sb(p) { const r = await fetch(SB_URL + p, { headers: hdr }); if (
 
 // 빨간날 목록은 앱 코드에서 그대로 읽는다
 const HOLI = Function("return " + html.match(/const HOLI=(\{[\s\S]*?\});/)[1])();
-// 17시 종료로 바꾼 날 (임시 단축 — 2026-11-23 요청: 그 주만 17:10 마감)
+// 17시 종료로 바꾼 날 (임시 단축 — 2026-11-23 요청: 그 주만 17:00 마감, 종료 후 대기 없음)
 const EARLY_OFF = new Set(["2026-11-23", "2026-11-24", "2026-11-25", "2026-11-26", "2026-11-27"]);
 const offOf = (dt) => { const w = new Date(dt + "T00:00:00Z").getUTCDay(); return (HOLI[dt] || EARLY_OFF.has(dt) || w === 0 || w === 3 || w === 6) ? "17:00" : "19:00"; };
 
@@ -69,7 +69,7 @@ async function main() {
     if (rec.evening) return log(`이미 마감 (${rec.evening})`);
     const endRef = Math.max(toMin(offOf(d)), toMin(lastEnd));
     const nowMin = kst().getUTCHours() * 60 + kst().getUTCMinutes();
-    if (nowMin < endRef + AFTER) return log(`아직 (종료 ${offOf(d)}, 최종 가동 ${lastEnd})`);
+    if (nowMin < endRef + (EARLY_OFF.has(d) ? 0 : AFTER)) return log(`아직 (종료 ${offOf(d)}, 최종 가동 ${lastEnd})`);
   }
   if (mode === "morning" && !force && rec.morning && !needFix) return log(`이미 재마감 (${rec.morning})`);
   const doClose = dp.length && !(mode === "morning" && !force && rec.morning);

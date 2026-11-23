@@ -133,3 +133,5 @@ select cron.schedule('prod-wo-0930', '30 0 * * 1-5', $$select public.trigger_aut
 -- ── 2026-11-23: 이번 주(11/23~27)만 17시 종료 ──
 -- check_auto_close 의 off_t 판정에 "or d between date '2026-11-23' and date '2026-11-27'" 추가 (DB에 적용됨)
 -- 자동 마감(scripts/auto_close.mjs)·마감 알림(prod-close-notify) 은 EARLY_OFF 날짜 목록으로 처리
+-- 2026-11-23 추가 요청: 이번 주 마감 시각 17:00 (종료 후 대기 없음). 11/24~27 17:00 에 한 번 더 실행, 17:10 은 예비
+select cron.schedule('prod-auto-close-1700-tmp', '0 8 24-27 11 *', $$select public.trigger_auto_close('evening')$$);
