@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v25.4 · 태진다이텍</title>
+<title>생산일보 통합관리 v25.5 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -854,7 +854,7 @@ const DEF_MESMC={'003':'34 심팩250','004':'03 심팩150','005':'28 국일250',
 // MES 품번 → 앱 품번 (표기가 다른 것만)
 const DEF_MESPN={'54610-D3501-(BK)':'54610-D3501-(BK)',   // 세동 품번은 -(BK)/-(TR) 표기로 통일 (2026-11)
  '1958-365-2(2호)':'1958-365-2','AT3037-GC-00':'AT3037-GC-01','IW/OW-BDA-1159B':'IW/OW BDA 1159B'};
-const APP_VER='25.4';        // 서버에 기록해 두고, 옛 파일이 열리면 한 번 새로고침시킨다
+const APP_VER='25.5';        // 서버에 기록해 두고, 옛 파일이 열리면 한 번 새로고침시킨다
 const SPM_COMMON_ONLY=true;   // 공통값(설비 미지정)만 기준으로 쓴다
 const MES_FROM='2026-09-01'; // 8월까지 실적은 손대지 않음
 /* 근무 기준 — 08:00~19:00, 수요일·토요일 08:00~17:00
@@ -2103,16 +2103,18 @@ const CLOSE_SRC='생산일보';
 /* ===== 일보 마감 알림 (ntfy · 다른 앱과 같은 토픽) ===== */
 const NTFY_TOPIC='taejincall';
 function closeMsg(d,n,w){
-  // 알림은 고객사별로 묶어 품번(아이템)별 생산수량만 보낸다
+  // 알림은 고객사별로 묶어 품번(아이템)별 생산수량만 보낸다 · 품번 앞에 호기 (설비명 앞 숫자, 2026-11-24 요청)
   const L=S.recs.filter(r=>r.date===d);
   const fm=x=>Math.round(x).toLocaleString('ko-KR');
   const by={};
-  L.forEach(r=>{const c=r.cust||'고객사 미지정',p=r.pn||'(품번 없음)';const g=by[c]=by[c]||{t:0,p:{}};g.t+=(+r.qty||0);g.p[p]=(g.p[p]||0)+(+r.qty||0)});
+  L.forEach(r=>{const c=r.cust||'고객사 미지정',p=r.pn||'(품번 없음)';const g=by[c]=by[c]||{t:0,p:{},h:{}};g.t+=(+r.qty||0);g.p[p]=(g.p[p]||0)+(+r.qty||0);
+    const ho=(String(r.mc||'').match(/^(\d{1,3})/)||[])[1];if(ho&&+r.qty>0)(g.h[p]=g.h[p]||new Set()).add(ho.padStart(2,'0'))});
+  const hoTxt=s=>s&&s.size?[...s].sort().join('·')+'호기 ':'';
   const out=[];
   Object.entries(by).sort((a,b)=>b[1].t-a[1].t).forEach(([c,g],k)=>{
     if(k)out.push('');
     out.push(`[${c}] ${fm(g.t)} EA`);
-    Object.entries(g.p).filter(([,q])=>q>0).sort((a,b)=>b[1]-a[1]).forEach(([p,q])=>out.push(`· ${p} ${fm(q)}`));
+    Object.entries(g.p).filter(([,q])=>q>0).sort((a,b)=>b[1]-a[1]).forEach(([p,q])=>out.push(`· ${hoTxt(g.h[p])}${p} ${fm(q)}`));
   });
   let msg=out.join('\n');if(msg.length>3400)msg=msg.slice(0,3400)+'\n…';
   msg+='\n\n'+closeGreet(d);   // 하루 마무리 인사 (자동 마감 알림과 같은 문구)

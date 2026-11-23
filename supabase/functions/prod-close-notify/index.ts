@@ -1,13 +1,14 @@
-// 생산일보 마감 자동 알림 (ntfy) — pg_cron: 16:00~23:50 10분마다 + 매일 08:00(전날 미마감 재발송)
+// 생산일보 마감 자동 알림 (ntfy) — pg_cron: 16:00~23:50 10분마다 + 매일 08:00(전날 마감 재발송)
 //  ① 업무 종료(평일 19:00 / 수·토·일·빨간날 17:00, 연장이면 최종 가동시각) 10분 뒤 1회 발송
 //  ② 그때 작업자 마감(production_close)이 덜 들어온 설비는 '미마감'으로 표시
-//  ③ 미마감이 있던 날은 다음날 08:00 최신 마감 수량으로 다시 발송 (?at=morning, 전날 기준)
+//  ③ 다음날 08:00 최신 마감 수량으로 다시 발송 (?at=morning, 전날 기준 · 미마감이 없던 날도 발송)
 //  수량 = 작업자 마감 실제양품 → (미마감) 일보 → MES 타발
 //  ?d=YYYY-MM-DD 날짜 지정, ?dry=1 보내지 않고 판단·내용만, ?now=HH:MM 시각 가정(시험용)
 //  [2026-10-27 Supabase 통합] SB_URL/SB_KEY 를 과장님 DB(ebthltd…) → SmartFactory 로 변경 (kv_store·daily_production 이 SmartFactory 로 이전됨)
 //  [2026-11-05] 저녁 마감 알림 끝에 하루 마무리 인사 (요일별, 금요일·특근은 따로), 08:00 재발송에는 아침 인사
 //  [2026-11-20] 미마감 설비 수량은 MES 정상 타발만 (이상 타발 미등록)
 //  [2026-11-23] MES 실적이 없는 설비도 현장 마감(실제양품)이 있으면 알림에 포함
+//  [2026-11-24] 08:00 마감 확인은 미마감이 없던 날도 매일 발송 · 품번 줄마다 호기 표기 (machine_status 설비명 앞 숫자)
 //  주말 알림 끄기는 pg_cron 쪽(run_if_weekday)에서 한다
 const SB_URL = "https://omngtyewdaqpphnzeate.supabase.co";
 const SB_KEY = "sb_publishable_9j2YkkL-7ul1TrhH-NjVdQ_vWDG2-1D";
@@ -49,7 +50,7 @@ const morningGreet = (d: string) => {
 };
 
 const toMin = (t: string) => { const [h, m] = String(t).split(":").map(Number); return (h || 0) * 60 + (m || 0); };
-// 17시 종료로 바꾼 날 (임시 단축 — 2026-11-23 요청: 그 주만 17:10 마감)
+// 17시 종료로 바꾼 날 (임시 단축 — 2026-11-23 요청: 그 주만 17시 종료, 자동 마감 17:00)
 const EARLY_OFF = new Set(["2026-11-23", "2026-11-24", "2026-11-25", "2026-11-26", "2026-11-27"]);
 const offOf = (d: string) => { const w = new Date(d + "T00:00:00Z").getUTCDay(); return (HOLI[d] || EARLY_OFF.has(d) || w === 0 || w === 3 || w === 6) ? "17:00" : "19:00"; };
 const norm = (s: unknown) => String(s ?? "").toUpperCase().replace(/[^0-9A-Z]/g, "");
@@ -85,7 +86,6 @@ Deno.serve(async (req) => {
     const sent: Record<string, any> = (sk[0] && sk[0].value) || {};
     const prev = sent[d] && typeof sent[d] === "object" && sent[d].t ? sent[d] : null;
     if (morning) {
-      if (prev && !prev.open) return skip("전날 미마감 없음");
       if (prev && prev.morning) return skip("이미 재발송");
     } else if (prev) return skip(`이미 발송 (${prev.t})`);
 
@@ -107,6 +107,14 @@ Deno.serve(async (req) => {
     const keyOf = (r: any) => (r.machine_code || "") + "|" + r.item_code;
     // 정상 타발 0(전일 작업지시 잔량·세팅 타발)은 생산이 아니므로 미마감으로 보지 않는다
     const openActive = dp.filter((r) => !(keyOf(r) in act) && good(r) > 0 && r.end_time && toMin(r.end_time) >= endRef - ACTIVE);
+
+    // 호기 번호 (설비코드 026 → 설비명 48_300 → 48호기)
+    const hoMap: Record<string, string> = {};
+    try {
+      const ms = await getJson(`${DT_URL}/rest/v1/machine_status?select=machine_code,machine_name`, DT_KEY);
+      ms.forEach((m: any) => { const x = String(m.machine_name || "").match(/^(\d{1,3})/); if (x) hoMap[m.machine_code] = String(+x[1]).padStart(2, "0"); });
+    } catch (_) { /* 없으면 설비코드 그대로 */ }
+    const hoOf = (mc: string) => (hoMap[mc] || mc) + "호기";
 
     // 품번·고객사 매핑 (일보 앱 기준정보)
     const kv = await getJson(`${SB_URL}/rest/v1/kv_store?key=eq.${KV_KEY}&select=value`, SB_KEY);
@@ -149,19 +157,21 @@ Deno.serve(async (req) => {
     const total = rows.reduce((a, r) => a + r.qty, 0);
     if (total <= 0) return skip("생산 수량 0");
 
-    const by: Record<string, { t: number; p: Record<string, number> }> = {};
+    const by: Record<string, { t: number; p: Record<string, number>; h: Record<string, Set<string>> }> = {};
     rows.forEach((r) => {
       const c = r.cust || "고객사 미지정";
-      const g = (by[c] = by[c] || { t: 0, p: {} });
+      const g = (by[c] = by[c] || { t: 0, p: {}, h: {} });
       g.t += r.qty; g.p[r.pn] = (g.p[r.pn] || 0) + r.qty;
+      if (r.qty > 0) (g.h[r.pn] = g.h[r.pn] || new Set()).add(hoMap[r.mc] || r.mc);
     });
+    const hoTxt = (s?: Set<string>) => s && s.size ? [...s].sort().join("·") + "호기 " : "";
     const out: string[] = [];
-    if (openActive.length) out.push(`※ 미마감 ${openActive.length}건(MES·일보 수량): ${openActive.map((r) => r.machine_code + "호기 " + appPn(String(r.item_code))).join(", ")}` + (morning ? "" : " → 내일 08:00 재발송"), "");
-    else if (morning) out.push("※ 미마감분 마감 반영 완료", "");
+    if (openActive.length) out.push(`※ 미마감 ${openActive.length}건(MES·일보 수량): ${openActive.map((r) => hoOf(r.machine_code) + " " + appPn(String(r.item_code))).join(", ")}` + (morning ? "" : " → 내일 08:00 재발송"), "");
+    else if (morning) out.push(prev && prev.open ? "※ 미마감분 마감 반영 완료" : "※ 전날 미마감 없음 · 최종 마감 수량", "");
     Object.entries(by).filter(([, g]) => g.t > 0).sort((a, b) => b[1].t - a[1].t).forEach(([c, g], k) => {
       if (k) out.push("");
       out.push(`[${c}] ${fm(g.t)} EA`);
-      Object.entries(g.p).filter(([, q]) => q > 0).sort((a, b) => b[1] - a[1]).forEach(([p, q]) => out.push(`· ${p} ${fm(q)}`));
+      Object.entries(g.p).filter(([, q]) => q > 0).sort((a, b) => b[1] - a[1]).forEach(([p, q]) => out.push(`· ${hoTxt(g.h[p])}${p} ${fm(q)}`));
     });
     let msg = out.join("\n");
     if (msg.length > 3400) msg = msg.slice(0, 3400) + "\n…";
