@@ -36,7 +36,9 @@ async function sb(p) { const r = await fetch(SB_URL + p, { headers: hdr }); if (
 
 // 빨간날 목록은 앱 코드에서 그대로 읽는다
 const HOLI = Function("return " + html.match(/const HOLI=(\{[\s\S]*?\});/)[1])();
-const offOf = (dt) => { const w = new Date(dt + "T00:00:00Z").getUTCDay(); return (HOLI[dt] || w === 0 || w === 3 || w === 6) ? "17:00" : "19:00"; };
+// 17시 종료로 바꾼 날 (임시 단축 — 2026-11-23 요청: 그 주만 17:10 마감)
+const EARLY_OFF = new Set(["2026-11-23", "2026-11-24", "2026-11-25", "2026-11-26", "2026-11-27"]);
+const offOf = (dt) => { const w = new Date(dt + "T00:00:00Z").getUTCDay(); return (HOLI[dt] || EARLY_OFF.has(dt) || w === 0 || w === 3 || w === 6) ? "17:00" : "19:00"; };
 
 async function main() {
   const doneRow = await sb(`/rest/v1/kv_store?key=eq.${DONE_KEY}&select=value`);

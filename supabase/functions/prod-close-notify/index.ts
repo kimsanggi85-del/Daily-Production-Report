@@ -48,7 +48,9 @@ const morningGreet = (d: string) => {
 };
 
 const toMin = (t: string) => { const [h, m] = String(t).split(":").map(Number); return (h || 0) * 60 + (m || 0); };
-const offOf = (d: string) => { const w = new Date(d + "T00:00:00Z").getUTCDay(); return (HOLI[d] || w === 0 || w === 3 || w === 6) ? "17:00" : "19:00"; };
+// 17시 종료로 바꾼 날 (임시 단축 — 2026-11-23 요청: 그 주만 17:10 마감)
+const EARLY_OFF = new Set(["2026-11-23", "2026-11-24", "2026-11-25", "2026-11-26", "2026-11-27"]);
+const offOf = (d: string) => { const w = new Date(d + "T00:00:00Z").getUTCDay(); return (HOLI[d] || EARLY_OFF.has(d) || w === 0 || w === 3 || w === 6) ? "17:00" : "19:00"; };
 const norm = (s: unknown) => String(s ?? "").toUpperCase().replace(/[^0-9A-Z]/g, "");
 const fm = (x: number) => Math.round(x).toLocaleString("ko-KR");
 const kstNow = () => new Date(Date.now() + 9 * 3600e3).toISOString();
