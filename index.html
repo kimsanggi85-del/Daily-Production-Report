@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v25.3 · 태진다이텍</title>
+<title>생산일보 통합관리 v25.4 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -854,7 +854,7 @@ const DEF_MESMC={'003':'34 심팩250','004':'03 심팩150','005':'28 국일250',
 // MES 품번 → 앱 품번 (표기가 다른 것만)
 const DEF_MESPN={'54610-D3501-(BK)':'54610-D3501-(BK)',   // 세동 품번은 -(BK)/-(TR) 표기로 통일 (2026-11)
  '1958-365-2(2호)':'1958-365-2','AT3037-GC-00':'AT3037-GC-01','IW/OW-BDA-1159B':'IW/OW BDA 1159B'};
-const APP_VER='25.3';        // 서버에 기록해 두고, 옛 파일이 열리면 한 번 새로고침시킨다
+const APP_VER='25.4';        // 서버에 기록해 두고, 옛 파일이 열리면 한 번 새로고침시킨다
 const SPM_COMMON_ONLY=true;   // 공통값(설비 미지정)만 기준으로 쓴다
 const MES_FROM='2026-09-01'; // 8월까지 실적은 손대지 않음
 /* 근무 기준 — 08:00~19:00, 수요일·토요일 08:00~17:00
@@ -871,7 +871,9 @@ const HOLI={'2026-01-01':'신정','2026-02-16':'설날 연휴','2026-02-17':'설
   '2026-09-24':'추석 연휴','2026-09-25':'추석','2026-09-26':'추석 연휴',
   '2026-10-03':'개천절','2026-10-05':'대체공휴일(개천절)','2026-10-09':'한글날','2026-12-25':'성탄절'};
 function holiName(d){return HOLI[d]||''}
-function shiftOf(d){if(HOLI[d])return SHIFT.hol;const w=new Date(d+'T00:00:00').getDay();return w===3?SHIFT.wed:w===6?SHIFT.sat:SHIFT.base}
+/* 임시 단축 — 이 날들은 08:00~17:00 (재적 540분, 휴식 80분) · 2026-11-23 요청: 그 주만 17시 종료 */
+const EARLY_OFF=new Set(['2026-11-23','2026-11-24','2026-11-25','2026-11-26','2026-11-27']);
+function shiftOf(d){if(HOLI[d])return SHIFT.hol;if(EARLY_OFF.has(d))return SHIFT.wed;const w=new Date(d+'T00:00:00').getDay();return w===3?SHIFT.wed:w===6?SHIFT.sat:SHIFT.base}
 function shiftTag(d){const h=holiName(d);if(h)return '공휴일 특근 · '+h;const w=new Date(d+'T00:00:00').getDay();return w===6?'토요일 특근':w===3?'수요일':''}
 function stdWork(d){return shiftOf(d).span}   // 재적 근무(분)
 function stdBrk(d){return shiftOf(d).brk}     // 휴식(분)
