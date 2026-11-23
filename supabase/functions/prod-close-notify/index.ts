@@ -7,6 +7,7 @@
 //  [2026-10-27 Supabase 통합] SB_URL/SB_KEY 를 과장님 DB(ebthltd…) → SmartFactory 로 변경 (kv_store·daily_production 이 SmartFactory 로 이전됨)
 //  [2026-11-05] 저녁 마감 알림 끝에 하루 마무리 인사 (요일별, 금요일·특근은 따로), 08:00 재발송에는 아침 인사
 //  [2026-11-20] 미마감 설비 수량은 MES 정상 타발만 (이상 타발 미등록)
+//  [2026-11-23] MES 실적이 없는 설비도 현장 마감(실제양품)이 있으면 알림에 포함
 //  주말 알림 끄기는 pg_cron 쪽(run_if_weekday)에서 한다
 const SB_URL = "https://omngtyewdaqpphnzeate.supabase.co";
 const SB_KEY = "sb_publishable_9j2YkkL-7ul1TrhH-NjVdQ_vWDG2-1D";
@@ -137,6 +138,13 @@ Deno.serve(async (req) => {
         qty = tot ? dayRec[norm(pn)] * (good(r) / tot) : dayRec[norm(pn)] / same.length;
       } else qty = good(r);
       return { cust: custOf(pn), pn, qty, mc: r.machine_code };
+    });
+    // MES 실적이 없는(수집 누락·멈춤) 설비도 현장 마감 수량이 있으면 넣는다
+    const dpKeys = new Set(dp.map(keyOf));
+    clo.forEach((c) => {
+      if (c.actual_qty == null || !(+c.actual_qty > 0) || dpKeys.has(keyOf(c))) return;
+      const pn = appPn(String(c.item_code || ""));
+      rows.push({ cust: custOf(pn), pn, qty: +c.actual_qty, mc: c.machine_code });
     });
     const total = rows.reduce((a, r) => a + r.qty, 0);
     if (total <= 0) return skip("생산 수량 0");
