@@ -94,4 +94,5 @@ revoke all on function public.close_sync_daily(int, boolean) from public, anon, 
 
 -- 11/16 48호기 1113-2 현장 마감 복구 (18:49 저장분, 19:11 1179-2 저장 때 MES 가 지움) — 2026-11-24 적용됨
 -- insert into production_close (...) values ('2026-11-16','026','IW/OW-BDA-1113-2', ..., 13600, ..., '황덕순', '2026-11-16 18:49:46+09');
--- 자동 실행(pg_cron)은 아직 등록하지 않음 — 사용자 확인 후 등록. 수동 실행: select public.close_sync_daily(14, true);  -- true = 보기만
+-- 2026-11-24 사용자 허용: 07:20~23:50 30분마다 자동 실행. 수동 확인: select public.close_sync_daily(14, true);  -- true = 보기만
+select cron.schedule('prod-close-sync', '20,50 22,23,0-14 * * *', $$select public.close_sync_daily(14, false)$$);
