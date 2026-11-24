@@ -34,3 +34,5 @@ update public.stock_ledger set pn = pn where pn in (select raw from public.stock
 
 -- 2026-11-24 요청: 45464-4G600 → 45464-4G650L 통일 (일보 품목·일보 7줄·재고 원장 11건 함께 변경, 원장 백업 stock_ledger_bak_4g600_20261124)
 insert into public.stock_pn_alias(raw, pn, memo) values ('45464-4G600','45464-4G650L','45464-4G600 은 45464-4G650L 로 통일 (2026-11-24 요청)') on conflict do nothing;
+-- 2026-11-24 요청: 45464-4G650 도 45464-4G650L 로 합침 (원장 12건 변경, 백업 stock_ledger_bak_4g650_20261124)
+insert into public.stock_pn_alias(raw, pn, memo) values ('45464-4G650','45464-4G650L','45464-4G650 은 45464-4G650L 로 통일 (2026-11-24 요청)') on conflict do nothing;
