@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v25.5 · 태진다이텍</title>
+<title>생산일보 통합관리 v25.6 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -854,7 +854,7 @@ const DEF_MESMC={'003':'34 심팩250','004':'03 심팩150','005':'28 국일250',
 // MES 품번 → 앱 품번 (표기가 다른 것만)
 const DEF_MESPN={'54610-D3501-(BK)':'54610-D3501-(BK)',   // 세동 품번은 -(BK)/-(TR) 표기로 통일 (2026-11)
  '1958-365-2(2호)':'1958-365-2','AT3037-GC-00':'AT3037-GC-01','IW/OW-BDA-1159B':'IW/OW BDA 1159B'};
-const APP_VER='25.5';        // 서버에 기록해 두고, 옛 파일이 열리면 한 번 새로고침시킨다
+const APP_VER='25.6';        // 서버에 기록해 두고, 옛 파일이 열리면 한 번 새로고침시킨다
 const SPM_COMMON_ONLY=true;   // 공통값(설비 미지정)만 기준으로 쓴다
 const MES_FROM='2026-09-01'; // 8월까지 실적은 손대지 않음
 /* 근무 기준 — 08:00~19:00, 수요일·토요일 08:00~17:00
@@ -1429,7 +1429,8 @@ function mapPn(code,mc,d,allowLast){
   if(hit)return hit.pn;
   // MES 품번 표기가 앱과 다른 계열(무/유 구분 등)은 그 설비에서 최근에 찍던 품번을 제안.
   // 단, 그날 그 설비가 품번을 두 종류 이상 돌렸으면 섞일 수 있어 제안하지 않는다.
-  if(allowLast&&mc){const last=S.recs.filter(r=>r.mc===mc&&(!d||r.date<d)).sort((a,b)=>b.date.localeCompare(a.date))[0];if(last)return last.pn}
+  // 같은 계열(품번 앞 6자리가 같을 때)만 제안 — 다른 품번(예: 45464-4G650 → 1969-0030-01)으로 바꿔 넣는 것을 막는다 (2026-11-24)
+  if(allowLast&&mc){const last=S.recs.filter(r=>r.mc===mc&&(!d||r.date<d)).sort((a,b)=>b.date.localeCompare(a.date))[0];if(last&&n.length>=6&&mesNorm(last.pn).slice(0,6)===n.slice(0,6))return last.pn}
   return '';
 }
 let MESROWS=[],MESDIAG={},MESCLO=[],MESDATE='';
