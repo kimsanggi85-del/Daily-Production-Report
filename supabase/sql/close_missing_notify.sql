@@ -2,7 +2,7 @@
 --  오늘 생산한 설비 = MES 일별집계 정상 타발 > 0  또는  일별집계가 없는데 오늘 타발 기록(machine_status.last_shot_at)이 있음
 --                    (아래 2026-11-24 수정본: 가동 기록 기준으로 비가동 제외)
 --  그중 오늘 현장 마감(production_close, 수량 > 0)이 없는 설비를 ntfy(taejincall)로 알림
---  발송 시각: 업무 종료 30분 전(마감 등록 안내) · 종료 30분 뒤(미등록 재알림) · 21:00(최종) — 미등록 설비가 있을 때만
+--  발송 시각: 업무 종료 10분 뒤(마감 후 미등록 알림) · 21:00(최종) — 미등록 설비가 있을 때만 (2026-11-25: 종료 전 안내 없앰)
 --  업무 종료: 평일 19:00 / 수·토·일 17:00 / 2026-11-23~27 17:00 (check_auto_close 와 같은 기준)
 create table if not exists public.close_remind_always (machine_code text primary key, memo text);
 insert into public.close_remind_always values ('025','47호기 카운터 고장 — 현장 수량으로 마감'),('026','48호기 카운터 고장 — 현장 수량으로 마감') on conflict do nothing;
@@ -46,8 +46,8 @@ declare
   v_slot text; title text; lines text; n int;
 begin
   v_slot := coalesce(p_force,
-    case when now_k::time >= off_t - interval '30 min' and now_k::time < off_t - interval '20 min' then 'before'
-         when now_k::time >= off_t + interval '30 min' and now_k::time < off_t + interval '40 min' then 'after'
+    -- 2026-11-25 요청: 종료 전 안내(16:30)는 보내지 않음 — 마감 후(종료 10분 뒤)와 21:00 최종만
+    case when now_k::time >= off_t + interval '10 min' and now_k::time < off_t + interval '20 min' then 'after'
          when now_k::time >= time '21:00' and now_k::time < time '21:10' then 'final' end);
   if v_slot is null then return '발송 시각 아님'; end if;
   if p_force is null and exists (select 1 from close_remind_sent s where s.d = ds and s.slot = v_slot) then return '이미 발송'; end if;
