@@ -9,6 +9,7 @@
 //  [2026-11-20] 미마감 설비 수량은 MES 정상 타발만 (이상 타발 미등록)
 //  [2026-11-23] MES 실적이 없는 설비도 현장 마감(실제양품)이 있으면 알림에 포함
 //  [2026-11-24] 08:00 마감 확인은 미마감이 없던 날도 매일 발송 · 품번 줄마다 호기 표기 (machine_status 설비명 앞 숫자)
+//  [2026-11-25] ntfy.sh 가 Edge Function 발송을 429 로 거절하면 DB 중계(ntfy_relay)로 발송
 //  주말 알림 끄기는 pg_cron 쪽(run_if_weekday)에서 한다
 const SB_URL = "https://omngtyewdaqpphnzeate.supabase.co";
 const SB_KEY = "sb_publishable_9j2YkkL-7ul1TrhH-NjVdQ_vWDG2-1D";
@@ -17,7 +18,7 @@ const DT_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 const KV_KEY = "tj_prod_daily_v1";
 const NTFY_TOPIC = "taejincall";
 const SENT_KEY = "tj_prod_notify_sent_v1";   // 자동 발송 기록 {날짜: {t, open, morning}}
-const DEF_MESPN: Record<string, string> = { "54610-D3501-(BK)": "54610-D3501", "1958-365-2(2호)": "1958-365-2", "AT3037-GC-00": "AT3037-GC-01", "IW/OW-BDA-1159B": "IW/OW BDA 1159B" };
+const DEF_MESPN: Record<string, string> = { "54610-D3501-(BK)": "54610-D3501", "1958-365-2(2호)": "1958-365-2", "AT3037-GC-00": "AT3037-GC-01" };   // [2026-11-25] 1159B 옛 표기(띄어쓰기) 변환 삭제 — 알림에 일보와 같은 품번으로
 // 달력 빨간날(법정공휴일·대체공휴일) — 평일 빨간날은 특근 08~17시
 const HOLI: Record<string, string> = { "2026-01-01": "신정", "2026-02-16": "설날 연휴", "2026-02-17": "설날", "2026-02-18": "설날 연휴",
   "2026-03-01": "삼일절", "2026-03-02": "대체공휴일(삼일절)", "2026-05-01": "근로자의 날", "2026-05-05": "어린이날",
@@ -187,7 +188,13 @@ Deno.serve(async (req) => {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ topic: NTFY_TOPIC, title, message: msg, tags: [openActive.length ? "warning" : "clipboard"], priority: 3 }),
     });
-    if (!r.ok) throw new Error("ntfy " + r.status);
+    if (!r.ok) {
+      // [2026-11-25] Edge Function 공용 IP 가 ntfy.sh 하루 한도(429)에 걸리면 DB(pg_net) 중계로 보낸다 (public.ntfy_relay)
+      const rr = await fetch(`${SB_URL}/rest/v1/rpc/ntfy_relay`, { method: "POST",
+        headers: { apikey: SB_KEY, Authorization: "Bearer " + SB_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({ p_title: title, p_message: msg, p_tags: [openActive.length ? "warning" : "clipboard"], p_priority: 3 }) });
+      if (!rr.ok) throw new Error("ntfy " + r.status + " · relay " + rr.status);
+    }
     sent[d] = morning ? { ...(prev || {}), morning: kstNow().slice(11, 16), openAfter: openActive.length }
                       : { t: kstNow().slice(11, 16), open: openActive.length };
     const keep = Object.fromEntries(Object.entries(sent).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 40));
