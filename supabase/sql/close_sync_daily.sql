@@ -61,7 +61,8 @@ begin
         'id', 'C' || substr(md5(c.ymd || c.mc || c.pn || clock_timestamp()::text), 1, 12),
         'date', c.ymd, 'mc', c.mc, 'proc', '', 'cust', coalesce(it ->> 'cust', ''), 'pn', c.pn, 'name', coalesce(it ->> 'name', ''),
         'w1', coalesce(split_part(c.worker, ',', 1), ''), 'w2', '', 'w3', '', 'w4', '',
-        'spm', coalesce((it ->> 'spm')::numeric, 0), 'work', case when early then 540 else 660 end, 'brk', case when early then 80 else 90 end,
+        'spm', coalesce(nullif((it ->> 'spm')::numeric, 0), (select (r ->> 'spm')::numeric from jsonb_array_elements(recs) r where r ->> 'mc' = c.mc and r ->> 'pn' = c.pn and coalesce((r ->> 'spm')::numeric, 0) > 0 order by r ->> 'date' desc limit 1), 0),  -- 2026-11-25: 품목 SPM 이 0이면 그 설비·품번 최근 일보 SPM (0이면 앱이 '단발'로 표시)
+         'work', case when early then 540 else 660 end, 'brk', case when early then 80 else 90 end,
         'stop', 0, 'qty', c.q, 'ng', 0, 'ngp', 0, 'sr', '', 'note', '마감자료 자동 반영 (근무·정지 확인 필요)', 'reg', 1, 'src', '마감', 'ua', ts, 'by', ''));
       out := out || jsonb_build_object('d', c.ymd, 'mc', c.mc, 'pn', c.pn, 'act', '추가', 'old', null, 'new', c.q);
     elsif n = 1 then
