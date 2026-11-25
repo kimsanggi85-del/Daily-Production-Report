@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>생산일보 통합관리 v25.6 · 태진다이텍</title>
+<title>생산일보 통합관리 v25.7 · 태진다이텍</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -854,7 +854,7 @@ const DEF_MESMC={'003':'34 심팩250','004':'03 심팩150','005':'28 국일250',
 // MES 품번 → 앱 품번 (표기가 다른 것만)
 const DEF_MESPN={'54610-D3501-(BK)':'54610-D3501-(BK)',   // 세동 품번은 -(BK)/-(TR) 표기로 통일 (2026-11)
  '1958-365-2(2호)':'1958-365-2','AT3037-GC-00':'AT3037-GC-01','IW/OW-BDA-1159B':'IW/OW BDA 1159B'};
-const APP_VER='25.6';        // 서버에 기록해 두고, 옛 파일이 열리면 한 번 새로고침시킨다
+const APP_VER='25.7';        // 서버에 기록해 두고, 옛 파일이 열리면 한 번 새로고침시킨다
 const SPM_COMMON_ONLY=true;   // 공통값(설비 미지정)만 기준으로 쓴다
 const MES_FROM='2026-09-01'; // 8월까지 실적은 손대지 않음
 /* 근무 기준 — 08:00~19:00, 수요일·토요일 08:00~17:00
@@ -913,6 +913,7 @@ const PN_NAME={"IW/OW-BDA-1106-2":"Raceway 1106 CA/CB","IW/OW-BDA-1106-3":"Racew
 /* ===== 상태 ===== */
 let S={recs:[],del:{},master:null,seedVer:'',ua:'',fails:[],issues:[]};
 let month=new Date().toISOString().slice(0,7);
+let editBase=null, editBaseUa='';
 let editId=null, pg='entry', sortKey='date', sortDir=-1;
 const $=id=>document.getElementById(id);
 const fmt=n=>(Math.round(n||0)).toLocaleString('ko-KR');
@@ -1061,7 +1062,9 @@ function mergeIn(srv){
   if(!srv||!srv.recs)return;
   const map=new Map(S.recs.map(r=>[r.id,r]));
   Object.assign(S.del,srv.del||{});
-  srv.recs.forEach(r=>{if(S.del[r.id])return;const l=map.get(r.id);if(!l||(r.ua||'')>=(l.ua||''))map.set(r.id,r)});
+  srv.recs.forEach(r=>{if(S.del[r.id])return;const l=map.get(r.id);if(!l||(r.ua||'')>=(l.ua||''))map.set(r.id,r);
+    // [v25.7] 이 기기가 고친 줄인데 그 사이 서버 쪽도 바뀌었으면: 서버 값 + 내가 바꾼 칸만
+    else if(l._ch&&(r.ua||'')>(l._bu||'')){const m={...r};l._ch.forEach(k=>m[k]=l[k]);m.ua=l.ua;m.by=l.by;map.set(r.id,m)}});
   S.recs=[...map.values()].filter(r=>!S.del[r.id]);
   if(srv.rel){S.rel=Object.assign({},srv.rel,S.rel||{})}
   if(srv.fails){const fm=new Map((S.fails||[]).map(f=>[f.id,f]));
@@ -1123,8 +1126,9 @@ async function push(manual,fresh){
     // [v24.4] 올리기 전에 서버 자료를 먼저 받아 합친다 (다른 기기·자동작업이 바꾼 것을 덮어쓰지 않게)
     if(!fresh){
       const g=await fetch(SB_URL+'/rest/v1/kv_store?key=eq.'+KV_KEY+'&select=value',{headers:hdr});
-      if(g.ok){const j=await g.json();if(j.length){if(checkVer(j[0].value))return;mergeIn(j[0].value);ensureMaster();saveLocal();}}
+      if(g.ok){const j=await g.json();if(j.length){if(checkVer(j[0].value))return;mergeIn(j[0].value);ensureMaster();fresh=true;saveLocal();}}
     }
+    if(fresh)S.recs.forEach(r=>{if(r._ch){delete r._ch;delete r._bu}});   // [v25.7] 서버와 합친 뒤에는 '바꾼 칸' 표시를 지운다
     const body=[{key:KV_KEY,value:{recs:S.recs,del:S.del,master:S.master,rpt:S.rpt||{},mig:S.mig||{},log:S.log||[],fails:S.fails||[],issues:S.issues||[],rel:S.rel||{},appVer:(S.appVer&&vNum(S.appVer)>vNum(APP_VER)?S.appVer:APP_VER),ua:S.ua},updated_at:now()}];
     const r=await fetch(SB_URL+'/rest/v1/kv_store?on_conflict=key',{method:'POST',headers:{...hdr,'Prefer':'resolution=merge-duplicates'},body:JSON.stringify(body)});
     if(!r.ok)throw new Error(r.status);
@@ -1338,7 +1342,11 @@ function saveRec(cont){
     // 실적수량을 손으로 고치면 '조정'으로 표시 — 실제수량 자동갱신·익일 재마감이 MES 값으로 되돌리지 않게
     if(o&&+r.qty!==+o.qty){r.src='조정';if(o.mes==null||o.mes==='')r.mes=+o.qty;
       logAdd('생산수량 조정',`${r.date} · ${r.mc} ${r.pn}: ${fmt(o.qty)} → ${fmt(r.qty)} (일보 수정)`);qtyFix=true}
-    S.recs[i]={...o,...r};toast(qtyFix?'수정했습니다 · 수량 조정으로 고정':'수정했습니다');}
+    // [v25.7] 바꾼 칸만 반영 + 표시(_ch·_bu) → 서버에 더 새 값이 있으면 mergeIn 이 나머지 칸은 서버 값으로 맞춘다
+    const ch=editBase?Object.keys(r).filter(k=>k==='ua'||k==='by'||k==='src'||k==='mes'?(k==='ua'||k==='by'||qtyFix):String(r[k]??'')!==String(editBase[k]??'')):Object.keys(r);
+    const nr={...o};ch.forEach(k=>nr[k]=r[k]);
+    if(editBase){nr._ch=[...new Set([...(o._ch||[]),...ch.filter(k=>k!=='ua'&&k!=='by')])];nr._bu=o._bu!=null?o._bu:editBaseUa;}
+    S.recs[i]=nr;toast(qtyFix?'수정했습니다 · 수량 조정으로 고정':'수정했습니다');}
   else{
     // 이중등록 방지 — 일보의 고유 키는 생산일자·설비·품번 (작업자·수량이 달라도 같은 줄로 본다)
     const dup=S.recs.find(x=>x.date===r.date&&x.mc===r.mc&&x.pn===r.pn);
@@ -1352,6 +1360,8 @@ function editRec(id){const r=S.recs.find(x=>x.id===id);if(!r)return;editId=id;
   if(pg!=='entry')go('entry');
   $('entryTitle').textContent='일보 수정 · '+r.date+' '+r.mc+' · '+r.pn;
   writeForm(r);if($('f_auto'))$('f_auto').checked=false;   // 저장된 일보는 정지시간을 그대로 유지
+  // [v25.7] 수정 창을 열 때의 값을 기억 — 저장할 때 '내가 바꾼 칸'만 반영한다 (오래 열어 둔 화면이 다른 칸을 옛 값으로 덮어쓰지 않게)
+  editBase=readForm();editBaseUa=r.ua||'';
   $('btnSave').textContent='수정 저장 (Ctrl+Enter)';$('btnEdit').disabled=false;$('btnDel').disabled=false;
   renderHist();
   openForm();}
