@@ -71,3 +71,28 @@ revoke all on function public.close_missing_notify(text) from public, anon, auth
 -- 10분마다 시각 확인 (UTC 07~12시 = KST 16:00~21:59), 평일만
 select cron.schedule('prod-close-missing-notify', '*/10 7-12 * * *', $$select public.run_if_weekday('select public.close_missing_notify()')$$);
 -- 확인: select * from public.close_missing_list();   수동 발송: select public.close_missing_notify('before');
+
+-- 2026-11-26 수정: 정지코드를 풀지 않고 생산한 설비(정상 타발 0·이상 타발만, 예: 02·34호기)와
+--   측정·조정이 길었던 설비(가동 30분 미만, 예: 45호기)가 미마감 알림에서 빠짐 → 오늘 총 타발(정상+이상) 100 이상이면 대상
+create or replace function public.close_missing_list(p_d date default null) returns table(machine_code text, ho text, item text, why text)
+language sql stable security definer set search_path = public as $$
+  with d as (select coalesce(p_d, (now() at time zone 'Asia/Seoul')::date) d),
+  ms as (select m.*,
+           (select sum(coalesce(normal_shot, shot_qty)) from daily_production x, d where x.machine_code = m.machine_code and x.ymd::date = d.d) dp,
+           (select sum(coalesce(x.shot_qty, 0)) from daily_production x, d where x.machine_code = m.machine_code and x.ymd::date = d.d) tot,
+           dt.run_min, coalesce(dt.stop_count, 0) + coalesce(dt.planned_count, 0) ev, dt.machine_code is not null has_dt
+         from machine_status m cross join d
+         left join daily_downtime dt on dt.machine_code = m.machine_code and dt.ymd::date = d.d
+         where coalesce(m.is_virtual, false) = false)
+  select ms.machine_code, coalesce(substring(ms.machine_name from '^(\d+)'), ms.machine_code),
+         coalesce(ms.current_item_code, ''),
+         case when ms.has_dt and ms.ev > 0 then '가동 ' || round(ms.run_min) || '분' else '' end ||
+         case when ms.dp > 0 then case when ms.has_dt and ms.ev > 0 then ' · ' else '' end || 'MES 정상 타발 ' || to_char(ms.dp, 'FM999,999')
+              when coalesce(ms.tot, 0) >= 100 then case when ms.has_dt and ms.ev > 0 then ' · ' else '' end || '정상 타발 0 · 이상 타발 ' || to_char(ms.tot, 'FM999,999') || ' (정지코드 미해제 — 실제 수량으로 마감)'
+              when a.machine_code is not null then ' · ' || a.memo else '' end
+  from ms cross join d
+  left join close_remind_always a on a.machine_code = ms.machine_code
+  where ((ms.has_dt and ms.ev > 0 and ms.run_min >= 30) or (not ms.has_dt and coalesce(ms.dp, 0) >= 100) or coalesce(ms.tot, 0) >= 100)
+    and not exists (select 1 from production_close c where c.machine_code = ms.machine_code and c.ymd::date = d.d and coalesce(c.actual_qty, 0) > 0)
+  order by 2;
+$$;
