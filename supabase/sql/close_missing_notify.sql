@@ -96,3 +96,41 @@ language sql stable security definer set search_path = public as $$
     and not exists (select 1 from production_close c where c.machine_code = ms.machine_code and c.ymd::date = d.d and coalesce(c.actual_qty, 0) > 0)
   order by 2;
 $$;
+
+-- 2026-11-26 요청: 21:00 최종 알림은 없애고, 다음날 아침 08:00 에 전 작업일 미마감 설비를 알림
+--   전 작업일 = 어제부터 거슬러 올라가 MES 생산 자료가 있는 가장 가까운 날 (월요일 아침 → 금요일, 최대 4일 전)
+create or replace function public.close_missing_notify(p_force text default null) returns text
+language plpgsql security definer set search_path = public as $$
+declare
+  now_k timestamp := now() at time zone 'Asia/Seoul';
+  v_d date := now_k::date;
+  ds text;
+  off_t time := case when extract(isodow from v_d) in (3, 6, 7) or v_d between date '2026-11-23' and date '2026-11-27' then time '17:00' else time '19:00' end;
+  v_slot text; title text; lines text; n int;
+begin
+  v_slot := coalesce(p_force,
+    case when now_k::time >= off_t + interval '10 min' and now_k::time < off_t + interval '20 min' then 'after'
+         when now_k::time >= time '08:00' and now_k::time < time '08:10' then 'morning' end);
+  if v_slot is null then return '발송 시각 아님'; end if;
+  if v_slot = 'morning' then
+    select max(x.ymd::date) into v_d from daily_production x where x.ymd::date < now_k::date and x.ymd::date >= now_k::date - 4;
+    if v_d is null then return '전 작업일 생산 자료 없음'; end if;
+  end if;
+  ds := to_char(v_d, 'YYYY-MM-DD');
+  if p_force is null and exists (select 1 from close_remind_sent s where s.d = ds and s.slot = v_slot) then return '이미 발송'; end if;
+  select count(*), string_agg('· ' || l.ho || '호기 ' || l.item || ' — ' || l.why, chr(10)) into n, lines from close_missing_list(v_d) l;
+  if n = 0 then return '미등록 설비 없음'; end if;
+  title := case v_slot when 'morning' then '⚠ ' || to_char(v_d, 'MM/DD') || ' 마감 미등록 ' || n || '대 — 오전 중 등록하세요'
+                       else '⚠ 마감 미등록 ' || n || '대 — 지금 마감 등록하세요' end;
+  perform net.http_post(url := 'https://ntfy.sh/', headers := jsonb_build_object('Content-Type', 'application/json'),
+    body := jsonb_build_object('topic', 'taejincall', 'title', title,
+      'message', lines || chr(10) || chr(10) || '생산한 설비는 MES 모바일 생산마감에서 실제 양품 수량을 등록해 주세요.' || chr(10) || '(늦게 등록해도 일보에 자동 반영됩니다)',
+      'tags', jsonb_build_array('warning'), 'priority', 4),
+    timeout_milliseconds := 30000);
+  insert into close_remind_sent as s (d, slot, cnt, msg) values (ds, v_slot, n, lines)
+    on conflict (d, slot) do update set at = now(), cnt = excluded.cnt, msg = excluded.msg;
+  return v_slot || ' 발송 ' || n || '대 (' || ds || ')';
+end $$;
+revoke all on function public.close_missing_notify(text) from public, anon, authenticated;
+-- KST 16:00~19:59(종료 10분 뒤 알림) + 08:00~08:59(아침 알림)
+select cron.schedule('prod-close-missing-notify', '*/10 7-10,23 * * *', $$select public.run_if_weekday('select public.close_missing_notify()')$$);
